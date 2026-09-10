@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradingView — XAUUSD (Gold 5m) · Python Strategy Terminal</title>
+    <meta name="description" content="TradingView duplicate terminal featuring live Python strategy scripting, bar-by-bar backtesting on Dukascopy data, AST anti-lookahead guard, and AI continuous optimizer.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Lightweight Charts (TradingView) -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    
+    <!-- Monaco Editor (VS Code engine) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    
+    <link rel="stylesheet" href="/static/styles.css?v=clean2">
+</head>
+<body class="tv-theme-dark">
+
+<!-- =========================================================================
+     TOP NAVIGATION BAR (TradingView Replica)
+========================================================================= -->
+<header id="tvHeader">
+    <div class="tv-header-left">
+        <!-- Logo -->
+        <div class="tv-logo-group" title="TradingView Terminal">
+            <svg class="tv-logo-svg" width="28" height="20" viewBox="0 0 28 20" fill="none">
+                <path d="M0 17H6L11 4H5L0 17Z" fill="#2962FF"/>
+                <path d="M8 17H14L19 4H13L8 17Z" fill="#00BCD4"/>
+                <path d="M16 17H22L27 4H21L16 17Z" fill="#2962FF"/>
+            </svg>
+            <span class="tv-brand-name">TradingView</span>
+            <span class="tv-badge-py">PYTHON</span>
+        </div>
+
+        <div class="tv-divider-v"></div>
+
+        <!-- Symbol Search Pill -->
+        <button class="tv-symbol-btn" id="symbolBtn" title="Symbol Search">
+            <span class="tv-symbol-ticker">XAUUSD</span>
+            <span class="tv-symbol-desc">Gold / US Dollar</span>
+            <span class="tv-source-tag">DUKASCOPY</span>
+        </button>
+
+        <div class="tv-divider-v"></div>
+
+        <!-- Timeframe Buttons -->
+        <div class="tv-timeframes">
+            <button class="tv-tf-btn" data-tf="1m">1m</button>
+            <button class="tv-tf-btn active" data-tf="5m">5m</button>
+            <button class="tv-tf-btn" data-tf="15m">15m</button>
+            <button class="tv-tf-btn" data-tf="1h">1h</button>
+            <button class="tv-tf-btn" data-tf="4h">4h</button>
+            <button class="tv-tf-btn" data-tf="1D">1D</button>
+        </div>
+
+        <div class="tv-divider-v"></div>
+
+        <!-- Chart Type -->
+        <button class="tv-icon-btn active" title="Candlestick Chart">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
+                <rect x="3" y="4" width="3" height="10" rx="0.5"/>
+                <line x1="4.5" y1="1" x2="4.5" y2="4" stroke="currentColor" stroke-width="1.5"/>
+                <line x1="4.5" y1="14" x2="4.5" y2="17" stroke="currentColor" stroke-width="1.5"/>
+                <rect x="11" y="2" width="3" height="12" rx="0.5"/>
+                <line x1="12.5" y1="0.5" x2="12.5" y2="2" stroke="currentColor" stroke-width="1.5"/>
+                <line x1="12.5" y1="14" x2="12.5" y2="16.5" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+        <!-- Trade Position Boxes Toggle -->
+        <button class="tv-header-text-btn active" id="toggleTradeBoxesBtn" title="Toggle Long/Short Trade Position Boxes on chart">
+            <span class="tv-box-icon">▣</span>
+            <span>Trade Boxes</span>
+        </button>
+    </div>
+
+    <!-- Center Quote Display -->
+    <div class="tv-header-center">
+        <div class="tv-live-quote" id="headerQuote">
+            <span class="tv-quote-label">XAUUSD</span>
+            <span class="tv-quote-price" id="quotePrice">—</span>
+            <span class="tv-quote-change" id="quoteChange">—</span>
+        </div>
+    </div>
+
+    <!-- Right Controls -->
+    <div class="tv-header-right">
+        <!-- Anti-Lookahead Active Badge -->
+        <div class="tv-guard-badge" title="Hardcoded AST static analyzer active to prevent lookahead bias">
+            <span class="guard-dot"></span>
+            <span>ZERO LOOKAHEAD GUARD</span>
+        </div>
+
+        <div class="tv-divider-v"></div>
+
+        <!-- AI Settings Modal Button -->
+        <button class="tv-header-btn-action" id="openAiConfigBtn" title="Configure AI & LLM Provider API">
+            <span class="btn-sparkle">✨</span>
+            <span>AI Settings</span>
+        </button>
+
+        <!-- Fullscreen Button -->
+        <button class="tv-icon-btn" id="fullscreenBtn" title="Toggle Fullscreen">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M1 5V1h4M11 1h4v4M15 11v4h-4M5 15H1v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+        </button>
+    </div>
+</header>
+
+<!-- =========================================================================
+     BODY CONTAINER (Toolbar + Chart Canvas + Right Sidebar)
+========================================================================= -->
+<div id="tvWorkspace">
+    
+    <!-- LEFT DRAWING TOOLBAR (TradingView Exact Toolset) -->
+    <aside id="tvLeftToolbar">
+        <button class="tv-tool-btn active" title="Crosshair (C)">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="9" cy="9" r="2.5" fill="currentColor"/>
+                <line x1="9" y1="1" x2="9" y2="6"/>
+                <line x1="9" y1="12" x2="9" y2="17"/>
+                <line x1="1" y1="9" x2="6" y2="9"/>
+                <line x1="12" y1="9" x2="17" y2="9"/>
+            </svg>
+        </button>
+
+        <button class="tv-tool-btn" title="Trend Line (Alt+T)">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5">
+                <line x1="3" y1="15" x2="15" y2="3"/>
+                <circle cx="3" cy="15" r="1.5" fill="currentColor"/>
+                <circle cx="15" cy="3" r="1.5" fill="currentColor"/>
+            </svg>
+        </button>
+
+        <button class="tv-tool-btn" title="Fib Retracement (Alt+F)">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5">
+                <line x1="2" y1="4" x2="16" y2="4"/>
+                <line x1="2" y1="8" x2="16" y2="8" stroke-dasharray="2 2"/>
+                <line x1="2" y1="11" x2="16" y2="11" stroke-dasharray="2 2"/>
+                <line x1="2" y1="14" x2="16" y2="14"/>
+            </svg>
+        </button>
+
+        <button class="tv-tool-btn" title="Brush / Paint">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M12 2l4 4-8 8H4v-4l8-8z"/>
+            </svg>
+        </button>
+
+        <button class="tv-tool-btn" title="Text Note">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M4 4h10M9 4v10M6 14h6"/>
+            </svg>
+        </button>
+
+        <button class="tv-tool-btn" title="Long / Short Position Tool">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="3" y="3" width="12" height="5" fill="#08998133" stroke="#089981"/>
+                <rect x="3" y="8" width="12" height="7" fill="#f2364533" stroke="#f23645"/>
+            </svg>
+        </button>
+
+        <button class="tv-tool-btn" title="Price Range / Measure (Shift+Click)">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M2 3h14M2 15h14M9 3v12"/>
+            </svg>
+        </button>
+
+        <div class="tv-tool-spacer"></div>
+
+        <button class="tv-tool-btn" id="clearDrawingsBtn" title="Remove Drawings">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M3 5h12M7 5V3h4v2M5 5l1 10h6l1-10"/>
+            </svg>
+        </button>
+    </aside>
+
+    <!-- CENTER MAIN WORKSPACE (Chart Canvas + Bottom Dock) -->
+    <section id="tvCenterStage">
+        
+        <!-- CHART AREA -->
+        <div id="tvChartContainer">
+            <!-- Dynamic OHLCV Hover Legend -->
+            <div id="chartLegend">
+                <div class="legend-row-primary">
+                    <span class="legend-symbol">XAUUSD · 5 · DUKASCOPY</span>
+                    <span class="legend-ohlc" id="legendOhlc">O: —  H: —  L: —  C: —</span>
+                </div>
+            </div>
+
+            <!-- TradingView Watermark -->
+            <div class="tv-watermark">
+                <span class="wm-symbol">XAUUSD</span>
+                <span class="wm-tf">5</span>
+            </div>
+
+            <!-- Lightweight Charts mount point -->
+            <div id="mainChartMount"></div>
+
+            <!-- Trade Position Boxes Canvas Overlay -->
+            <canvas id="tradeOverlayCanvas"></canvas>
+
+            <!-- Floating Monthly Performance Table (TradingView style) -->
+            <div id="tvFloatingStatsTable" class="tv-floating-stats-widget minimized">
+                <div class="fsw-header">
+                    <span class="fsw-title">Monthly Results</span>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <button class="fsw-toggle-btn" id="fswToggleBtn" title="Expand / Minimize Table">+</button>
+                        <button class="fsw-toggle-btn" id="fswCloseBtn" title="Close Table">✕</button>
+                    </div>
+                </div>
+                <div class="fsw-body" id="fswBody">
+                    <table class="fsw-table">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Returns</th>
+                                <th>Win Rate</th>
+                                <th>Trades</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fswTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                    <div class="fsw-summary-rows">
+                        <div class="fsw-row"><span>Max Drawdown:</span><strong id="fswMaxDD" class="negative">—</strong></div>
+                        <div class="fsw-row"><span>Profit Factor:</span><strong id="fswPF">—</strong></div>
+                        <div class="fsw-row"><span>Net PnL:</span><strong id="fswNetPnl">—</strong></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Floating Trade Navigator Bar (Step through trades one-by-one) -->
+            <div id="tvTradeNavigator" class="tv-floating-trade-nav">
+                <button class="tnav-btn" id="tnavPrevBtn" title="Previous Trade">◀ Prev</button>
+                <div class="tnav-info" id="tnavInfo">
+                    <span class="tnav-badge" id="tnavDir">LONG</span>
+                    <span class="tnav-text" id="tnavText">Trade #1: $4,403.69 → $4,415.08</span>
+                    <span class="tnav-pnl positive" id="tnavPnl">+$1,139.00</span>
+                </div>
+                <button class="tnav-btn" id="tnavNextBtn" title="Next Trade">Next ▶</button>
+                <div class="tnav-divider"></div>
+                <button class="tnav-btn-list" id="tnavOpenListBtn" title="Open Complete Trades Table in Strategy Tester">📋 View 200 Trades</button>
+            </div>
+        </div>
+
+        <!-- RESIZABLE SPLIT DRAGGER -->
+        <div id="tvSplitDragger" title="Drag to resize Strategy Tester"></div>
+
+        <!-- =====================================================================
+             BOTTOM DOCK: PINE/PYTHON EDITOR + STRATEGY TESTER + AI OPTIMIZER
+        ===================================================================== -->
+        <div id="tvBottomDock">
+            
+            <!-- Dock Tabs Header -->
+            <div class="tv-dock-header">
+                <div class="tv-dock-tabs">
+                    <button class="tv-tab-btn active" data-tab="strategyTester">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M1 14h14v2H1v-2zm1-4h3v3H2v-3zm5-5h3v8H7V5zm5-4h3v12h-3V1z"/>
+                        </svg>
+                        <span>Strategy Tester</span>
+                    </button>
+
+                    <button class="tv-tab-btn" data-tab="pythonEditor">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M5.5 3L1 7.5 5.5 12l1.1-1.1L3.2 7.5l3.4-3.4L5.5 3zm5 0l-1.1 1.1 3.4 3.4-3.4 3.4 1.1 1.1 4.5-4.5L10.5 3z"/>
+                        </svg>
+                        <span>Python Strategy Editor</span>
+                        <span class="tab-badge-py">py</span>
+                    </button>
+
+                    <button class="tv-tab-btn" data-tab="aiGenerator">
+                        <span class="tab-sparkle">✨</span>
+                        <span>AI Strategy Generator</span>
+                    </button>
+
+                    <button class="tv-tab-btn" data-tab="logsConsole">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M2 3h12v10H2V3zm1 1v8h10V4H3zm2 2h6v1H5V6zm0 2h6v1H5V8zm0 2h4v1H5v-1z"/>
+                        </svg>
+                        <span>Console Logs</span>
+                    </button>
+
+                    <button class="tv-tab-btn" data-tab="strategyLeaderboard">
+                        <span class="tab-trophy">🏆</span>
+                        <span>Leaderboard</span>
+                        <span class="tab-badge-leaderboard" id="leaderboardBadge">2</span>
+                    </button>
+
+                    <button class="tv-tab-btn" data-tab="quantLab" id="tabBtnQuantLab">
+                        <span class="tab-dna">🧬</span>
+                        <span>Multi-Agent Quant Lab</span>
+                        <span class="tab-badge-active-loop" id="labRunningBadge" style="display:none;">LIVE</span>
+                    </button>
+                </div>
+
+                <!-- Dock Action Controls (Right side of bottom bar) -->
+                <div class="tv-dock-actions">
+                    <div id="editorActions" style="display: none;">
+                        <button class="tv-dock-btn-secondary" id="resetStrategyBtn" title="Reset to Elvaris River Strategy v2">Reset to Elvaris</button>
+                        <button class="tv-dock-btn-primary" id="runStrategyBtn" title="Run Strategy & Backtest (Ctrl+Enter)">
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M4 2v12l10-6L4 2z"/>
+                            </svg>
+                            <span>Run Strategy</span>
+                        </button>
+                    </div>
+
+                    <button class="tv-icon-btn" id="dockCollapseBtn" title="Collapse / Expand Panel">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M3 5l5 5 5-5H3z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dock Content Panels -->
+            <div class="tv-dock-body">
+
+                <!-- -------------------------------------------------------------
+                     TAB 1: STRATEGY TESTER (TradingView Duplicate)
+                -------------------------------------------------------------- -->
+                <div class="tv-tab-content active" id="tabStrategyTester">
+                    <!-- Tester Sub-Tabs -->
+                    <div class="tv-tester-subnav">
+                        <div class="tester-subtabs">
+                            <button class="subtab-btn active" data-subtab="overview">Overview</button>
+                            <button class="subtab-btn" data-subtab="performance">Performance Summary</button>
+                            <button class="subtab-btn" data-subtab="trades">List of Trades</button>
+                            <button class="subtab-btn" data-subtab="monteCarlo">🎲 Monte Carlo Stress Test</button>
+                        </div>
+                        <div class="tester-meta" id="testerMeta">
+                            Initial Capital: <strong>$100,000</strong> · 1 Lot (100 oz) · Spread: $0.20 · Slippage: $0.05
+                        </div>
+                    </div>
+
+                    <!-- Subtab 1: Overview -->
+                    <div class="tester-subtab-pane active" id="subtabOverview">
+                        <div class="tester-overview-layout">
+                            <!-- Metrics Cards Grid -->
+                            <div class="tv-metrics-grid" id="metricsGrid">
+                                <!-- Populated dynamically -->
+                            </div>
+                            <!-- Equity Curve Chart -->
+                            <div class="tv-equity-panel">
+                                <div class="equity-header">
+                                    <span class="equity-title">Cumulative Equity Curve ($)</span>
+                                    <span class="equity-final" id="equityFinal">$0.00</span>
+                                </div>
+                                <div id="equityChartMount"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Subtab 2: Performance Summary -->
+                    <div class="tester-subtab-pane" id="subtabPerformance">
+                        <div class="tv-table-wrapper">
+                            <table class="tv-perf-table" id="perfSummaryTable">
+                                <thead>
+                                    <tr>
+                                        <th>Performance Metric</th>
+                                        <th>All Trades</th>
+                                        <th>Long Trades</th>
+                                        <th>Short Trades</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="perfSummaryBody">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Subtab 3: List of Trades -->
+                    <div class="tester-subtab-pane" id="subtabTrades">
+                        <div class="trades-toolbar">
+                            <div class="trades-filters">
+                                <button class="tr-filter-btn active" data-trfilter="all">All (<span id="countAll">0</span>)</button>
+                                <button class="tr-filter-btn" data-trfilter="long">Longs (<span id="countLong">0</span>)</button>
+                                <button class="tr-filter-btn" data-trfilter="short">Shorts (<span id="countShort">0</span>)</button>
+                                <button class="tr-filter-btn" data-trfilter="win">Wins (<span id="countWin">0</span>)</button>
+                                <button class="tr-filter-btn" data-trfilter="loss">Losses (<span id="countLoss">0</span>)</button>
+                            </div>
+                            <span class="trades-hint">Click any trade row to jump chart to that candle</span>
+                        </div>
+                        <div class="tv-table-wrapper tv-trades-table-scroll">
+                            <table class="tv-trades-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Type</th>
+                                        <th>Entry Time</th>
+                                        <th>Entry Price</th>
+                                        <th>Exit Time</th>
+                                        <th>Exit Price</th>
+                                        <th>Exit Reason</th>
+                                        <th>Contracts</th>
+                                        <th>Profit ($)</th>
+                                        <th>Return %</th>
+                                        <th>Cum. Profit ($)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tradesTableBody">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Subtab 4: Monte Carlo Stress Test -->
+                    <div class="tester-subtab-pane" id="subtabMonteCarlo">
+                        <div class="mc-layout">
+                            <div class="mc-chart-col">
+                                <div class="mc-header-row">
+                                    <div class="mc-title-block">
+                                        <span class="mc-title">🎲 Monte Carlo Bootstrap Simulation (1,000 Reshuffled Paths)</span>
+                                        <span class="mc-subtitle">Stress-testing random trade sequence order, severe drawdowns & ruin</span>
+                                    </div>
+                                    <button class="tv-dock-btn-secondary" id="btnRerunMonteCarlo">
+                                        <span>🔄 Resimulate 1,000 Paths</span>
+                                    </button>
+                                </div>
+                                <div class="mc-chart-mount" id="mcChartMount">
+                                    <canvas id="mcCanvas" width="900" height="260"></canvas>
+                                </div>
+                                <div class="mc-legend">
+                                    <span class="mc-leg-item"><span class="mc-dot p95"></span> 95th Percentile (Optimistic)</span>
+                                    <span class="mc-leg-item"><span class="mc-dot p75"></span> 75th Percentile</span>
+                                    <span class="mc-leg-item"><span class="mc-dot p50"></span> 50th Percentile (Median Path)</span>
+                                    <span class="mc-leg-item"><span class="mc-dot p25"></span> 25th Percentile</span>
+                                    <span class="mc-leg-item"><span class="mc-dot p5"></span> 5th Percentile (95% Value at Risk)</span>
+                                </div>
+                            </div>
+                            <div class="mc-metrics-col">
+                                <div class="mc-card">
+                                    <span class="mc-card-label">95% VaR Max Drawdown</span>
+                                    <span class="mc-card-val negative" id="mcVar95">0.0 R</span>
+                                    <span class="mc-card-sub" id="mcVar95Usd">Worst-case 95% confidence</span>
+                                </div>
+                                <div class="mc-card">
+                                    <span class="mc-card-label">Expected (Mean) Drawdown</span>
+                                    <span class="mc-card-val" id="mcExpectedDd">0.0 R</span>
+                                    <span class="mc-card-sub" id="mcExpectedDdUsd">Median simulated risk</span>
+                                </div>
+                                <div class="mc-card">
+                                    <span class="mc-card-label">Risk of 10R Drawdown</span>
+                                    <span class="mc-card-val" id="mcRisk10r">0.0%</span>
+                                    <span class="mc-card-sub">Probability of reaching 10R DD</span>
+                                </div>
+                                <div class="mc-card">
+                                    <span class="mc-card-label">Risk of 20% Account Ruin</span>
+                                    <span class="mc-card-val" id="mcRisk20pct">0.0%</span>
+                                    <span class="mc-card-sub">Chance of hitting 20% account DD</span>
+                                </div>
+                                <div class="mc-card">
+                                    <span class="mc-card-label">Probability of Profit</span>
+                                    <span class="mc-card-val positive" id="mcProbProfit">0.0%</span>
+                                    <span class="mc-card-sub">Simulations ending in profit</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- -------------------------------------------------------------
+                     TAB 2: PYTHON STRATEGY EDITOR (Monaco Code Editor)
+                -------------------------------------------------------------- -->
+                <div class="tv-tab-content" id="tabPythonEditor">
+                    <div class="editor-subbar">
+                        <div class="editor-subbar-left">
+                            <span class="file-name">strategy.py</span>
+                            <span class="guard-pill" title="AST parser scans every character to prevent future leaks">
+                                🛡️ Anti-Lookahead Parser: Active
+                            </span>
+                        </div>
+                        <div class="editor-subbar-right">
+                            <span class="shortcut-tip">Press <strong>Ctrl + Enter</strong> to compile and backtest</span>
+                        </div>
+                    </div>
+                    <!-- Monaco Editor Mount -->
+                    <div id="monacoEditorContainer"></div>
+                </div>
+
+                <!-- -------------------------------------------------------------
+                     TAB 3: AI STRATEGY GENERATOR & CONTINUOUS OPTIMIZER
+                -------------------------------------------------------------- -->
+                <div class="tv-tab-content" id="tabAiGenerator">
+                    <div class="ai-generator-layout">
+                        <!-- Left: Prompt & Generation Controls -->
+                        <div class="ai-controls-col">
+                            <div class="ai-card">
+                                <h3 class="ai-card-title">
+                                    <span>✨ Strategy Concept & Generation</span>
+                                    <button class="ai-cfg-link" id="aiConfigModalLink">Configure API Key</button>
+                                </h3>
+
+                                <div class="ai-input-group">
+                                    <label class="ai-label" for="aiPromptInput">Describe strategy or request improvements:</label>
+                                    <textarea id="aiPromptInput" rows="4" class="ai-textarea" placeholder="e.g. Create a mean-reversion strategy using Bollinger Band squeeze and RSI divergence on 5-minute Gold, with 10 pt Stop Loss and 20 pt Take Profit."></textarea>
+                                </div>
+
+                                <div class="ai-btn-row">
+                                    <button class="ai-btn-primary" id="btnAiGenerate">
+                                        <span>Generate Strategy</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Autonomous Continuous Testing Loop -->
+                            <div class="ai-card">
+                                <h3 class="ai-card-title">
+                                    <span>🔄 Autonomous Continuous Optimization</span>
+                                    <span class="ai-status-pill" id="optStatusPill">Idle</span>
+                                </h3>
+                                <p class="ai-card-desc">
+                                    The AI iteratively mutates parameters, evaluates Sharpe Ratio & Profit Factor on Dukascopy data, enforces zero lookahead bias, and keeps the best strategy.
+                                </p>
+                                
+                                <div class="opt-controls-row">
+                                    <div class="opt-input-block">
+                                        <label for="optIterations">Max Iterations:</label>
+                                        <input type="number" id="optIterations" value="5" min="1" max="20" class="opt-input">
+                                    </div>
+                                    <button class="ai-btn-opt" id="btnStartOptimize">
+                                        <span>Start Continuous Optimization</span>
+                                    </button>
+                                    <button class="ai-btn-stop" id="btnStopOptimize" style="display: none;">
+                                        <span>Stop</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Autonomous Optimization Feed & Live Results -->
+                        <div class="ai-results-col">
+                            <div class="ai-card" style="height: 100%;">
+                                <h3 class="ai-card-title">
+                                    <span>Optimization Progression & Guard Verifications</span>
+                                    <span id="bestScoreBadge" class="score-badge">Best Score: —</span>
+                                </h3>
+                                
+                                <div class="ai-log-stream" id="aiLogStream">
+                                    <div class="log-entry log-info">
+                                        <span class="log-ts">System</span>
+                                        <span class="log-msg">AI Strategy Engine initialized with Hardcoded Anti-Lookahead Bias rules. Ready for generation.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- -------------------------------------------------------------
+                     TAB 4: CONSOLE LOGS
+                -------------------------------------------------------------- -->
+                <div class="tv-tab-content" id="tabLogsConsole">
+                    <div class="console-box" id="consoleOutput">
+                        <div class="console-line info">[System] Dukascopy 5m XAUUSD Engine Ready. 34,744 candles loaded.</div>
+                        <div class="console-line info">[Guard] AST & Runtime Anti-Lookahead Guard active.</div>
+                    </div>
+                </div>
+
+                <!-- -------------------------------------------------------------
+                     TAB 5: STRATEGY LEADERBOARD (Ranked by Total R & Monthly Yield)
+                -------------------------------------------------------------- -->
+                <div class="tv-tab-content" id="tabStrategyLeaderboard">
+                    <div class="lb-container">
+                        <div class="lb-header">
+                            <div class="lb-title-block">
+                                <h3 class="lb-title">🏆 Quantitative Strategy Leaderboard & Hall of Fame</h3>
+                                <p class="lb-desc">Ranked by Total Net Return (R), High-Yield Months (>= +10.0R), Max Drawdown in R, and Monte Carlo 95% Stress VaR</p>
+                            </div>
+                            <div class="lb-actions">
+                                <button class="ai-btn-primary" id="btnStartGenerationToLeaderboard">
+                                    <span class="btn-sparkle">🚀</span>
+                                    <span>Start Autonomous Strategy Generation</span>
+                                </button>
+                                <button class="tv-dock-btn-secondary" id="btnRefreshLeaderboard">
+                                    <span>🔄 Refresh Leaderboard</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="tv-table-wrapper lb-table-scroll">
+                            <table class="tv-trades-table lb-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 75px; text-align: center;">Rank</th>
+                                        <th>Strategy Name & Alpha Concept</th>
+                                        <th style="text-align: right;">Total R (+R)</th>
+                                        <th>Monthly Yields (>= +10R)</th>
+                                        <th style="text-align: right;">Max DD (R / %)</th>
+                                        <th style="text-align: right;">Win Rate</th>
+                                        <th style="text-align: right;">Profit Factor</th>
+                                        <th style="text-align: right;">Monte Carlo 95% VaR</th>
+                                        <th style="text-align: center; width: 140px;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="leaderboardTableBody">
+                                    <!-- Populated dynamically from /api/leaderboard -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- -------------------------------------------------------------
+                     TAB 6: MULTI-AGENT QUANT LAB & AUTONOMOUS EXPLORATION LOOP
+                -------------------------------------------------------------- -->
+                <div class="tv-tab-content" id="tabQuantLab">
+                    <div class="ql-container">
+                        <!-- Header & Controls -->
+                        <div class="ql-header">
+                            <div>
+                                <h3 class="ql-title">
+                                    <span>🧬 Autonomous Multi-Agent Quant Lab</span>
+                                    <span class="ql-status-pill idle" id="qlStatusPill">IDLE</span>
+                                </h3>
+                                <p class="ql-desc">
+                                    Collaborative LLM Research Team: 💡 Idea Generator ➔ 🛡️ Risk Officer ➔ 📊 Backtester & Monte Carlo ➔ 🔬 Critic Post-Mortem ➔ ⚡ Optimizer
+                                </p>
+                            </div>
+                            <div class="ql-controls">
+                                <div class="ql-rounds-wrap">
+                                    <label for="qlRoundsInput">Rounds:</label>
+                                    <input type="number" id="qlRoundsInput" min="1" max="100" value="100" class="ql-input-num" />
+                                    <div class="ql-quick-pills" style="display:flex;gap:4px;margin-left:4px;">
+                                        <button type="button" class="btn-ql-pill" onclick="document.getElementById('qlRoundsInput').value=10" style="padding:2px 8px;font-size:11px;background:#1e222d;border:1px solid #2a2e39;color:#d1d4dc;border-radius:4px;cursor:pointer;">10</button>
+                                        <button type="button" class="btn-ql-pill" onclick="document.getElementById('qlRoundsInput').value=50" style="padding:2px 8px;font-size:11px;background:#1e222d;border:1px solid #2a2e39;color:#d1d4dc;border-radius:4px;cursor:pointer;">50</button>
+                                        <button type="button" class="btn-ql-pill" onclick="document.getElementById('qlRoundsInput').value=100" style="padding:2px 8px;font-size:11px;background:rgba(41,98,255,0.2);border:1px solid #2962ff;color:#2962ff;font-weight:600;border-radius:4px;cursor:pointer;">100 (Goal)</button>
+                                    </div>
+                                </div>
+                                <button class="btn-start-research" id="btnStartResearch">
+                                    ⚡ Start Autonomous Loop (100)
+                                </button>
+                                <button class="btn-stop-research" id="btnStopResearch" disabled>
+                                    ⏹ Stop Loop
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 4-Agent Visual Pipeline -->
+                        <div class="ql-pipeline">
+                            <div class="agent-card" id="agentCardIdea">
+                                <div class="agent-badge">💡 Idea Generator</div>
+                                <div class="agent-sub">Combinatorial Alpha Mining</div>
+                                <div class="agent-detail" id="agentIdeaDetail">Waiting for round start...</div>
+                            </div>
+                            <div class="agent-arrow">➔</div>
+                            <div class="agent-card" id="agentCardRisk">
+                                <div class="agent-badge">🛡️ Risk Officer</div>
+                                <div class="agent-sub">AST Anti-Lookahead & SL/TP</div>
+                                <div class="agent-detail" id="agentRiskDetail">Standby</div>
+                            </div>
+                            <div class="agent-arrow">➔</div>
+                            <div class="agent-card" id="agentCardBacktest">
+                                <div class="agent-badge">📊 Backtest & MC</div>
+                                <div class="agent-sub">Dukascopy Friction & 1000 VaR</div>
+                                <div class="agent-detail" id="agentBacktestDetail">Standby</div>
+                            </div>
+                            <div class="agent-arrow">➔</div>
+                            <div class="agent-card" id="agentCardCritic">
+                                <div class="agent-badge">🔬 Critic Post-Mortem</div>
+                                <div class="agent-sub">Losing Trade Diagnostics</div>
+                                <div class="agent-detail" id="agentCriticDetail">Standby</div>
+                            </div>
+                            <div class="agent-arrow">➔</div>
+                            <div class="agent-card" id="agentCardOptimizer">
+                                <div class="agent-badge">⚡ Optimizer</div>
+                                <div class="agent-sub">High-Yield Tuning (>= 10R)</div>
+                                <div class="agent-detail" id="agentOptimizerDetail">Standby</div>
+                            </div>
+                        </div>
+
+                        <!-- Telemetry Grid -->
+                        <div class="ql-telemetry">
+                            <div class="ql-metric-card">
+                                <span class="ql-m-label">Active Exploration Hypothesis</span>
+                                <span class="ql-m-val highlight" id="qlHypothesisVal">Ready to explore</span>
+                            </div>
+                            <div class="ql-metric-card">
+                                <span class="ql-m-label">Current Progress</span>
+                                <span class="ql-m-val" id="qlProgressVal">Round 0 of 5</span>
+                            </div>
+                            <div class="ql-metric-card">
+                                <span class="ql-m-label">Candidates Evaluated</span>
+                                <span class="ql-m-val" id="qlCandidatesVal">0</span>
+                            </div>
+                            <div class="ql-metric-card">
+                                <span class="ql-m-label">Best Candidate Discovered</span>
+                                <span class="ql-m-val positive" id="qlBestVal">—</span>
+                            </div>
+                        </div>
+
+                        <!-- Live Agent Debate & Activity Stream -->
+                        <div class="ql-stream-wrap">
+                            <div class="ql-stream-header">
+                                <span>💬 Multi-Agent Debate & Real-Time Research Activity Stream</span>
+                                <button class="btn-clear-stream" id="btnClearStream">Clear</button>
+                            </div>
+                            <div class="ql-stream-body" id="qlStreamBody">
+                                <div class="ql-log-row info">
+                                    <span class="ql-log-time">[Ready]</span>
+                                    <span class="ql-log-agent">System:</span>
+                                    <span class="ql-log-msg">Multi-Agent Quant Research Lab initialized. Click '⚡ Start Autonomous Loop' to begin discovering strategies.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </section>
+
+    <!-- RIGHT WATCHLIST & SYMBOL DETAILS BAR -->
+    <aside id="tvRightPanel">
+        <div class="tv-right-tabs">
+            <button class="tv-rp-tab active" title="Watchlist">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M2 3h12v2H2V3zm0 4h12v2H2V7zm0 4h12v2H2v-2z"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="tv-watchlist-container">
+            <div class="tv-wl-header">
+                <span class="tv-wl-title">Watchlist</span>
+                <span class="tv-wl-count">5 symbols</span>
+            </div>
+            
+            <div class="tv-wl-list">
+                <div class="tv-wl-item active" data-symbol="XAUUSD">
+                    <div class="wl-symbol-col">
+                        <span class="wl-sym">XAUUSD</span>
+                        <span class="wl-name">Gold Spot / US Dollar</span>
+                    </div>
+                    <div class="wl-price-col">
+                        <span class="wl-price" id="wlPriceXAU">—</span>
+                        <span class="wl-chg positive" id="wlChgXAU">—</span>
+                    </div>
+                </div>
+
+                <div class="tv-wl-item" data-symbol="EURUSD">
+                    <div class="wl-symbol-col">
+                        <span class="wl-sym">EURUSD</span>
+                        <span class="wl-name">Euro / US Dollar</span>
+                    </div>
+                    <div class="wl-price-col">
+                        <span class="wl-price">1.0845</span>
+                        <span class="wl-chg positive">+0.12%</span>
+                    </div>
+                </div>
+
+                <div class="tv-wl-item" data-symbol="GBPUSD">
+                    <div class="wl-symbol-col">
+                        <span class="wl-sym">GBPUSD</span>
+                        <span class="wl-name">British Pound / USD</span>
+                    </div>
+                    <div class="wl-price-col">
+                        <span class="wl-price">1.2982</span>
+                        <span class="wl-chg negative">-0.08%</span>
+                    </div>
+                </div>
+
+                <div class="tv-wl-item" data-symbol="BTCUSD">
+                    <div class="wl-symbol-col">
+                        <span class="wl-sym">BTCUSD</span>
+                        <span class="wl-name">Bitcoin / US Dollar</span>
+                    </div>
+                    <div class="wl-price-col">
+                        <span class="wl-price">64,250.00</span>
+                        <span class="wl-chg positive">+1.84%</span>
+                    </div>
+                </div>
+
+                <div class="tv-wl-item" data-symbol="US30">
+                    <div class="wl-symbol-col">
+                        <span class="wl-sym">US30</span>
+                        <span class="wl-name">Dow Jones 30</span>
+                    </div>
+                    <div class="wl-price-col">
+                        <span class="wl-price">39,840.00</span>
+                        <span class="wl-chg positive">+0.31%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Symbol Quote Card -->
+            <div class="tv-symbol-card">
+                <div class="card-sym-title">XAUUSD · 5M</div>
+                <div class="card-price-main" id="cardPriceMain">—</div>
+                <div class="card-stats-row">
+                    <div class="card-stat"><span class="cs-lbl">High (6M)</span><span class="cs-val" id="csHigh">—</span></div>
+                    <div class="card-stat"><span class="cs-lbl">Low (6M)</span><span class="cs-val" id="csLow">—</span></div>
+                </div>
+                <div class="card-stats-row">
+                    <div class="card-stat"><span class="cs-lbl">Bars</span><span class="cs-val">34,596</span></div>
+                    <div class="card-stat"><span class="cs-lbl">Source</span><span class="cs-val">Dukascopy</span></div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+</div>
+
+<!-- =========================================================================
+     MODAL: AI & LLM API CONFIGURATION
+========================================================================= -->
+<div class="tv-modal-backdrop" id="aiConfigModal">
+    <div class="tv-modal">
+        <div class="tv-modal-header">
+            <h3>Configure AI Strategy Provider</h3>
+            <button class="modal-close-btn" id="closeAiModalBtn">✕</button>
+        </div>
+        <div class="tv-modal-body">
+            <div class="modal-field">
+                <label for="cfgProvider">AI Provider:</label>
+                <select id="cfgProvider" class="modal-select">
+                    <option value="omniroute">OmniRoute (Proxy / Local / Gateway)</option>
+                    <option value="gemini">Google Gemini</option>
+                    <option value="openai">OpenAI (ChatGPT)</option>
+                    <option value="anthropic">Anthropic Claude</option>
+                    <option value="groq">Groq (Ultra-Fast)</option>
+                    <option value="openrouter">OpenRouter</option>
+                </select>
+            </div>
+
+            <div class="modal-field" id="endpointRow">
+                <label for="cfgEndpoint">OmniRoute Endpoint / Base URL:</label>
+                <input type="text" id="cfgEndpoint" class="modal-input" placeholder="e.g. http://localhost:20128/v1 or https://your-omniroute-url.com/v1" value="http://localhost:20128/v1">
+            </div>
+
+            <div class="modal-field">
+                <label for="cfgApiKey">API Key (or OmniRoute Secret):</label>
+                <input type="password" id="cfgApiKey" class="modal-input" placeholder="Enter your OmniRoute / Provider API Key">
+            </div>
+
+            <div class="modal-field">
+                <label for="cfgModel">Model Name (optional):</label>
+                <input type="text" id="cfgModel" class="modal-input" placeholder="e.g. gpt-4o, claude-3-5-sonnet, deepseek-chat, gemini-2.0-flash">
+            </div>
+
+            <div class="modal-info-box">
+                <strong>🛡️ Hardcoded Anti-Lookahead Bias Protection:</strong>
+                All strategy prompts sent to any model automatically inject strict causality rules. Any code returning future-peeking operations (`shift(-1)`, `center=True`, `bfill()`, forward indexing) is permanently blocked by the server-side AST validator.
+            </div>
+        </div>
+        <div class="tv-modal-footer">
+            <button class="modal-btn-secondary" id="cancelAiModalBtn">Cancel</button>
+            <button class="modal-btn-primary" id="saveAiModalBtn">Save Configuration</button>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================================
+     MODAL: INDICATORS OVERLAYS (ƒx)
+========================================================================= -->
+<div class="tv-modal-backdrop" id="indicatorsModal">
+    <div class="tv-modal">
+        <div class="tv-modal-header">
+            <h3>Chart Overlays & Indicators</h3>
+            <button class="modal-close-btn" id="closeIndModalBtn">✕</button>
+        </div>
+        <div class="tv-modal-body">
+            <div class="ind-toggle-list">
+                <label class="ind-check-row">
+                    <input type="checkbox" id="chkBB" checked>
+                    <span>Bollinger Bands (55, 0.2)</span>
+                </label>
+                <label class="ind-check-row">
+                    <input type="checkbox" id="chkSMMA33" checked>
+                    <span>SMMA 33 High / Low</span>
+                </label>
+                <label class="ind-check-row">
+                    <input type="checkbox" id="chkSMMA144" checked>
+                    <span>SMMA 144 High / Low</span>
+                </label>
+                <label class="ind-check-row">
+                    <input type="checkbox" id="chkRF" checked>
+                    <span>Smooth Range Filter</span>
+                </label>
+            </div>
+        </div>
+        <div class="tv-modal-footer">
+            <button class="modal-btn-primary" id="applyIndBtn">Apply</button>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================================
+     GLOBAL LOADING & ALERT OVERLAY
+========================================================================= -->
+<div id="loadingOverlay">
+    <div class="tv-spinner"></div>
+    <div class="tv-loading-text" id="loadingText">Loading Dukascopy XAUUSD 5m data...</div>
+</div>
+
+<div id="tvToast" class="tv-toast"></div>
+
+<!-- =========================================================================
+     SCRIPTS: APPLICATION LOGIC
+========================================================================= -->
+<script src="/static/app.js?v=align_trades_3"></script>
+</body>
+</html>
