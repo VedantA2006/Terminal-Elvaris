@@ -362,6 +362,40 @@
     "rank_score": 10.6
   },
   {
+    "id": "strat_1789050311",
+    "name": "Champion Cross-Pollination (LSS Hybrid + VWAP Slope) (Round #52)",
+    "concept": "Cross-pollinating the verified +81.8R LSS Champion with VWAP alignment and ...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-10 19:55:11",
+    "code": "import numpy as np\n\ndef calculate_signals(df):\n    \"\"\"\n    Champion Cross\u2011Pollination \u2013 LSS Hybrid + VWAP Slope\n    ----------------------------------------------------\n    Generates long/short entry signals on 5\u2011minute XAUUSD candles\n    using swing\u2011based liquidity sweeps, VWAP trend filtering,\n    session gating, ATR\u2011based stops, ADX & slope confirmation\n    and a relative volume filter.\n    \"\"\"\n\n    # ---- Indicator preparation ----\n    swing_highs, swing_lows = find_swings(df, swing_len=7)\n    vwap_series = vwap(df)\n    atr4 = atr(df, period=4)\n    adx_val, _, _ = adx(df, period=14)\n    slope20 = linear_regression_slope(df['close'], period=20)\n    rvol20 = rvol(df, period=20)\n    session_mask_lny = session_mask(df, 'london_ny')\n\n    # ---- Signal containers ----\n    df['bull_signal'] = False\n    df['bear_signal'] = False\n    df['sl_long'] = np.nan\n    df['sl_short'] = np.nan\n    df['tp1_long'] = np.nan\n    df['tp1_short'] = np.nan\n\n    # ---- Long entry logic (SSL Sweep: low < swing_low, close > swing_low) ----\n    long_cond = (\n        (df['low'] < swing_lows) &\n        (df['close'] > swing_lows) &\n        (df['close'] > vwap_series) &\n        (adx_val > 20) &\n        (slope20 > 0) &\n        (rvol20 > 1.4) &\n        session_mask_lny\n    )\n    df.loc[long_cond, 'bull_signal'] = True\n    df.loc[long_cond, 'sl_long'] = swing_lows[long_cond] - atr4[long_cond] * 0.25\n    risk_long = (df['close'] - df['sl_long']).abs()\n    df.loc[long_cond, 'tp1_long'] = df['close'] + risk_long * 1.6  # 1.6R\n\n    # ---- Short entry logic (BSL Sweep: high > swing_high, close < swing_high) ----\n    short_cond = (\n        (df['high'] > swing_highs) &\n        (df['close'] < swing_highs) &\n        (df['close'] < vwap_series) &\n        (adx_val > 20) &\n        (slope20 < 0) &\n        (rvol20 > 1.4) &\n        session_mask_lny\n    )\n    df.loc[short_cond, 'bear_signal'] = True\n    df.loc[short_cond, 'sl_short'] = swing_highs[short_cond] + atr4[short_cond] * 0.25\n    risk_short = (df['sl_short'] - df['close']).abs()\n    df.loc[short_cond, 'tp1_short'] = df['close'] - risk_short * 1.6  # 1.6R\n\n    return df",
+    "total_r": -0.6,
+    "total_trades": 8,
+    "winning_trades": 3,
+    "losing_trades": 5,
+    "win_rate": 37.5,
+    "profit_factor": 0.88,
+    "total_pnl": -597.66,
+    "max_drawdown_r": 5.3,
+    "max_drawdown_pct": 5.23,
+    "sharpe_ratio": -0.21,
+    "monthly_r": {
+      "Mar 2026": 0.5,
+      "Apr 2026": -1.6,
+      "May 2026": 1.5,
+      "Aug 2026": -1.0
+    },
+    "months_ge_10r": 0,
+    "monte_carlo": {
+      "expected_max_dd_r": 3.56,
+      "var_95_max_dd_r": 6.22,
+      "risk_of_ruin_10r": 0.0,
+      "risk_of_ruin_20r": 0.0,
+      "probability_of_profit": 35.3,
+      "median_final_r": -0.6
+    },
+    "rank_score": 9.5
+  },
+  {
     "id": "strat_1789049063",
     "name": "Vectorized Linear Regression Velocity Drift (Round #28)",
     "concept": "Measures continuous institutional directional price drift via 20-bar Linear...",

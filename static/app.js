@@ -1381,6 +1381,9 @@ function switchDockTab(tabId) {
 
     if (tabId === 'quantLab') {
         pollResearchStatus();
+        if (!researchPollTimer) {
+            researchPollTimer = setInterval(pollResearchStatus, 1500);
+        }
     }
 }
 
@@ -1867,6 +1870,9 @@ async function pollResearchStatus() {
         }
 
         if (data.status === 'running') {
+            if (!researchPollTimer) {
+                researchPollTimer = setInterval(pollResearchStatus, 1500);
+            }
             if (btnStart) btnStart.disabled = true;
             if (btnStop) btnStop.disabled = false;
         } else if (data.status === 'stopping') {
@@ -1969,5 +1975,6 @@ document.addEventListener('DOMContentLoaded', () => {
     try { initCharts(); } catch (e) { console.error('Charts boot error:', e); }
     try { setupNavigation(); } catch (e) { console.error('Navigation boot error:', e); }
     try { loadBaselineData(); } catch (e) { console.error('Data boot error:', e); }
+    try { pollResearchStatus(); } catch (e) { console.error('QuantLab poll error:', e); }
 });
 
