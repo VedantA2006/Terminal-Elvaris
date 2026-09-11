@@ -257,18 +257,33 @@ def generate_synthetic_data():
 # ========================================================================
 
 def load_or_download():
-    """Load real Dukascopy 6-month data up to today."""
+    """Load real Dukascopy data, falling back to direct download or synthetic if unavailable."""
     if OUTPUT_FILE.exists():
         df = pd.read_csv(OUTPUT_FILE, index_col='datetime', parse_dates=True)
         if len(df) > 1000:
             print(f"Using cached real Dukascopy data: {len(df)} bars ({df.index[0]} to {df.index[-1]})")
             return df
 
+    # 1. dukascopy-node CLI
     df = download_dukascopy_node()
     if df is not None and len(df) > 1000:
         return df
 
-    raise RuntimeError("Failed to load real Dukascopy data from today to last 6 months.")
+    # 2. dukascopy direct download (Python)
+    try:
+        df = download_dukascopy_direct()
+        if df is not None and len(df) > 1000:
+            return df
+    except Exception as e:
+        print(f"   [X] direct dukascopy download failed: {e}")
+
+    # 3. Synthetic fallback
+    print("   [!] Falling back to calibrated synthetic gold data generation...")
+    df = generate_synthetic_data()
+    if df is not None and len(df) > 1000:
+        return df
+
+    raise RuntimeError("Failed to load or generate XAUUSD 5m data.")
 
 
 if __name__ == '__main__':

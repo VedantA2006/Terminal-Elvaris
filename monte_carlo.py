@@ -1,13 +1,16 @@
 """
-Monte Carlo Stress Testing Engine for Algorithmic Trading Strategies.
+Monte Carlo Sequence-Risk Bootstrap Resampling Engine for Algorithmic Trading Strategies.
 
-Performs bootstrap resampling simulations (1,000 runs) on trade sequences
-to determine:
+Performs bootstrap trade-order resampling simulations (1,000 runs) on historical
+trade sequences to evaluate sequence-of-returns risk:
   - Percentile equity corridors (5th, 25th, Median 50th, 75th, 95th)
   - 95% Confidence Max Drawdown (Value at Risk) in R and USD
   - Expected (Mean) Drawdown in R and USD
   - Risk of Ruin probabilities (Chance of reaching 10R DD, 20R DD, 20% Account DD)
   - Probability of Profit
+
+Note: This evaluates sequence risk via empirical trade shuffling; it does NOT
+model synthetic price paths, slippage regimes, or structural volatility shocks.
 """
 
 import numpy as np

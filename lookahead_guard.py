@@ -149,19 +149,112 @@ class LookaheadASTVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
+def heal_strategy_code(code: str) -> str:
+    """
+    Auto-heals common LLM code formatting anomalies:
+    1. Strips markdown backtick wrappers (```python ... ```).
+    2. Slices directly from 'def calculate_signals' if preambles or think tags leaked.
+    3. Normalizes indentation: aligns 'def calculate_signals' to column 0 and body to 4 spaces.
+    4. Auto-repairs trailing truncated lines (unclosed parentheses/brackets) by backward trimming.
+    5. Guarantees 'return df' is cleanly present at the function exit.
+    """
+    if not code:
+        return ""
+
+    # 1. Strip markdown fences
+    clean = code.strip()
+    if clean.startswith("```python"):
+        clean = clean[9:]
+    elif clean.startswith("```"):
+        clean = clean[3:]
+    if clean.endswith("```"):
+        clean = clean[:-3]
+    clean = clean.strip()
+
+    if "def calculate_signals" not in clean:
+        return clean
+
+    start_idx = clean.find("def calculate_signals")
+    clean = clean[start_idx:]
+
+    raw_lines = [l.replace("\t", "    ") for l in clean.splitlines()]
+    def_idx = 0
+    for i, l in enumerate(raw_lines):
+        if "def calculate_signals" in l:
+            def_idx = i
+            break
+
+    body_lines = []
+    base_indent = None
+    for l in raw_lines[def_idx + 1:]:
+        s = l.strip()
+        if not s:
+            body_lines.append("")
+            continue
+        if s.startswith("#"):
+            body_lines.append("    " + s)
+            continue
+        indent = len(l) - len(l.lstrip())
+        if base_indent is None and indent > 0:
+            base_indent = indent
+        if base_indent:
+            rel_indent = max(0, indent - base_indent)
+            body_lines.append("    " + (" " * rel_indent) + l.lstrip())
+        else:
+            body_lines.append("    " + l.lstrip())
+
+    header = "def calculate_signals(df):"
+    norm_code = header + "\n" + "\n".join(body_lines)
+
+    # Check if normalized code parses cleanly as-is
+    try:
+        ast.parse(norm_code)
+        if "return df" not in norm_code:
+            norm_code = norm_code.rstrip() + "\n    return df\n"
+        return norm_code
+    except SyntaxError:
+        pass
+
+    # Iterative backward trim for truncated code (unclosed parentheses, incomplete trailing statements)
+    lines = norm_code.rstrip().splitlines()
+    for _ in range(min(25, max(1, len(lines) - 1))):
+        lines.pop()
+        cand = "\n".join(lines).rstrip() + "\n    return df\n"
+        try:
+            ast.parse(cand)
+            return cand
+        except SyntaxError:
+            continue
+
+    return norm_code
+
+
+def is_syntax_error(errors: List[str]) -> bool:
+    """Returns True if the error is a Python syntax/parsing issue rather than a causal lookahead violation."""
+    return any("Python Syntax Error" in str(e) for e in errors)
+
+
 def validate_strategy_code(code_str: str) -> Tuple[bool, List[str]]:
     """
     Validates Python strategy source code for lookahead bias.
+    Auto-heals formatting/indentation anomalies before evaluation.
 
     Returns:
         (is_valid, list_of_error_messages)
     """
+    # 1. Attempt initial parse; auto-heal if a syntax error is detected
     try:
         tree = ast.parse(code_str)
-    except SyntaxError as e:
-        return False, [f"Python Syntax Error at line {e.lineno}: {e.msg}"]
+        working_code = code_str
+    except SyntaxError as orig_err:
+        healed = heal_strategy_code(code_str)
+        try:
+            tree = ast.parse(healed)
+            working_code = healed
+        except SyntaxError:
+            return False, [f"Python Syntax Error at line {orig_err.lineno}: {orig_err.msg}"]
 
-    lines = code_str.splitlines()
+    lines = working_code.splitlines()
     visitor = LookaheadASTVisitor(lines)
     visitor.visit(tree)
 

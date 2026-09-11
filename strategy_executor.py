@@ -18,7 +18,9 @@ import pandas as pd
 from typing import Dict, Any, Tuple
 
 from lookahead_guard import assert_no_lookahead, LookaheadBiasError
+from security_guard import assert_no_dangerous_code, SecurityViolationError, SAFE_BUILTINS
 from backtest import run_backtest
+from stats_utils import compute_sharpe_sortino
 
 
 # Standard Indicator Helpers available to any strategy code
@@ -157,16 +159,24 @@ def find_fvgs(df: pd.DataFrame):
     return b_top, b_bot, s_top, s_bot
 
 def session_mask(df: pd.DataFrame, session: str = 'london_ny') -> pd.Series:
+    """
+    Returns a boolean mask for institutional trading sessions (UTC hours).
+    - 'london':    06:00 – 11:00 UTC  (London open through European morning)
+    - 'ny':        12:20 – 17:30 UTC  (COMEX Gold floor / US institutional hours)
+    - 'asia':      00:00 – 06:00 UTC  (Asian session)
+    - 'london_ny': Combined London + NY (the two highest-volume Gold windows)
+    """
     times = df.index if isinstance(df.index, pd.DatetimeIndex) else pd.to_datetime(df.get('dt', df.get('datetime', df.index)))
     mins = times.hour * 60 + times.minute
     if session == 'london':
         m = (6 * 60 <= mins) & (mins < 11 * 60)
     elif session == 'ny':
-        m = (17 * 60 + 30 <= mins) & (mins < 24 * 60)
+        m = (12 * 60 + 20 <= mins) & (mins < 17 * 60 + 30)
     elif session == 'asia':
         m = (0 <= mins) & (mins < 6 * 60)
     else:
-        m = ((6 * 60 <= mins) & (mins < 11 * 60)) | ((17 * 60 + 30 <= mins) & (mins < 24 * 60))
+        # london_ny: covers both institutional sessions with the overlap (12:20-17:30)
+        m = ((6 * 60 <= mins) & (mins < 11 * 60)) | ((12 * 60 + 20 <= mins) & (mins < 17 * 60 + 30))
     return pd.Series(m, index=df.index)
 
 def daily_levels(df: pd.DataFrame) -> pd.DataFrame:
@@ -437,9 +447,14 @@ def _format_native_sim_trades(trades_df: pd.DataFrame, initial_capital: float = 
         'max_consecutive_losses': max_l,
         'long_trades': len(long_trades),
         'short_trades': len(short_trades),
-        'sharpe_ratio': 2.85,
-        'sortino_ratio': 3.64,
+        'sharpe_ratio': 0.0,
+        'sortino_ratio': 0.0,
     }
+
+    # Compute real Sharpe/Sortino from actual trade data (not hardcoded)
+    sharpe, sortino = compute_sharpe_sortino(formatted_trades, equity_curve, initial_capital)
+    stats['sharpe_ratio'] = sharpe
+    stats['sortino_ratio'] = sortino
 
     return formatted_trades, equity_curve, stats, res_df
 
@@ -467,6 +482,17 @@ def execute_strategy(code_str: str, raw_df: pd.DataFrame, initial_capital: float
             'logs': ''
         }
 
+    # 1b. SECURITY CHECK — block imports, eval, exec, open, etc.
+    try:
+        assert_no_dangerous_code(code_str)
+    except SecurityViolationError as e:
+        return {
+            'success': False,
+            'error_type': 'SECURITY_VIOLATION',
+            'message': str(e),
+            'logs': 'Strategy rejected by Security Guard: dangerous code patterns detected.'
+        }
+
     # 2. Prepare execution context
     df_copy = raw_df.copy()
     if 'dt' not in df_copy.columns:
@@ -482,6 +508,7 @@ def execute_strategy(code_str: str, raw_df: pd.DataFrame, initial_capital: float
     sys.stdout = stdout_capture
 
     env = {
+        '__builtins__': SAFE_BUILTINS,
         'pd': pd,
         'np': np,
         'math': math,
@@ -525,46 +552,47 @@ def execute_strategy(code_str: str, raw_df: pd.DataFrame, initial_capital: float
                         res_df = env.get('df', df_copy)
                     break
 
-            if res_df is None and 'run_simulation' in env and callable(env['run_simulation']):
-                sim_res = env['run_simulation'](df_copy)
-                if isinstance(sim_res, tuple) and len(sim_res) > 0 and isinstance(sim_res[0], pd.DataFrame):
-                    res_df = sim_res[0]
-                elif isinstance(sim_res, pd.DataFrame):
-                    res_df = sim_res
-            elif res_df is None and 'simulate' in env and callable(env['simulate']):
-                sim_res = env['simulate'](df_copy)
-                if isinstance(sim_res, tuple) and len(sim_res) > 0 and isinstance(sim_res[0], pd.DataFrame):
-                    first_item = sim_res[0]
-                    if 'bull_signal' in first_item.columns:
-                        res_df = first_item
-                    elif not first_item.empty and ('result' in first_item.columns or 'r_return' in first_item.columns):
-                        trades, equity_curve, stats, res_df = _format_native_sim_trades(first_item, initial_capital, df_copy)
-                        native_sim_handled = True
-                    else:
-                        # first_item is trades_df, map trades into signals
-                        res_df = df_copy.copy()
-                        res_df['bull_signal'] = False
-                        res_df['bear_signal'] = False
-                        res_df['sl_long'] = np.nan
-                        res_df['tp1_long'] = np.nan
-                        res_df['sl_short'] = np.nan
-                        res_df['tp1_short'] = np.nan
-                        for _, tr in first_item.iterrows():
-                            b_idx = tr.get('entry_bar')
-                            if b_idx is not None and not pd.isna(b_idx):
-                                b_idx = int(b_idx)
-                                if 0 <= b_idx < len(res_df):
-                                    if tr.get('direction') == 1:
-                                        res_df.iloc[b_idx, res_df.columns.get_loc('bull_signal')] = True
-                                        res_df.iloc[b_idx, res_df.columns.get_loc('sl_long')] = tr.get('sl')
-                                        res_df.iloc[b_idx, res_df.columns.get_loc('tp1_long')] = tr.get('tp')
-                                    else:
-                                        res_df.iloc[b_idx, res_df.columns.get_loc('bear_signal')] = True
-                                        res_df.iloc[b_idx, res_df.columns.get_loc('sl_short')] = tr.get('sl')
-                                        res_df.iloc[b_idx, res_df.columns.get_loc('tp1_short')] = tr.get('tp')
-            else:
-                # Assumed df was mutated in-place
-                res_df = env.get('df', df_copy)
+            if res_df is None:
+                if 'run_simulation' in env and callable(env['run_simulation']):
+                    sim_res = env['run_simulation'](df_copy)
+                    if isinstance(sim_res, tuple) and len(sim_res) > 0 and isinstance(sim_res[0], pd.DataFrame):
+                        res_df = sim_res[0]
+                    elif isinstance(sim_res, pd.DataFrame):
+                        res_df = sim_res
+                elif 'simulate' in env and callable(env['simulate']):
+                    sim_res = env['simulate'](df_copy)
+                    if isinstance(sim_res, tuple) and len(sim_res) > 0 and isinstance(sim_res[0], pd.DataFrame):
+                        first_item = sim_res[0]
+                        if 'bull_signal' in first_item.columns:
+                            res_df = first_item
+                        elif not first_item.empty and ('result' in first_item.columns or 'r_return' in first_item.columns):
+                            trades, equity_curve, stats, res_df = _format_native_sim_trades(first_item, initial_capital, df_copy)
+                            native_sim_handled = True
+                        else:
+                            # first_item is trades_df, map trades into signals
+                            res_df = df_copy.copy()
+                            res_df['bull_signal'] = False
+                            res_df['bear_signal'] = False
+                            res_df['sl_long'] = np.nan
+                            res_df['tp1_long'] = np.nan
+                            res_df['sl_short'] = np.nan
+                            res_df['tp1_short'] = np.nan
+                            for _, tr in first_item.iterrows():
+                                b_idx = tr.get('entry_bar')
+                                if b_idx is not None and not pd.isna(b_idx):
+                                    b_idx = int(b_idx)
+                                    if 0 <= b_idx < len(res_df):
+                                        if tr.get('direction') == 1:
+                                            res_df.iloc[b_idx, res_df.columns.get_loc('bull_signal')] = True
+                                            res_df.iloc[b_idx, res_df.columns.get_loc('sl_long')] = tr.get('sl')
+                                            res_df.iloc[b_idx, res_df.columns.get_loc('tp1_long')] = tr.get('tp')
+                                        else:
+                                            res_df.iloc[b_idx, res_df.columns.get_loc('bear_signal')] = True
+                                            res_df.iloc[b_idx, res_df.columns.get_loc('sl_short')] = tr.get('sl')
+                                            res_df.iloc[b_idx, res_df.columns.get_loc('tp1_short')] = tr.get('tp')
+                else:
+                    # Assumed df was mutated in-place
+                    res_df = env.get('df', df_copy)
 
         if res_df is None or not isinstance(res_df, pd.DataFrame):
             raise ValueError("Strategy must return or modify a pandas DataFrame named 'df'.")
@@ -642,6 +670,13 @@ def execute_strategy(code_str: str, raw_df: pd.DataFrame, initial_capital: float
             'error_type': 'LOOKAHEAD_BIAS',
             'message': str(e),
             'logs': 'Strategy rejected: Runtime lookahead violation detected.'
+        }
+    except SecurityViolationError as e:
+        return {
+            'success': False,
+            'error_type': 'SECURITY_VIOLATION',
+            'message': str(e),
+            'logs': 'Strategy rejected: Security violation detected at runtime.'
         }
     except Exception as e:
         err_msg = traceback.format_exc()

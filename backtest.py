@@ -12,6 +12,8 @@ import numpy as np
 import pandas as pd
 import math
 
+from stats_utils import compute_sharpe_sortino
+
 
 def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False, spread=0.20, slippage=0.05):
     """
@@ -208,8 +210,8 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
                 if sl is not None:
                     if math.isnan(sl) or sl >= entry_price:
                         sl = entry_price - 10.0  # Fallback 10 pt SL
-                    elif (entry_price - sl) < 2.5:
-                        sl = entry_price - 2.5   # Mandatory minimum $2.50 stop distance to survive spread
+                    elif (entry_price - sl) < 4.0:
+                        sl = entry_price - 4.0   # Mandatory minimum $4.00 stop distance to survive XAUUSD spread/slippage
                 else:
                     sl = entry_price - 10.0
 
@@ -233,6 +235,9 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
                     if tps[0] < min_tp:
                         tps[0] = min_tp
 
+                # Fixed-fractional of INITIAL capital (not current equity).
+                # Design choice: prevents compounding drawdowns and ensures
+                # consistent R-multiple interpretation across all trades.
                 risk_per_trade_usd = initial_capital * 0.01
                 calc_size = round(risk_per_trade_usd / risk_dist, 2) if risk_dist > 0 else lot_size
 
@@ -263,8 +268,8 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
                 if sl is not None:
                     if math.isnan(sl) or sl <= entry_price:
                         sl = entry_price + 10.0
-                    elif (sl - entry_price) < 2.5:
-                        sl = entry_price + 2.5   # Mandatory minimum $2.50 stop distance to survive spread
+                    elif (sl - entry_price) < 4.0:
+                        sl = entry_price + 4.0   # Mandatory minimum $4.00 stop distance to survive XAUUSD spread/slippage
                 else:
                     sl = entry_price + 10.0
 
@@ -423,37 +428,8 @@ def _compute_stats(trades, equity_curve, initial_capital, max_drawdown, max_draw
             cur_w = 0
             max_l = max(max_l, cur_l)
 
-    # Standardized Daily Periodic Return Sharpe and Sortino Ratios (Annualized x sqrt(252))
-    sharpe = 0.0
-    sortino = 0.0
-    if equity_curve and len(equity_curve) > 1:
-        try:
-            eq_df = pd.DataFrame(equity_curve)
-            eq_df['date'] = pd.to_datetime(eq_df['time']).dt.date
-            daily_eq = eq_df.groupby('date')['equity'].last()
-            daily_rets = daily_eq.pct_change().dropna()
-            if len(daily_rets) > 1 and daily_rets.std() > 0:
-                mean_ret = float(daily_rets.mean())
-                std_ret = float(daily_rets.std())
-                sharpe = round((mean_ret / std_ret) * np.sqrt(252), 2)
-                downside_rets = daily_rets[daily_rets < 0]
-                if len(downside_rets) > 1 and downside_rets.std() > 0:
-                    sortino = round((mean_ret / float(downside_rets.std())) * np.sqrt(252), 2)
-                else:
-                    sortino = sharpe
-        except Exception:
-            pass
-
-    # Fallback to trade-based annualization if daily curve is insufficient
-    if sharpe == 0.0 and len(pnls) > 1 and np.std(pnls) > 0:
-        mean_r = np.mean(pnls)
-        std_r = np.std(pnls)
-        sharpe = round((mean_r / std_r) * np.sqrt(min(len(pnls), 252)), 2)
-        downside = [p for p in pnls if p < 0]
-        if downside and np.std(downside) > 0:
-            sortino = round((mean_r / np.std(downside)) * np.sqrt(min(len(pnls), 252)), 2)
-        else:
-            sortino = sharpe
+    # Sharpe & Sortino via shared single-source-of-truth utility
+    sharpe, sortino = compute_sharpe_sortino(trades, equity_curve, initial_capital)
 
     avg_win = float(np.mean(wins)) if wins else 0.0
     avg_loss = float(abs(np.mean(losses))) if losses else 0.0

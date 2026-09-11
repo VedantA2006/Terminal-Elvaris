@@ -25,9 +25,17 @@ test_live_ai_round.py
 audit_board.py
 update_board.py
 champion_81_8r_trades.csv
+verify_remediation.py
+check_loop.py
 
 # IDE and OS files
 .vscode/
 .idea/
 Thumbs.db
 Desktop.ini
+
+# Temporary data dumps & scratch files
+logs_dump.json
+logs_live.json
+scratch_dashboard.py
+temp_dashboard.html

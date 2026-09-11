@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ================================================================================
- 5 MONTHS >= 10R RUNNER-UP STRATEGY (+81.8R CHAMPION) — COMPLETE STANDALONE SCRIPT
+ LSS CHAMPION STRATEGY — COMPLETE STANDALONE SCRIPT
 ================================================================================
  Exact Parameters:
    SWING_LEN   = 7
@@ -52,11 +52,12 @@ def load_ohlcv(filepath: str = 'xauusd_new.json') -> pd.DataFrame:
     # Check fallback paths if specified file doesn't exist
     resolved_path = filepath
     if not os.path.exists(resolved_path):
+        base_dir = os.path.dirname(os.path.abspath(__file__))
         candidates = [
             'xauusd_new.json',
+            os.path.join(base_dir, 'data', 'XAUUSD_5min.csv'),
             'data/XAUUSD_5min.csv',
             '../data/XAUUSD_5min.csv',
-            'C:/Users/vedan/Desktop/Foundeer/data/XAUUSD_5min.csv'
         ]
         for c in candidates:
             if os.path.exists(c):
@@ -537,7 +538,7 @@ def simulate(df: pd.DataFrame, filter_sessions: bool = True):
 # ==============================================================================
 def main():
     print("=" * 80)
-    print(" EXECUTING +81.8R RUNNER-UP STRATEGY (5 MONTHS >= 10R)")
+    print(" EXECUTING LSS CHAMPION STRATEGY (CANDLE-CLOSE EXECUTION)")
     print(" Dataset: Dukascopy Real M5 XAUUSD (6 Months / Full Loaded Bars)")
     print("=" * 80)
 

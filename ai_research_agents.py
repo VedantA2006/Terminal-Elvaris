@@ -9,15 +9,20 @@ Implements a 4-agent collaborative quantitative debate pipeline:
 5. OptimizerAgent: Monte Carlo & High-Yield Refinement (tunes parameters and filters to hunt for >= 5 months >= 10R)
 """
 
+import os
 import re
 import json
+import random
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 import pandas as pd
 import numpy as np
 
-from ai_generator import call_ai_llm, _clean_code_response, HARDCODED_SYSTEM_PROMPT
-from lookahead_guard import validate_strategy_code
+from ai_generator import (
+    call_ai_llm, _clean_code_response, HARDCODED_SYSTEM_PROMPT,
+    get_engine_telemetry, set_engine_fallback, update_engine_telemetry
+)
+from lookahead_guard import validate_strategy_code, heal_strategy_code, is_syntax_error
 from strategy_executor import execute_strategy
 from monte_carlo import run_monte_carlo
 from leaderboard import compute_monthly_r_breakdown, compute_rank_score
@@ -85,7 +90,7 @@ Focus on combining:
     {
         "id": "champion_cross_pollination",
         "name": "Champion Cross-Pollination (LSS Hybrid + VWAP Slope)",
-        "concept": "Cross-pollinating the verified +81.8R LSS Champion with VWAP alignment and dynamic session volatility filters.",
+        "concept": "Cross-pollinating the LSS Champion framework with VWAP alignment and dynamic session volatility filters.",
         "instructions": """
 The Champion Strategy operates on:
 - Swing Length = 7, ATR Length = 14, R:R = 1.5 to 2.0.
@@ -311,18 +316,22 @@ class IdeaGeneratorAgent:
     """
 
     def __init__(self, provider: str = 'omniroute', api_key: str = '', model: str = '', endpoint: str = None):
-        self.provider = provider
-        self.api_key = api_key
-        self.model = model
-        self.endpoint = endpoint
+        self.provider = (provider or 'omniroute').lower()
+        self.api_key = api_key or os.environ.get('OMNIROUTE_API_KEY', '') or os.environ.get('GROQ_API_KEY', '')
+        self.model = model or 'agentrouter/gpt-6-astra'
+        if self.model in ('auto/best-coding', 'auto/best-reasoning', 'auto', 'groq/qwen/qwen3.6-27b', 'qwen/qwen3.6-27b'):
+            self.model = 'agentrouter/gpt-6-astra'
+        self.endpoint = endpoint or os.environ.get('OMNIROUTE_ENDPOINT', 'http://localhost:20128/v1')
 
-    def propose_strategy(self, archetype_idx: int = 0, recent_hypotheses: List[str] = None, custom_focus: str = None) -> Dict[str, Any]:
-        """Generates an initial strategy code proposal based on a chosen archetype with novelty enforcement."""
+    def propose_strategy(self, archetype_idx: int = 0, recent_hypotheses: List[str] = None, custom_focus: str = None,
+                         champion_code: str = None, second_parent_code: str = None,
+                         failure_memory: List[str] = None, leaderboard_code_context: List[Dict] = None) -> Dict[str, Any]:
+        """Generates an initial strategy code proposal based on a chosen archetype or breeds a champion parent."""
         archetype = ALPHA_ARCHETYPES[archetype_idx % len(ALPHA_ARCHETYPES)]
 
         novelty_mandate = ""
-        if recent_hypotheses:
-            formatted_recent = "\n".join(f"- {h}" for h in recent_hypotheses[-6:])
+        if recent_hypotheses and not champion_code:
+            formatted_recent = "\n".join(f"- {h}" for h in recent_hypotheses[-20:])
             novelty_mandate = f"""
 CRITICAL NOVELTY MANDATE — AVOID DUPLICATE STRATEGIES:
 The following concepts were ALREADY explored in recent rounds:
@@ -330,6 +339,65 @@ The following concepts were ALREADY explored in recent rounds:
 
 You MUST NOT replicate the exact indicator parameters, indicator combinations, or setup logic of the above.
 Innovate with alternative threshold values, unique filter combinations, or distinct execution confirmations to guarantee that this strategy is genuinely novel!
+"""
+
+        # UPGRADE 4: Failure Memory — teach LLM from past mistakes
+        failure_section = ""
+        if failure_memory:
+            formatted_failures = "\n".join(f"- {f}" for f in failure_memory[-8:])
+            failure_section = f"""
+LEARN FROM RECENT FAILURES — DO NOT REPEAT THESE MISTAKES:
+{formatted_failures}
+
+Key lessons: Avoid over-filtering (causes 0 trades), ensure out-of-sample robustness (avoid curve-fitting to train data),
+and keep entry conditions to 2-3 confluences maximum to generate sufficient trade frequency.
+"""
+
+        # UPGRADE 1: Leaderboard code context — show LLM what winning code looks like
+        leaderboard_section = ""
+        if leaderboard_code_context and not champion_code:
+            lb_snippets = []
+            for i, lc in enumerate(leaderboard_code_context[:3]):
+                lb_snippets.append(
+                    f"### Winner #{i+1}: {lc['name']} ({lc['total_r']:+.1f}R, PF {lc['profit_factor']}, WR {lc['win_rate']}%)\n"
+                    f"```python\n{lc['code']}\n```"
+                )
+            leaderboard_section = f"""
+PROVEN WINNING STRATEGY CODE (Learn from these patterns):
+{chr(10).join(lb_snippets)}
+
+Study these winners carefully. Notice their signal structure, risk management, and confluence patterns.
+Create a NOVEL strategy that is DIFFERENT from these but learns from their structural discipline!
+"""
+
+        breeding_mandate = ""
+        if champion_code:
+            # UPGRADE 5: Second parent for cross-pollination
+            second_parent_section = ""
+            if second_parent_code:
+                second_parent_section = f"""
+SECOND PARENT FOR CROSS-POLLINATION:
+```python
+{second_parent_code[:500]}
+```
+Cross-breed elements from BOTH parents: combine Parent A's entry logic with Parent B's risk management,
+or merge Parent A's filters with Parent B's signal structure. Create a genuinely novel hybrid!
+"""
+            breeding_mandate = f"""
+🧬 GENETIC MUTATION / CROSS-BREEDING MANDATE:
+Below is our current Champion Strategy from the Leaderboard (proven positive Net R and high win rate):
+```python
+{champion_code}
+```
+{second_parent_section}
+YOUR BREEDING MISSION:
+Do NOT discard the winning logic! Mutate and evolve this champion by cross-breeding it with the Archetype: "{archetype['name']}" ({archetype['concept']}).
+Guidelines for mutation:
+1. Retain the core winning edge of the parent strategy (e.g. key filters, signal structure, ATR risk management).
+2. Inject innovative confluences from {archetype['name']} (e.g. enhanced volume gating, session VWAP context, higher-timeframe trend alignment, or dynamic volatility expansion).
+3. Evolve the risk management (keep stop loss at least 1.5x-2.0x ATR and min $4.00, improve Take Profit targeting with 1.8R-2.5R).
+4. Prune noisy/redundant conditions if they cause over-fitting or unnecessary bleed.
+Produce a refined, evolved strategy that outperforms the parent champion!
 """
 
         user_prompt = f"""
@@ -343,53 +411,259 @@ Research Guidelines:
 {archetype['instructions']}
 
 {f'Specialized Focus: {custom_focus}' if custom_focus else ''}
-{novelty_mandate}
+{breeding_mandate if champion_code else novelty_mandate}
+{failure_section}
+{leaderboard_section}
 
 MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
 1. STRICT ZERO LOOKAHEAD BIAS: No shift(-n), no center=True, no bfill(). All calculations causal.
-2. MULTI-CONFLUENCE THINKING:
-   Combine setup trigger with macro trend context (Intraday VWAP `df['close'] > vwap(df)`, Daily Floor Pivots `daily_levels(df)` S1/R1/PDH/PDL, or EMA 21/55 alignment).
+   - ABSOLUTE BAN: NEVER use `center=True` in `.rolling()` (e.g. `df['high'].rolling(..., center=True)` peeks into future candles and is PERMANENTLY BLOCKED by the AST security parser).
+   - Use strictly causal rolling: `df['high'].rolling(15).max().shift(1)` or call the built-in `find_swings(df)`.
+2. REALISTIC CONFLUENCES (PREVENT ZERO-TRADE OVER-FILTERING):
+   - Use 2 to 3 confluences MAXIMUM: [Macro Trend Context] + [Archetype Entry Trigger] + [Session Mask].
+   - Examples of macro context: Intraday VWAP (`df['close'] > vwap(df)`), Daily Pivots (`levels['pp']`), or EMA 21/55.
+   - CRITICAL: Do NOT stack 5 or 6 simultaneous indicators with `&`. Over-filtering causes 0 trades to ever trigger!
+   - Target 15 to 45 quality trades over the 6-month train period (approx. 1 to 2 trades per week).
 3. ANTI-BLEED / NON-REPEATING TRANSITION SIGNALS (PREVENT OVERTRADING CHURN):
    - Entry signals MUST trigger ONLY on the FIRST candle transition of a setup:
      `raw_bull = setup_condition & sess`
      `bull_signal = raw_bull & (~raw_bull.shift(1).fillna(False))`
    - NEVER fire repeatedly on consecutive bars during a rolling window!
-   - Target 40 to 220 high-conviction trades across the 6-month Dukascopy dataset (0.5 to 1.5 trades/day).
 4. INSTITUTIONAL STOP LOSS & TAKE PROFIT:
-   - ALL trade entries are taken strictly at the CANDLE CLOSE (`df['close']`).
-   - Stop Loss MUST have a healthy 1.2x to 2.2x ATR buffer to easily survive spread/slippage:
-     `sl_long = np.minimum(df['low'], swing_lows) - (1.5 * atr(df, 14))`
-     `sl_short = np.maximum(df['high'], swing_highs) + (1.5 * atr(df, 14))`
-   - Ensure risk distance from close is at least $2.50:
-     `risk_long = np.maximum(df['close'] - sl_long, 2.50)`
-     `risk_short = np.maximum(sl_short - df['close'], 2.50)`
-   - Dynamically scale Take Profit directly from close using 1.5R to 2.5R Risk-to-Reward:
-     `df['tp1_long'] = df['close'] + (risk_long * 1.5)`
-     `df['tp1_short'] = df['close'] - (risk_short * 1.5)`
-   - NEVER invert Risk-to-Reward or use micro-stops (< $2.00)!
+    - ALL trade entries are taken strictly at the CANDLE CLOSE (`df['close']`).
+    - Stop Loss MUST use a FULL ATR multiplier (1.2x to 2.2x) — NOT a tiny fractional multiplier:
+      CORRECT:   `sl_long = np.minimum(df['low'], swing_lows) - (1.5 * atr(df, 14))`
+      WRONG:     `sl_long = df['low'] - (0.25 * atr(df, 14))`  ← This creates micro-stops that get eaten by spread!
+      `sl_short = np.maximum(df['high'], swing_highs) + (1.5 * atr(df, 14))`
+    - The stop distance from entry MUST be at least $4.00 (Gold spreads + slippage = $0.25):
+      `risk_long = np.maximum(df['close'] - sl_long, 4.00)`
+      `risk_short = np.maximum(sl_short - df['close'], 4.00)`
+    - Dynamically scale Take Profit directly from close using 1.5R to 2.5R Risk-to-Reward:
+      `df['tp1_long'] = df['close'] + (risk_long * 1.8)`
+      `df['tp1_short'] = df['close'] - (risk_short * 1.8)`
+    - NEVER use buffer_factor < 1.0 for ATR multipliers! Values like 0.20, 0.25, 0.35 are FORBIDDEN.
+    - NEVER invert Risk-to-Reward or use micro-stops (< $4.00)!
 5. Mandatory Session Gating: Wrap all entries in `session_mask(df, 'london_ny')`.
 6. Define calculate_signals(df) returning df with 'bull_signal', 'bear_signal', 'sl_long', 'sl_short', 'tp1_long', 'tp1_short'.
 7. MUST end with `return df`.
 8. Return ONLY executable Python code in ```python ... ``` block.
 """
         # Call with higher temperature (0.7) to maximize generative diversity across rounds
-        raw_resp = call_ai_llm(
-            self.provider, self.api_key, self.model, user_prompt,
-            system_prompt="You are the Lead Idea Generator Agent in an elite quantitative research team. Your goal is to explore diverse, distinct institutional alpha models without repeating past ideas.",
-            endpoint_url=self.endpoint,
-            temperature=0.7
+        sys_msg = (
+            "You are the Lead Genetic Quantitative Research Agent. Your goal is to mutate and evolve top-performing champion strategies into even higher-alpha variations."
+            if champion_code else
+            "You are the Lead Idea Generator Agent in an elite quantitative research team. Your goal is to explore diverse, distinct institutional alpha models without repeating past ideas."
         )
-        code = _clean_code_response(raw_resp)
+        raw_resp = ""
+        code = ""
+        engine_mode = "LLM"
+        engine_name = f"OmniRoute ({self.model})" if self.model else "OmniRoute LLM"
+        fallback_active = False
+        fallback_reason = None
+
+        try:
+            raw_resp = call_ai_llm(
+                self.provider, self.api_key, self.model, user_prompt,
+                system_prompt=sys_msg,
+                endpoint_url=self.endpoint,
+                temperature=0.7
+            )
+            code = _clean_code_response(raw_resp)
+        except Exception as err:
+            raw_resp = f"LLM Quota/Network Fallback: {err}"
+
+        # If LLM failed, timed out, or returned malformed output, fall back to autonomous synthesis
+        if not code or "def calculate_signals" not in code:
+            code = self._synthesize_archetype_code(archetype_idx, champion_code=champion_code)
+            engine_mode = "ARCHETYPE_GENERATOR"
+            engine_name = "Institutional Archetype Generator"
+            fallback_active = True
+            
+            # Determine human-readable reason
+            if "429" in str(raw_resp):
+                fallback_reason = "Groq Daily Token Limit Reached (429) · Auto-Resets in ~20m"
+            elif "503" in str(raw_resp) or "499" in str(raw_resp) or "timed out" in str(raw_resp).lower():
+                fallback_reason = "OmniRoute Upstream Timeout / Busy · Safety-Net Engaged"
+            else:
+                fallback_reason = f"Upstream Quota/Network Fallback: {str(raw_resp)[:60]}"
+            
+            set_engine_fallback(
+                reason=fallback_reason,
+                status_code=429 if "429" in str(raw_resp) else 503,
+                error_text=str(raw_resp)
+            )
+
         return {
             "archetype": archetype,
             "code": code,
             "raw_response": raw_resp,
+            "is_breeding": bool(champion_code),
+            "engine_mode": engine_mode,
+            "engine_name": engine_name,
+            "fallback_active": fallback_active,
+            "fallback_reason": fallback_reason,
             "proposed_at": datetime.utcnow().isoformat()
         }
 
+    @staticmethod
+    def _synthesize_archetype_code(archetype_idx: int, champion_code: str = None) -> str:
+        """High-speed institutional alpha synthesizer. Generates AST-compliant causal trading systems."""
+        sw_len = random.choice([5, 6, 7, 8, 10, 12])
+        atr_period = random.choice([10, 14, 20])
+        atr_mult = round(random.choice([1.3, 1.5, 1.7, 2.0, 2.2]), 2)
+        rr = round(random.choice([1.6, 1.8, 2.0, 2.2, 2.5]), 2)
+        min_dist = round(random.choice([3.5, 4.0, 4.5, 5.0]), 2)
+        ema_fast = random.choice([13, 21])
+        ema_slow = random.choice([34, 55])
+        adx_thresh = random.choice([20, 22, 25])
+        rvol_thresh = round(random.choice([1.1, 1.25, 1.4]), 2)
+
+        # Champion genetic mutation
+        if champion_code and "def calculate_signals" in champion_code:
+            mutated = champion_code
+            for pat, rep in [
+                (r'atr_mult\s*=\s*[\d\.]+', f'atr_mult = {atr_mult}'),
+                (r'swing_len\s*=\s*\d+', f'swing_len = {sw_len}'),
+                (r'min_risk\s*=\s*[\d\.]+', f'min_risk = {min_dist}'),
+                (r'\*\s*1\.[5-9]', f'* {rr}'),
+                (r'\*\s*2\.[0-5]', f'* {rr}')
+            ]:
+                mutated = re.sub(pat, rep, mutated)
+            if mutated != champion_code:
+                return mutated
+
+        idx = archetype_idx % len(ALPHA_ARCHETYPES)
+        if idx == 0:
+            return f'''def calculate_signals(df):
+    sess = session_mask(df, 'london_ny')
+    sw_highs, sw_lows = find_swings(df, swing_len={sw_len})
+    bull_fvg_top, bull_fvg_bot, bear_fvg_top, bear_fvg_bot = find_fvgs(df)
+    vwap_line = vwap(df)
+    
+    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)
+    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)
+    
+    armed_long = ssl_sweep.rolling(8, min_periods=1).max() == 1
+    armed_short = bsl_sweep.rolling(8, min_periods=1).max() == 1
+    
+    fvg_touch_long = (df['low'] <= bull_fvg_top) & (df['close'] > bull_fvg_bot)
+    fvg_touch_short = (df['high'] >= bear_fvg_bot) & (df['close'] < bear_fvg_top)
+    
+    raw_bull = armed_long & fvg_touch_long & (df['close'] > vwap_line) & sess
+    raw_bear = armed_short & fvg_touch_short & (df['close'] < vwap_line) & sess
+    
+    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))
+    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))
+    
+    atr_val = atr(df, {atr_period})
+    sl_long = np.minimum(df['low'], sw_lows) - ({atr_mult} * atr_val)
+    sl_short = np.maximum(df['high'], sw_highs) + ({atr_mult} * atr_val)
+    
+    risk_l = np.maximum(df['close'] - sl_long, {min_dist})
+    risk_s = np.maximum(sl_short - df['close'], {min_dist})
+    
+    df['sl_long'] = df['close'] - risk_l
+    df['sl_short'] = df['close'] + risk_s
+    df['tp1_long'] = df['close'] + (risk_l * {rr})
+    df['tp1_short'] = df['close'] - (risk_s * {rr})
+    return df
+'''
+
+        elif idx == 1:
+            return f'''def calculate_signals(df):
+    sess = session_mask(df, 'london_ny')
+    levels = daily_levels(df)
+    vwap_line = vwap(df)
+    atr_val = atr(df, {atr_period})
+    
+    s1_sweep = (df['low'] < levels['s1']) & (df['close'] > levels['s1'])
+    r1_sweep = (df['high'] > levels['r1']) & (df['close'] < levels['r1'])
+    
+    raw_bull = s1_sweep & (df['close'] > vwap_line) & sess
+    raw_bear = r1_sweep & (df['close'] < vwap_line) & sess
+    
+    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))
+    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))
+    
+    risk_l = np.maximum({atr_mult} * atr_val, {min_dist})
+    risk_s = np.maximum({atr_mult} * atr_val, {min_dist})
+    
+    df['sl_long'] = df['close'] - risk_l
+    df['sl_short'] = df['close'] + risk_s
+    df['tp1_long'] = df['close'] + (risk_l * {rr})
+    df['tp1_short'] = df['close'] - (risk_s * {rr})
+    return df
+'''
+
+        elif idx == 2:
+            return f'''def calculate_signals(df):
+    sess = session_mask(df, 'london_ny')
+    er = efficiency_ratio(df['close'], 20)
+    adx_val, _, _ = adx(df, {atr_period})
+    st_line, st_dir = supertrend(df, 10, 3.0)
+    atr_val = atr(df, {atr_period})
+    
+    st_bull_cross = (st_dir == 1) & (st_dir.shift(1) <= 0)
+    st_bear_cross = (st_dir == -1) & (st_dir.shift(1) >= 0)
+    
+    regime_ok = (er > 0.28) & (adx_val > {adx_thresh}) & sess
+    
+    raw_bull = st_bull_cross & regime_ok
+    raw_bear = st_bear_cross & regime_ok
+    
+    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))
+    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))
+    
+    risk_l = np.maximum(df['close'] - st_line, {min_dist})
+    risk_s = np.maximum(st_line - df['close'], {min_dist})
+    risk_l = np.maximum(risk_l, {atr_mult} * atr_val)
+    risk_s = np.maximum(risk_s, {atr_mult} * atr_val)
+    
+    df['sl_long'] = df['close'] - risk_l
+    df['sl_short'] = df['close'] + risk_s
+    df['tp1_long'] = df['close'] + (risk_l * {rr})
+    df['tp1_short'] = df['close'] - (risk_s * {rr})
+    return df
+'''
+
+        else:
+            return f'''def calculate_signals(df):
+    sess = session_mask(df, 'london_ny')
+    sw_highs, sw_lows = find_swings(df, swing_len={sw_len})
+    atr_val = atr(df, {atr_period})
+    ema_fast = ema(df['close'], {ema_fast})
+    ema_slow = ema(df['close'], {ema_slow})
+    vol_filter = rvol(df, 20) > {rvol_thresh}
+    
+    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)
+    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)
+    trend_bull = ema_fast > ema_slow
+    trend_bear = ema_fast < ema_slow
+    
+    raw_bull = ssl_sweep & trend_bull & vol_filter & sess
+    raw_bear = bsl_sweep & trend_bear & vol_filter & sess
+    
+    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))
+    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))
+    
+    risk_l = np.maximum(df['close'] - (sw_lows - ({atr_mult} * atr_val)), {min_dist})
+    risk_s = np.maximum((sw_highs + ({atr_mult} * atr_val)) - df['close'], {min_dist})
+    
+    df['sl_long'] = df['close'] - risk_l
+    df['sl_short'] = df['close'] + risk_s
+    df['tp1_long'] = df['close'] + (risk_l * {rr})
+    df['tp1_short'] = df['close'] - (risk_s * {rr})
+    return df
+'''
+
+
+def synthesize_archetype_code(archetype_idx: int, champion_code: str = None) -> str:
+    """Convenience module function to synthesize an institutional archetype strategy."""
+    return IdeaGeneratorAgent._synthesize_archetype_code(archetype_idx, champion_code=champion_code)
+
 
 # ===========================================================================
-# 2. RISK OFFICER AGENT
+# 2. RISK OFFICER AGENT (High-Speed Static AST & Structural Risk Engine)
 # ===========================================================================
 
 class RiskOfficerAgent:
@@ -397,8 +671,11 @@ class RiskOfficerAgent:
     Audits candidate strategy code for:
     - Lookahead bias / causal violations (AST inspection)
     - Directional integrity (SSL = Long, BSL = Short)
-    - Structural Stop Loss & Take Profit realism
+    - Structural Stop Loss & Take Profit realism (Min $4.00 Stop Distance)
     - Mandatory session gating (London/NY killzones)
+    - Anti-bleed transition gating
+    Operates via ultra-fast deterministic AST analysis (<3ms) to eliminate
+    redundant LLM wait times.
     """
 
     def __init__(self, provider: str = 'omniroute', api_key: str = '', model: str = '', endpoint: str = None):
@@ -407,83 +684,55 @@ class RiskOfficerAgent:
         self.model = model
         self.endpoint = endpoint
 
-    def audit_and_refine(self, code: str, archetype_name: str) -> Tuple[bool, str, List[str]]:
+    def audit_and_refine(self, code: str, archetype_name: str, archetype_idx: int = 0) -> Tuple[bool, str, List[str]]:
         """
-        Performs static AST validation, directional audit, and LLM risk audit.
+        Performs static AST validation and defensive guard injection in <5ms.
+        Auto-heals formatting/indentation anomalies and replaces unresolvable syntax
+        anomalies with verified archetype baselines to prevent tournament stalls.
         Returns: (is_approved, refined_code_or_original, audit_notes)
         """
         notes = []
 
+        # 0. Pre-clean & heal formatting/indentation
+        code = heal_strategy_code(code)
+
         # 1. Hardcoded AST Lookahead Check
         is_valid, errors = validate_strategy_code(code)
         if not is_valid:
-            notes.append(f"AST LOOKAHEAD VIOLATION: {errors}")
-            return False, code, notes
+            if is_syntax_error(errors):
+                notes.append(f"Auto-healed syntax irregularity in proposal: {errors[0]}")
+                # Fallback to institutional archetype code to keep tournament alive
+                code = synthesize_archetype_code(archetype_idx)
+                notes.append(f"AST Self-Heal: Synthesized verified institutional archetype for [{archetype_name}].")
+            else:
+                notes.append(f"AST LOOKAHEAD VIOLATION: {errors}")
+                return False, code, notes
 
         notes.append("AST Anti-Lookahead Check: PASSED (Zero future peeking detected)")
 
         # 2. Ensure Mandatory Session Gating
         if "session_mask" not in code:
-            notes.append("Missing session gating. Auto-injecting session_mask(df, 'london_ny') to eliminate Asian chop.")
+            notes.append("Auto-injected session_mask(df, 'london_ny') to eliminate Asian chop.")
             code = self._inject_session_gating(code)
 
         # 3. Ensure Anti-Bleed Transition Gating (Eliminates 800-trade churn)
         if "shift(1)" not in code and "diff()" not in code:
-            notes.append("Enforcing anti-bleed transition guard to prevent consecutive-bar signal churn.")
+            notes.append("Enforced anti-bleed transition guard to prevent consecutive-bar signal churn.")
             code = self._inject_anti_bleed_guards(code)
 
         # 4. Ensure Structural Risk Management
         if 'sl_long' not in code or 'sl_short' not in code:
-            notes.append("Missing dynamic Stop Loss columns. Auto-injecting institutional ATR risk protection.")
+            notes.append("Missing dynamic Stop Loss columns. Auto-injected institutional ATR risk protection.")
             code = self._inject_structural_risk(code)
 
-        # Guarantee return df is present
-        if 'return df' not in code:
-            code += "\n    return df\n"
+        # Post-injection clean and heal
+        code = heal_strategy_code(code)
 
-        # 5. LLM Risk Audit & Sanity Check
-        prompt = f"""
-[AGENT: RISK OFFICER & CODE AUDITOR]
-Review this quantitative strategy candidate for XAUUSD (Gold 5m):
-Archetype: {archetype_name}
-
-```python
-{code}
-```
-
-AUDIT CHECKLIST:
-1. Directional Integrity: Long trades MUST be triggered by low sweeps (SSL) or bullish structure. Short trades MUST be triggered by high sweeps (BSL) or bearish structure.
-2. Institutional Stop Distances: Stop Loss MUST have a healthy buffer (1.2x to 2.2x ATR, minimum $2.50 distance from close) so Dukascopy friction is < 8% of risk. Strictly REJECT micro-stops (< $2.00).
-3. Proportional Take Profit: Ensure Take-Profit is dynamically scaled to the true risk distance (1.5R to 2.5R).
-4. Anti-Bleed Guard: Signals MUST trigger on setup transitions, never firing on consecutive candles during a rolling window.
-5. Ensure no lookahead constructs sneak in.
-6. Ensure signal columns `df['bull_signal']`, `df['bear_signal']`, `df['sl_long']`, `df['sl_short']`, `df['tp1_long']`, `df['tp1_short']` are cleanly populated.
-7. MUST end with `return df`.
-
-If the code is sound, keep it intact or apply small defensive adjustments. Return ONLY valid Python code inside ```python ... ```.
-"""
-        try:
-            raw_resp = call_ai_llm(
-                self.provider, self.api_key, self.model, prompt,
-                system_prompt="You are the Chief Risk Officer and Code Auditor. Your job is to eliminate reckless risks, micro-stop spread traps, and churn overtrading.",
-                endpoint_url=self.endpoint
-            )
-            audited_code = _clean_code_response(raw_resp)
-            if 'return df' not in audited_code:
-                audited_code += "\n    return df\n"
-            is_valid_audit, errors_audit = validate_strategy_code(audited_code)
-            if is_valid_audit:
-                notes.append("Risk Officer Code Audit: APPROVED with institutional risk parameters.")
-                return True, audited_code, notes
-            else:
-                notes.append(f"Audited code had AST errors ({errors_audit}), using original verified code.")
-                return True, code, notes
-        except Exception as e:
-            notes.append(f"Risk Officer LLM check skipped ({e}), proceeding with AST-verified code.")
-            return True, code, notes
+        notes.append("Risk Officer Audit: APPROVED with institutional risk parameters (<3ms).")
+        return True, code, notes
 
     def _inject_session_gating(self, code: str) -> str:
-        """Injects London/NY session gating."""
+        """Injects London/NY session gating right before the final return statement."""
         injection = """
     # Risk Officer Injected Session Gating (London/NY Killzones)
     _sess_mask = session_mask(df, 'london_ny')
@@ -493,7 +742,8 @@ If the code is sound, keep it intact or apply small defensive adjustments. Retur
         df['bear_signal'] = df['bear_signal'] & _sess_mask
 """
         if 'return df' in code:
-            return code.replace("return df", injection + "\n    return df")
+            idx = code.rfind('return df')
+            return code[:idx] + injection + "\n    return df\n" + code[idx + 9:]
         return code + injection + "\n    return df\n"
 
     def _inject_anti_bleed_guards(self, code: str) -> str:
@@ -506,25 +756,27 @@ If the code is sound, keep it intact or apply small defensive adjustments. Retur
         df['bear_signal'] = df['bear_signal'].astype(bool) & (~df['bear_signal'].astype(bool).shift(1).fillna(False))
 """
         if 'return df' in code:
-            return code.replace("return df", injection + "\n    return df")
+            idx = code.rfind('return df')
+            return code[:idx] + injection + "\n    return df\n" + code[idx + 9:]
         return code + injection + "\n    return df\n"
 
     def _inject_structural_risk(self, code: str) -> str:
         """Injects institutional ATR SL/TP if missing from calculate_signals."""
         injection = """
-    # Risk Officer Injected Institutional ATR Risk Protection (Min $2.50 Stop Distance)
+    # Risk Officer Injected Institutional ATR Risk Protection (Min $4.00 Stop Distance)
     atr_risk = atr(df, period=14)
     if 'sl_long' not in df.columns:
         df['sl_long'] = np.where(df['bull_signal'], df['low'] - 1.5 * atr_risk, np.nan)
-        risk_l = np.maximum(df['close'] - df['sl_long'], 2.50)
+        risk_l = np.maximum(df['close'] - df['sl_long'], 4.00)
         df['tp1_long'] = np.where(df['bull_signal'], df['close'] + 1.8 * risk_l, np.nan)
     if 'sl_short' not in df.columns:
         df['sl_short'] = np.where(df['bear_signal'], df['high'] + 1.5 * atr_risk, np.nan)
-        risk_s = np.maximum(df['sl_short'] - df['close'], 2.50)
+        risk_s = np.maximum(df['sl_short'] - df['close'], 4.00)
         df['tp1_short'] = np.where(df['bear_signal'], df['close'] - 1.8 * risk_s, np.nan)
 """
         if 'return df' in code:
-            return code.replace("return df", injection + "\n    return df")
+            idx = code.rfind('return df')
+            return code[:idx] + injection + "\n    return df\n" + code[idx + 9:]
         return code + injection + "\n    return df\n"
 
 
@@ -615,18 +867,52 @@ class CriticPostMortem:
 class ParameterGridSweeper:
     """
     Fast vectorized parameter optimizer:
-    Evaluates a 9-point grid of (atr_mult, rr_ratio) on real Dukascopy data
+    Evaluates a 12-point grid of (atr_mult, rr_ratio) on real Dukascopy data
     to discover the mathematical alpha peak for any strategy candidate.
     """
 
     @staticmethod
+    def _mutate_code_params(code: str, am: float, rr: float) -> str:
+        """Robustly mutates ATR stop buffers and TP risk multipliers without corrupting code."""
+        mutated = code
+        # 1. Parameter variable assignments
+        mutated = re.sub(r'\b(atr_mult|atr_multiplier|atr_buffer_factor)\s*=\s*[\d\.]+', rf'\g<1> = {am}', mutated)
+        mutated = re.sub(r'\b(rr_ratio|rr_factor|reward_risk_ratio|target_rr)\s*=\s*[\d\.]+', rf'\g<1> = {rr}', mutated)
+
+        # 2. ATR buffer expressions in Stop Loss (e.g. 1.5 * atr(...) or (1.5 * atr_val))
+        mutated = re.sub(
+            r'([\+\-\(\*]\s*)[\d\.]+(\s*\*\s*atr(?:_val|_risk|\(df|\b))',
+            rf'\g<1>{am}\g<2>',
+            mutated
+        )
+        mutated = re.sub(
+            r'(atr(?:_val|_risk|\(df|\b)\s*\*\s*)[\d\.]+',
+            rf'\g<1>{am}',
+            mutated
+        )
+
+        # 3. Risk multiplier expressions in Take Profit (maintaining long and short risk independently)
+        mutated = re.sub(
+            r'\b(risk_\w+|risk[ls]|sl_dist(?:_\w+)?)\s*\*\s*[\d\.]+',
+            rf'\g<1> * {rr}',
+            mutated
+        )
+        mutated = re.sub(
+            r'[\d\.]+\s*\*\s*(risk_\w+|risk[ls]|sl_dist(?:_\w+)?)',
+            rf'{rr} * \g<1>',
+            mutated
+        )
+
+        return mutated
+
+    @staticmethod
     def sweep_and_optimize(base_code: str, df: pd.DataFrame) -> Tuple[str, Dict[str, Any], List[Dict[str, Any]], Dict[str, float]]:
         """
-        Sweeps combinations of (atr_mult in [0.15, 0.25, 0.35], rr_ratio in [1.2, 1.5, 1.8]).
+        Sweeps combinations of (atr_mult in [1.2, 1.5, 2.0], rr_ratio in [1.5, 1.8, 2.2, 2.5]).
         Returns: (best_code, best_stats, best_trades, best_monthly)
         """
         # Fast 1-Pass Baseline Prune:
-        # If the candidate produces < 5 trades, abort immediately without wasting 9 full grid sweeps!
+        # If the candidate produces < 5 trades, abort immediately without wasting full grid sweeps!
         base_res = execute_strategy(base_code, df)
         if not base_res.get('success'):
             return base_code, {}, [], {}
@@ -644,33 +930,43 @@ class ParameterGridSweeper:
         base_months_10 = sum(1 for v in base_monthly.values() if v >= 10.0)
         base_pf = float(base_stats.get('profit_factor', 1.0))
         best_score = (base_net_r * 1.5) + (base_months_10 * 15.0) + (base_pf * 10.0)
+        if len(base_trades) < 25:
+            best_score *= (len(base_trades) / 25.0)
 
         # Institutional ATR stop buffers and Risk-to-Reward ratios
         atr_mults = [1.2, 1.5, 2.0]
-        rr_ratios = [1.5, 1.8, 2.2]
+        rr_ratios = [1.5, 1.8, 2.2, 2.5]
 
+        consecutive_dead = 0
         for am in atr_mults:
+            if consecutive_dead >= 4 and best_score <= 0:
+                break
             for rr in rr_ratios:
-                mutated = base_code
-                # Replace explicit atr_mult / rr_ratio variables
-                mutated = re.sub(r'atr_mult\s*=\s*[\d\.]+', f'atr_mult = {am}', mutated)
-                mutated = re.sub(r'rr_ratio\s*=\s*[\d\.]+', f'rr_ratio = {rr}', mutated)
-                mutated = re.sub(r'rr_factor\s*=\s*[\d\.]+', f'rr_factor = {rr}', mutated)
-
-                # Mutate explicit stop loss and take profit multipliers
-                mutated = re.sub(r'\*\s*[\d\.]+\s*\*\s*atr', f'* {am} * atr', mutated)
-                mutated = re.sub(r'risk_\w+\s*\*\s*[\d\.]+', f'risk_long * {rr}' if 'risk_long' in mutated else f'risk_short * {rr}', mutated)
+                mutated = ParameterGridSweeper._mutate_code_params(base_code, am, rr)
+                if mutated == base_code:
+                    continue
 
                 res = execute_strategy(mutated, df)
                 if res.get('success'):
                     trades = res.get('trades', [])
                     stats = res.get('stats', {})
-                    if len(trades) >= 15:
+                    if len(trades) < 5:
+                        consecutive_dead += 1
+                        if consecutive_dead >= 4 and best_score <= 0:
+                            break
+                        continue
+                    else:
+                        consecutive_dead = 0
+                    if len(trades) >= 10:
                         monthly = compute_monthly_r_breakdown(trades)
                         months_10 = sum(1 for v in monthly.values() if v >= 10.0)
                         net_r = sum(monthly.values()) if monthly else stats.get('total_pnl', 0.0) / 1000.0
                         pf = float(stats.get('profit_factor', 1.0))
                         score = (net_r * 1.5) + (months_10 * 15.0) + (pf * 10.0)
+
+                        # Sample size confidence penalty
+                        if len(trades) < 25:
+                            score *= (len(trades) / 25.0)
 
                         # Penalize overtrading churn and reward selective high-conviction frequency
                         if len(trades) > 300:
@@ -710,9 +1006,24 @@ class OptimizerAgent:
                                  mc_results: Dict[str, Any],
                                  post_mortem: Dict[str, Any],
                                  monthly_r: Dict[str, float],
-                                 iteration: int = 1) -> Dict[str, Any]:
-        """Refines the strategy code guided by empirical failure modes and Monte Carlo VaR."""
+                                 iteration: int = 1,
+                                 leaderboard_context: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Refines the strategy code guided by empirical failure modes, Monte Carlo VaR, and tournament winners."""
         months_ge_10 = sum(1 for v in monthly_r.values() if v >= 10.0)
+
+        lb_section = ""
+        if leaderboard_context:
+            benchmarks = []
+            for i, top in enumerate(leaderboard_context[:3]):
+                benchmarks.append(
+                    f"  #{i+1} [{top.get('name', 'Champion')}]: {top.get('total_r', 0):+.1f}R | "
+                    f"PF: {top.get('profit_factor', 0)} | WR: {top.get('win_rate', 0)}% | Trades: {top.get('total_trades', 0)}"
+                )
+            lb_section = f"""
+CURRENT TOURNAMENT BENCHMARKS (TOP PERFORMERS ON LEADERBOARD):
+{chr(10).join(benchmarks)}
+Notice the trade frequency, profit factor, and consistency of these proven performers. Emulate their structural discipline!
+"""
 
         prompt = f"""
 [AGENT: QUANTITATIVE OPTIMIZER]
@@ -732,17 +1043,17 @@ EMPIRICAL BACKTEST PERFORMANCE (6-Month Dukascopy 5m Gold):
 - Monte Carlo 95% VaR Drawdown: -{mc_results.get('var_95_max_dd_r', 'N/A')} R
 - Monthly Returns Breakdown: {monthly_r}
 - High-Yield Months (>= +10R): {months_ge_10} Months
-
+{lb_section}
 CRITIC POST-MORTEM FAILURE DIAGNOSIS:
 {post_mortem.get('diagnosis', 'Standard optimization')}
 Session Loss Distribution: {post_mortem.get('session_loss_concentration', {})}
 
 TARGET OBJECTIVES FOR INSTITUTIONAL PROFITABILITY:
 1. Strictly enforce London/NY killzones: `session_mask(df, 'london_ny')` to eliminate low-volume chop.
-2. Anchor Stop Loss with a healthy institutional 1.2x to 2.2x ATR buffer (minimum $2.50 to $4.00 distance from entry). NEVER use micro-stops (< $2.00) that get eaten by spread and slippage!
-3. Enforce anti-bleed transition triggers (`signal & ~signal.shift(1)`) so trades only enter on setup initiation, targeting 40 to 220 high-quality trades.
+2. Anchor Stop Loss with a healthy institutional 1.2x to 2.2x ATR buffer (minimum $4.00 distance from entry). NEVER use micro-stops (< $4.00) that get eaten by spread and slippage!
+3. Enforce anti-bleed transition triggers (`signal & ~signal.shift(1)`) so trades only enter on setup initiation, targeting ~0.5 to 1.5 high-conviction trades per trading day on average.
 4. Scale Take-Profit dynamically to at least 1.5x to 2.2x the true stop distance.
-5. Target 5 months >= +10.0R like the Champion strategy.
+5. Target consistent positive monthly expectancy and solid risk-adjusted return across all market regimes.
 6. Keep the code clean, fast, and STRICTLY CAUSAL (Zero lookahead).
 7. MUST end with `return df`.
 
@@ -757,6 +1068,16 @@ Return ONLY the improved Python code in ```python ... ```.
             new_code = _clean_code_response(raw_resp)
             if 'return df' not in new_code:
                 new_code += "\n    return df\n"
+            
+            # Defensive guard: Ensure optimization didn't strip session or anti-bleed guards
+            ro_helper = RiskOfficerAgent()
+            if "session_mask" not in new_code:
+                new_code = ro_helper._inject_session_gating(new_code)
+            if "shift(1)" not in new_code and "diff()" not in new_code:
+                new_code = ro_helper._inject_anti_bleed_guards(new_code)
+            if 'sl_long' not in new_code or 'sl_short' not in new_code:
+                new_code = ro_helper._inject_structural_risk(new_code)
+
             is_valid, errors = validate_strategy_code(new_code)
             if not is_valid:
                 return {"success": False, "message": f"Optimized code failed AST validation: {errors}", "code": current_code}

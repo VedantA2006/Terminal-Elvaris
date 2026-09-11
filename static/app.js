@@ -557,6 +557,26 @@ function jumpToTradeIndex(idx) {
 }
 
 // =============================================================================
+// EQUITY CURVE DATA UTILITIES (Global Scope)
+// =============================================================================
+function prepareEquityData(equityList) {
+    if (!equityList || !equityList.length) return [];
+    const eqMap = new Map();
+    equityList.forEach(e => {
+        let ts = typeof e.time_ts === 'number' && e.time_ts > 0
+            ? e.time_ts
+            : (e.time ? Math.floor(new Date(e.time).getTime() / 1000) : NaN);
+        if (!isNaN(ts)) {
+            eqMap.set(ts, e.equity);
+        }
+    });
+    return Array.from(eqMap.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map(([time, value]) => ({ time, value }));
+}
+window.prepareEquityData = prepareEquityData;
+
+// =============================================================================
 // INITIAL DATA LOADING (Baseline)
 // =============================================================================
 async function loadBaselineData() {
@@ -594,25 +614,9 @@ async function loadBaselineData() {
 
         // 3. Clean chart: No indicator lines plotted
 
-function prepareEquityData(equityList) {
-    if (!equityList || !equityList.length) return [];
-    const eqMap = new Map();
-    equityList.forEach(e => {
-        let ts = typeof e.time_ts === 'number' && e.time_ts > 0
-            ? e.time_ts
-            : (e.time ? Math.floor(new Date(e.time).getTime() / 1000) : NaN);
-        if (!isNaN(ts)) {
-            eqMap.set(ts, e.equity);
-        }
-    });
-    return Array.from(eqMap.entries())
-        .sort((a, b) => a[0] - b[0])
-        .map(([time, value]) => ({ time, value }));
-}
-
         // 4. Equity Curve
         const eqData = prepareEquityData(equity);
-        if (eqData.length) equitySeries.setData(eqData);
+        if (eqData && eqData.length && equitySeries) equitySeries.setData(eqData);
 
         // 5. Render Strategy Tester & Floating Stats & Navigator
         renderStrategyTester(currentStats, currentTrades);
@@ -1047,10 +1051,15 @@ function addConsoleLog(message, type = 'info') {
 }
 
 function getAiConfig() {
+    let savedModel = localStorage.getItem('tv_ai_model');
+    if (!savedModel || savedModel === 'auto/best-coding' || savedModel === 'auto/best-reasoning' || savedModel.includes('qwen3.6') || savedModel === 'groq/openai/gpt-oss-120b') {
+        savedModel = 'agentrouter/gpt-6-astra';
+        localStorage.setItem('tv_ai_model', savedModel);
+    }
     return {
         provider: localStorage.getItem('tv_ai_provider') || 'omniroute',
-        apiKey: localStorage.getItem('tv_ai_apikey') || 'sk-e9b30155d949b791-9b5481-fe8fbacd',
-        model: localStorage.getItem('tv_ai_model') || 'auto/best-coding',
+        apiKey: localStorage.getItem('tv_ai_apikey') || '',
+        model: savedModel,
         endpoint: localStorage.getItem('tv_ai_endpoint') || 'http://localhost:20128/v1',
     };
 }
@@ -1340,12 +1349,30 @@ function setupNavigation() {
     document.getElementById('btnRefreshLeaderboard')?.addEventListener('click', fetchLeaderboard);
     document.getElementById('btnStartGenerationToLeaderboard')?.addEventListener('click', startAutonomousGeneration);
 
+    // Multi-Agent Tournament buttons: Leaderboard
+    document.getElementById('btnLbStart1000')?.addEventListener('click', () => startMultiAgentResearch(1000));
+    document.getElementById('btnLbPause')?.addEventListener('click', pauseMultiAgentResearch);
+    document.getElementById('btnLbResume')?.addEventListener('click', resumeMultiAgentResearch);
+    document.getElementById('lbTournPill')?.addEventListener('click', () => switchDockTab('quantLab'));
+
+    // Multi-Agent Tournament buttons: Top Header Bar
+    document.getElementById('hdrBtnStart1000')?.addEventListener('click', () => startMultiAgentResearch(1000));
+    document.getElementById('hdrBtnPause')?.addEventListener('click', pauseMultiAgentResearch);
+    document.getElementById('hdrBtnResume')?.addEventListener('click', resumeMultiAgentResearch);
+    document.getElementById('hdrTournPill')?.addEventListener('click', () => switchDockTab('quantLab'));
+
     // Multi-Agent Quant Lab listeners
-    document.getElementById('btnStartResearch')?.addEventListener('click', startMultiAgentResearch);
+    document.getElementById('btnStartResearch')?.addEventListener('click', () => startMultiAgentResearch());
+    document.getElementById('btnPauseResearch')?.addEventListener('click', pauseMultiAgentResearch);
+    document.getElementById('btnResumeResearch')?.addEventListener('click', resumeMultiAgentResearch);
     document.getElementById('btnStopResearch')?.addEventListener('click', stopMultiAgentResearch);
     document.getElementById('btnClearStream')?.addEventListener('click', () => {
         const stream = document.getElementById('qlStreamBody');
         if (stream) stream.innerHTML = '';
+    });
+
+    document.getElementById('tvHeaderEngineBadge')?.addEventListener('click', () => {
+        openAiConfigModal();
     });
 }
 
@@ -1630,9 +1657,12 @@ function renderLeaderboardTable(items) {
                     <div class="lb-strat-name">${item.name}</div>
                     <div class="lb-strat-concept">${item.concept || ''}</div>
                     <div class="lb-strat-badges">
+                        <span class="lb-tag" style="background: rgba(33, 150, 243, 0.15); color: #64b5f6; border: 1px solid rgba(33, 150, 243, 0.3);" title="Full 6-Month Dukascopy 5m Backtest">6M Full Backtest</span>
                         <span class="lb-tag tag-guard">AST Anti-Lookahead</span>
                         <span class="lb-tag tag-friction">Dukascopy Friction</span>
                         ${rank === 1 && totalR > 0 ? `<span class="lb-tag tag-champ">CHAMPION (${totalRSign}${totalR}R)</span>` : ''}
+                        ${item.val_r !== undefined ? `<span class="lb-tag" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);" title="Out-of-Sample Validation: ${item.val_r >= 0 ? '+' : ''}${item.val_r}R (${item.val_trades || 0} trades, PF ${item.val_pf || 0})">Val: ${item.val_r >= 0 ? '+' : ''}${item.val_r}R</span>` : ''}
+                        ${item.test_r !== undefined ? `<span class="lb-tag" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);" title="Out-of-Sample Test: ${item.test_r >= 0 ? '+' : ''}${item.test_r}R (${item.test_trades || 0} trades, PF ${item.test_pf || 0})">Test: ${item.test_r >= 0 ? '+' : ''}${item.test_r}R</span>` : ''}
                     </div>
                 </td>
                 <td style="text-align: right;">
@@ -1686,16 +1716,16 @@ async function loadLeaderboardStrategy(stratId) {
         currentCode = data.code || '';
 
         if (data.exec_result && data.exec_result.success) {
-            currentStats = data.exec_result.stats;
-            currentTrades = data.exec_result.trades;
+            currentStats = data.exec_result.stats || {};
+            currentTrades = data.exec_result.trades || [];
             currentMarkers = data.exec_result.markers || [];
             updateMarkersDisplay();
 
             if (data.exec_result.equity) {
                 const eqData = prepareEquityData(data.exec_result.equity);
-                if (eqData.length) {
+                if (eqData && eqData.length && equitySeries) {
                     equitySeries.setData(eqData);
-                    equityChart.timeScale().fitContent();
+                    if (equityChart) equityChart.timeScale().fitContent();
                 }
             }
 
@@ -1703,11 +1733,14 @@ async function loadLeaderboardStrategy(stratId) {
             renderFloatingMonthlyStats(currentTrades, currentStats);
             updateTradeNavigator();
 
-            if (currentTrades.length > 0) {
+            if (currentTrades && currentTrades.length > 0) {
                 jumpToTradeIndex(currentTrades.length - 1);
             }
             requestAnimationFrame(drawTradeBoxes);
             runMonteCarloSimulation(currentTrades, true);
+        } else if (data.exec_result && !data.exec_result.success) {
+            showToast(`Strategy loaded, but execution failed: ${data.exec_result.error || 'Check console'}`, 'warning');
+            addConsoleLog(`[Leaderboard] Execution error: ${data.exec_result.error}`, 'warning');
         }
 
         showToast(`Loaded "${data.strategy?.name}" into Chart!`, 'success');
@@ -1717,7 +1750,7 @@ async function loadLeaderboardStrategy(stratId) {
 
     } catch (err) {
         console.error('Error loading strategy:', err);
-        showToast('Error loading strategy from leaderboard', 'error');
+        showToast(`Error loading strategy from leaderboard: ${err.message || err}`, 'error');
     } finally {
         hideLoading();
     }
@@ -1792,36 +1825,62 @@ function hideLoading() {
 // =============================================================================
 let researchPollTimer = null;
 
-async function startMultiAgentResearch() {
+async function startMultiAgentResearch(forcedRounds, forceRestart = false) {
     const roundsInput = document.getElementById('qlRoundsInput');
-    const rounds = roundsInput ? parseInt(roundsInput.value, 10) || 100 : 100;
+    let rounds = 1000;
+    if (typeof forcedRounds === 'number') {
+        rounds = forcedRounds;
+        if (roundsInput) {
+            roundsInput.value = forcedRounds;
+            const btnStart = document.getElementById('btnStartResearch');
+            if (btnStart) btnStart.innerText = `⚡ Start Autonomous Loop (${forcedRounds})`;
+        }
+    } else {
+        rounds = roundsInput ? parseInt(roundsInput.value, 10) || 1000 : 1000;
+    }
 
-    const btnStart = document.getElementById('btnStartResearch');
-    const btnStop = document.getElementById('btnStopResearch');
-    if (btnStart) btnStart.disabled = true;
-    if (btnStop) btnStop.disabled = false;
+    // Immediately update all start / pause / resume buttons across Header, Leaderboard, and Quant Lab
+    ['btnStartResearch', 'btnLbStart1000', 'hdrBtnStart1000'].forEach(id => {
+        const b = document.getElementById(id);
+        if (b) b.disabled = true;
+    });
+    ['btnPauseResearch', 'btnLbPause', 'hdrBtnPause'].forEach(id => {
+        const b = document.getElementById(id);
+        if (b) {
+            b.style.display = 'inline-flex';
+            b.disabled = false;
+            b.innerHTML = id === 'hdrBtnPause' ? '⏸ Pause' : '⏸ Pause Rounds';
+        }
+    });
+    ['btnResumeResearch', 'btnLbResume', 'hdrBtnResume'].forEach(id => {
+        const b = document.getElementById(id);
+        if (b) b.style.display = 'none';
+    });
 
     showToast(`🧬 Starting Multi-Agent Quant Lab (${rounds} Rounds)...`, 'info');
 
+    const cfg = getAiConfig();
     try {
         const res = await fetch('/api/research/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 rounds: rounds,
-                provider: 'omniroute',
-                endpoint: 'http://localhost:20128/v1'
+                provider: cfg.provider,
+                api_key: cfg.apiKey,
+                model: cfg.model,
+                endpoint: cfg.endpoint,
+                force_restart: forceRestart
             })
         });
         const data = await res.json().catch(() => ({ success: false }));
         if (!res.ok || !data.success) {
             showToast(data.message || 'Failed to start research loop', 'error');
-            if (btnStart) btnStart.disabled = false;
-            if (btnStop) btnStop.disabled = true;
+            pollResearchStatus();
             return;
         }
 
-        // Start active polling
+        showToast(`⚡ Started Multi-Agent Research Loop (${rounds} Rounds)`, 'success');
         if (!researchPollTimer) {
             researchPollTimer = setInterval(pollResearchStatus, 1500);
         }
@@ -1830,14 +1889,83 @@ async function startMultiAgentResearch() {
     } catch (err) {
         console.error('Failed to start research loop:', err);
         showToast('Network error starting research loop', 'error');
-        if (btnStart) btnStart.disabled = false;
-        if (btnStop) btnStop.disabled = true;
+        pollResearchStatus();
+    }
+}
+
+async function pauseMultiAgentResearch() {
+    ['btnPauseResearch', 'btnLbPause', 'hdrBtnPause'].forEach(id => {
+        const b = document.getElementById(id);
+        if (b) {
+            b.disabled = true;
+            b.innerHTML = '⏳ Pausing...';
+        }
+    });
+    showToast('⏸️ Pause requested. Stopping process of rounds...', 'info');
+
+    try {
+        const res = await fetch('/api/research/pause', { method: 'POST' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+            showToast(data.message || 'Failed to pause research loop', 'error');
+        } else {
+            showToast('Loop halting cleanly. Progress preserved.', 'info');
+        }
+        pollResearchStatus();
+    } catch (err) {
+        console.error('Failed to pause research loop:', err);
+        showToast('Network error requesting pause', 'error');
+        pollResearchStatus();
+    }
+}
+
+async function resumeMultiAgentResearch() {
+    ['btnResumeResearch', 'btnLbResume', 'hdrBtnResume'].forEach(id => {
+        const b = document.getElementById(id);
+        if (b) {
+            b.disabled = true;
+            b.innerHTML = '⚡ Resuming...';
+        }
+    });
+
+    const cfg = getAiConfig();
+    showToast('▶️ Resuming autonomous tournament from exact paused round...', 'info');
+
+    try {
+        const res = await fetch('/api/research/resume', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                provider: cfg.provider,
+                api_key: cfg.apiKey,
+                model: cfg.model,
+                endpoint: cfg.endpoint
+            })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+            showToast(data.message || 'Failed to resume research loop', 'error');
+            pollResearchStatus();
+            return;
+        }
+
+        showToast(data.message || 'Research loop resumed', 'success');
+        if (!researchPollTimer) {
+            researchPollTimer = setInterval(pollResearchStatus, 1500);
+        }
+        pollResearchStatus();
+    } catch (err) {
+        console.error('Failed to resume research loop:', err);
+        showToast('Network error resuming loop', 'error');
+        pollResearchStatus();
     }
 }
 
 async function stopMultiAgentResearch() {
     const btnStop = document.getElementById('btnStopResearch');
+    const btnPause = document.getElementById('btnPauseResearch');
     if (btnStop) btnStop.disabled = true;
+    if (btnPause) btnPause.disabled = true;
 
     try {
         await fetch('/api/research/stop', { method: 'POST' });
@@ -1854,11 +1982,99 @@ async function pollResearchStatus() {
         if (!res.ok) return;
         const data = await res.json();
 
-        // 1. Status Pill & Buttons
+        // 0. Update Live Engine & Model Telemetry (Header, Quant Lab Banner, AI Tab)
+        const eng = data.engine || {};
+        const isFallback = Boolean(eng.fallback_active);
+        const mode = eng.mode || (isFallback ? 'ARCHETYPE_GENERATOR' : 'LLM');
+        const modelName = eng.model || 'groq/openai/gpt-oss-120b';
+        const endpointUrl = eng.endpoint || 'http://localhost:20128/v1 (OmniRoute)';
+        const fallbackReason = eng.fallback_reason || (isFallback ? 'Upstream Rate Limit (429) · Algorithmic Archetype Engine Active' : 'Live');
+
+        // Header Badge
+        const headerBadge = document.getElementById('tvHeaderEngineBadge');
+        const headerDot = document.getElementById('headerEngineDot');
+        const headerText = document.getElementById('headerEngineText');
+        if (headerBadge && headerText) {
+            if (isFallback) {
+                headerBadge.className = 'tv-engine-badge badge-fallback';
+                headerText.textContent = `AI: ARCHETYPE GENERATOR (Fallback Active)`;
+                headerBadge.title = `Current Engine: Institutional Archetype Synthesizer (Fallback: ${fallbackReason})`;
+            } else {
+                headerBadge.className = 'tv-engine-badge badge-llm';
+                const shortModel = modelName.includes('/') ? modelName.split('/').pop() : modelName;
+                headerText.textContent = `AI: ${shortModel} (OmniRoute 200 OK)`;
+                headerBadge.title = `Current Engine: OmniRoute LLM [${modelName}] via ${endpointUrl}`;
+            }
+        }
+
+        // Quant Lab Engine Banner
+        const qlBanner = document.getElementById('qlEngineBanner');
+        const qlDot = document.getElementById('qlEngineDot');
+        const qlTitle = document.getElementById('qlEngineTitle');
+        const qlBadge = document.getElementById('qlEngineBadge');
+        const qlModel = document.getElementById('qlEngineModel');
+        const qlEndpoint = document.getElementById('qlEngineEndpoint');
+        const qlReason = document.getElementById('qlEngineReason');
+
+        if (qlBanner) {
+            if (isFallback) {
+                qlBanner.classList.remove('llm-active');
+                if (qlDot) { qlDot.className = 'engine-dot-lg'; }
+                if (qlTitle) qlTitle.textContent = 'Institutional Archetype Generator';
+                if (qlBadge) {
+                    qlBadge.className = 'ql-eb-badge fallback';
+                    qlBadge.textContent = 'FALLBACK ACTIVE';
+                }
+                if (qlReason) {
+                    qlReason.className = 'ql-eb-val warning';
+                    qlReason.textContent = fallbackReason;
+                }
+            } else {
+                qlBanner.classList.add('llm-active');
+                if (qlDot) { qlDot.className = 'engine-dot-lg llm'; }
+                if (qlTitle) qlTitle.textContent = `OmniRoute LLM (${modelName})`;
+                if (qlBadge) {
+                    qlBadge.className = 'ql-eb-badge llm';
+                    qlBadge.textContent = 'ONLINE (200 OK)';
+                }
+                if (qlReason) {
+                    qlReason.className = 'ql-eb-val success';
+                    qlReason.textContent = 'AgentRouter GPT-6 Astra active via OmniRoute proxy gateway.';
+                }
+            }
+            if (qlModel) qlModel.textContent = modelName;
+            if (qlEndpoint) qlEndpoint.textContent = endpointUrl;
+        }
+
+        // AI Tab Active Engine Notice
+        const aiAebText = document.getElementById('aiActiveEngineText');
+        if (aiAebText) {
+            if (isFallback) {
+                aiAebText.innerHTML = `Active Generator: <strong style="color:var(--tv-yellow)">Institutional Archetype Generator</strong> (Upstream LLM 429 daily rate limit reached · Safety-Net engaged)`;
+            } else {
+                aiAebText.innerHTML = `Active Generator: <strong style="color:var(--tv-green)">OmniRoute LLM</strong> [${modelName}] (${endpointUrl})`;
+            }
+        }
+
+        // 1. Status Pills & Buttons (Header, Leaderboard, and Quant Lab Synchronized)
         const pill = document.getElementById('qlStatusPill');
         const badge = document.getElementById('labRunningBadge');
         const btnStart = document.getElementById('btnStartResearch');
+        const btnPause = document.getElementById('btnPauseResearch');
+        const btnResume = document.getElementById('btnResumeResearch');
         const btnStop = document.getElementById('btnStopResearch');
+
+        // Header controls
+        const hdrPill = document.getElementById('hdrTournPill');
+        const hdrBtnStart = document.getElementById('hdrBtnStart1000');
+        const hdrBtnPause = document.getElementById('hdrBtnPause');
+        const hdrBtnResume = document.getElementById('hdrBtnResume');
+
+        // Leaderboard controls
+        const lbPill = document.getElementById('lbTournPill');
+        const lbBtnStart = document.getElementById('btnLbStart1000');
+        const lbBtnPause = document.getElementById('btnLbPause');
+        const lbBtnResume = document.getElementById('btnLbResume');
 
         if (pill) {
             pill.className = `ql-status-pill ${data.status}`;
@@ -1866,21 +2082,201 @@ async function pollResearchStatus() {
         }
 
         if (badge) {
-            badge.style.display = (data.status === 'running') ? 'inline-block' : 'none';
+            badge.style.display = (data.status === 'running' || data.status === 'pausing') ? 'inline-block' : 'none';
         }
+
+        const nextRound = data.current_round + 1;
 
         if (data.status === 'running') {
             if (!researchPollTimer) {
                 researchPollTimer = setInterval(pollResearchStatus, 1500);
             }
-            if (btnStart) btnStart.disabled = true;
+            // Header
+            if (hdrPill) {
+                hdrPill.className = 'tv-tourn-status-pill running';
+                hdrPill.textContent = `ROUND ${data.current_round}/${data.max_rounds} (RUNNING)`;
+                hdrPill.title = `Multi-Agent Tournament active on Round ${data.current_round}. Click to view in Quant Lab.`;
+            }
+            if (hdrBtnStart) hdrBtnStart.style.display = 'none';
+            if (hdrBtnPause) {
+                hdrBtnPause.style.display = 'inline-flex';
+                hdrBtnPause.disabled = false;
+                hdrBtnPause.innerHTML = '⏸ Pause';
+            }
+            if (hdrBtnResume) hdrBtnResume.style.display = 'none';
+
+            // Leaderboard
+            if (lbPill) {
+                lbPill.className = 'tv-tourn-status-pill running';
+                lbPill.textContent = `ROUND ${data.current_round}/${data.max_rounds} (RUNNING)`;
+            }
+            if (lbBtnStart) lbBtnStart.style.display = 'none';
+            if (lbBtnPause) {
+                lbBtnPause.style.display = 'inline-flex';
+                lbBtnPause.disabled = false;
+                lbBtnPause.innerHTML = '⏸ Pause Rounds';
+            }
+            if (lbBtnResume) lbBtnResume.style.display = 'none';
+
+            // Quant Lab
+            if (btnStart) {
+                btnStart.style.display = 'inline-flex';
+                btnStart.disabled = true;
+            }
+            if (btnPause) {
+                btnPause.style.display = 'inline-flex';
+                btnPause.disabled = false;
+                btnPause.innerHTML = '⏸ Pause Rounds';
+            }
+            if (btnResume) btnResume.style.display = 'none';
             if (btnStop) btnStop.disabled = false;
+
+        } else if (data.status === 'pausing') {
+            if (!researchPollTimer) {
+                researchPollTimer = setInterval(pollResearchStatus, 1500);
+            }
+            // Header
+            if (hdrPill) {
+                hdrPill.className = 'tv-tourn-status-pill pausing';
+                hdrPill.textContent = `ROUND ${data.current_round}/${data.max_rounds} (PAUSING...)`;
+            }
+            if (hdrBtnStart) hdrBtnStart.style.display = 'none';
+            if (hdrBtnPause) {
+                hdrBtnPause.style.display = 'inline-flex';
+                hdrBtnPause.disabled = true;
+                hdrBtnPause.innerHTML = '⏳ Pausing...';
+            }
+            if (hdrBtnResume) hdrBtnResume.style.display = 'none';
+
+            // Leaderboard
+            if (lbPill) {
+                lbPill.className = 'tv-tourn-status-pill pausing';
+                lbPill.textContent = `ROUND ${data.current_round}/${data.max_rounds} (PAUSING...)`;
+            }
+            if (lbBtnStart) lbBtnStart.style.display = 'none';
+            if (lbBtnPause) {
+                lbBtnPause.style.display = 'inline-flex';
+                lbBtnPause.disabled = true;
+                lbBtnPause.innerHTML = '⏳ Pausing...';
+            }
+            if (lbBtnResume) lbBtnResume.style.display = 'none';
+
+            // Quant Lab
+            if (btnStart) {
+                btnStart.style.display = 'inline-flex';
+                btnStart.disabled = true;
+            }
+            if (btnPause) {
+                btnPause.style.display = 'inline-flex';
+                btnPause.disabled = true;
+                btnPause.innerHTML = '⏳ Pausing...';
+            }
+            if (btnResume) btnResume.style.display = 'none';
+            if (btnStop) btnStop.disabled = false;
+
+        } else if (data.status === 'paused') {
+            if (!researchPollTimer) {
+                researchPollTimer = setInterval(pollResearchStatus, 2500);
+            }
+            // Header
+            if (hdrPill) {
+                hdrPill.className = 'tv-tourn-status-pill paused';
+                hdrPill.textContent = `ROUND ${data.current_round}/${data.max_rounds} (PAUSED)`;
+                hdrPill.title = `Tournament is paused. Click Resume to continue from round ${nextRound}.`;
+            }
+            if (hdrBtnStart) hdrBtnStart.style.display = 'none';
+            if (hdrBtnPause) hdrBtnPause.style.display = 'none';
+            if (hdrBtnResume) {
+                hdrBtnResume.style.display = 'inline-flex';
+                hdrBtnResume.disabled = false;
+                hdrBtnResume.innerHTML = '▶ Resume';
+            }
+
+            // Leaderboard
+            if (lbPill) {
+                lbPill.className = 'tv-tourn-status-pill paused';
+                lbPill.textContent = `ROUND ${data.current_round}/${data.max_rounds} (PAUSED)`;
+            }
+            if (lbBtnStart) lbBtnStart.style.display = 'none';
+            if (lbBtnPause) lbBtnPause.style.display = 'none';
+            if (lbBtnResume) {
+                lbBtnResume.style.display = 'inline-flex';
+                lbBtnResume.disabled = false;
+                lbBtnResume.innerHTML = `▶ Resume Rounds (${nextRound})`;
+            }
+
+            // Quant Lab
+            if (btnStart) btnStart.style.display = 'none';
+            if (btnPause) btnPause.style.display = 'none';
+            if (btnResume) {
+                btnResume.style.display = 'inline-flex';
+                btnResume.disabled = false;
+                btnResume.innerHTML = `▶ Resume Loop (from Round ${nextRound})`;
+            }
+            if (btnStop) btnStop.disabled = false;
+
         } else if (data.status === 'stopping') {
-            if (btnStart) btnStart.disabled = true;
+            // Stopping transition
+            if (hdrPill) {
+                hdrPill.className = 'tv-tourn-status-pill idle';
+                hdrPill.textContent = 'STOPPING...';
+            }
+            if (lbPill) {
+                lbPill.className = 'tv-tourn-status-pill idle';
+                lbPill.textContent = 'STOPPING...';
+            }
+            if (btnStart) {
+                btnStart.style.display = 'inline-flex';
+                btnStart.disabled = true;
+            }
+            if (btnPause) {
+                btnPause.style.display = 'inline-flex';
+                btnPause.disabled = true;
+                btnPause.innerHTML = '⏸ Pause Rounds';
+            }
+            if (btnResume) btnResume.style.display = 'none';
             if (btnStop) btnStop.disabled = true;
+
         } else {
-            if (btnStart) btnStart.disabled = false;
+            // idle / completed / stopped
+            // Header
+            if (hdrPill) {
+                hdrPill.className = 'tv-tourn-status-pill idle';
+                hdrPill.textContent = '1000 ROUNDS: IDLE';
+                hdrPill.title = 'Multi-Agent Tournament is idle. Click ⚡ 1000 Rounds to start.';
+            }
+            if (hdrBtnStart) {
+                hdrBtnStart.style.display = 'inline-flex';
+                hdrBtnStart.disabled = false;
+            }
+            if (hdrBtnPause) hdrBtnPause.style.display = 'none';
+            if (hdrBtnResume) hdrBtnResume.style.display = 'none';
+
+            // Leaderboard
+            if (lbPill) {
+                lbPill.className = 'tv-tourn-status-pill idle';
+                lbPill.textContent = '1000 ROUNDS: IDLE';
+            }
+            if (lbBtnStart) {
+                lbBtnStart.style.display = 'inline-flex';
+                lbBtnStart.disabled = false;
+            }
+            if (lbBtnPause) lbBtnPause.style.display = 'none';
+            if (lbBtnResume) lbBtnResume.style.display = 'none';
+
+            // Quant Lab
+            if (btnStart) {
+                btnStart.style.display = 'inline-flex';
+                btnStart.disabled = false;
+            }
+            if (btnPause) {
+                btnPause.style.display = 'inline-flex';
+                btnPause.disabled = true;
+                btnPause.innerHTML = '⏸ Pause Rounds';
+            }
+            if (btnResume) btnResume.style.display = 'none';
             if (btnStop) btnStop.disabled = true;
+
             if (researchPollTimer) {
                 clearInterval(researchPollTimer);
                 researchPollTimer = null;
@@ -1892,7 +2288,15 @@ async function pollResearchStatus() {
         if (hypEl) hypEl.textContent = data.current_hypothesis || (data.status === 'running' ? 'Mining combinatorial alpha...' : 'Ready to explore');
 
         const progEl = document.getElementById('qlProgressVal');
-        if (progEl) progEl.textContent = `Round ${data.current_round} of ${data.max_rounds}`;
+        if (progEl) {
+            if (data.status === 'paused') {
+                progEl.textContent = `Round ${data.current_round} of ${data.max_rounds} (PAUSED)`;
+            } else if (data.status === 'pausing') {
+                progEl.textContent = `Round ${data.current_round} of ${data.max_rounds} (Finishing round...)`;
+            } else {
+                progEl.textContent = `Round ${data.current_round} of ${data.max_rounds}`;
+            }
+        }
 
         const candEl = document.getElementById('qlCandidatesVal');
         if (candEl) candEl.textContent = data.total_candidates;

@@ -7,14 +7,65 @@ Supports:
   - Continuous Testing / Evolutionary Parameter Optimization
 """
 
+import os
 import re
 import json
 import requests
+import time
 from typing import Dict, Any, List, Optional
 import pandas as pd
 
-from lookahead_guard import validate_strategy_code
+from dotenv import load_dotenv
+load_dotenv()
+
+from datetime import datetime
+
+from lookahead_guard import validate_strategy_code, heal_strategy_code
 from strategy_executor import execute_strategy
+
+# ---------------------------------------------------------------------------
+# LIVE ENGINE TELEMETRY & FALLBACK TRACKER
+# ---------------------------------------------------------------------------
+ENGINE_TELEMETRY: Dict[str, Any] = {
+    "mode": "IDLE",
+    "provider": "omniroute",
+    "model": "agentrouter/gpt-6-astra",
+    "endpoint": "http://localhost:20128/v1",
+    "status": "idle",
+    "status_code": None,
+    "last_error": None,
+    "fallback_active": False,
+    "fallback_reason": None,
+    "active_display": "OmniRoute LLM (agentrouter/gpt-6-astra)",
+    "last_updated": datetime.utcnow().strftime("%H:%M:%S")
+}
+
+
+def get_engine_telemetry() -> Dict[str, Any]:
+    """Returns a snapshot of the active generation engine telemetry."""
+    return dict(ENGINE_TELEMETRY)
+
+
+def update_engine_telemetry(**kwargs):
+    """Updates live generation telemetry."""
+    ENGINE_TELEMETRY.update(kwargs)
+    ENGINE_TELEMETRY["last_updated"] = datetime.utcnow().strftime("%H:%M:%S")
+
+
+def set_engine_fallback(reason: str, status_code: int = 429, error_text: str = ""):
+    """Dispatches fallback event to institutional archetype engine."""
+    clean_reason = reason if reason else "Upstream rate limit cooldown"
+    ENGINE_TELEMETRY.update({
+        "mode": "ARCHETYPE_GENERATOR",
+        "status": "fallback",
+        "status_code": status_code,
+        "last_error": error_text or clean_reason,
+        "fallback_active": True,
+        "fallback_reason": clean_reason,
+        "active_display": "🟡 Institutional Archetype Generator (Fallback Active)",
+        "last_updated": datetime.utcnow().strftime("%H:%M:%S")
+    })
+
 
 # ---------------------------------------------------------------------------
 # HARDCODED ANTI-LOOKAHEAD BIAS SYSTEM PROMPT & CONCEPT INVENTORY
@@ -112,7 +163,7 @@ CRITICAL INSTITUTIONAL TRADE EXECUTION & PROFITABILITY RULES:
      `raw_bull = setup_condition & sess`
      `bull_signal = raw_bull & (~raw_bull.shift(1).fillna(False))`
    - NEVER let signals fire repeatedly on consecutive bars during a rolling window!
-   - Target 40 to 220 high-conviction, selective trades across the 6-month Dukascopy dataset (0.5 to 1.5 trades/day).
+   - Target a selective trade frequency (0.5 to 1.5 trades/day) of high-conviction entries.
 
 3. INSTITUTIONAL RISK MANAGEMENT & MINIMUM STOP DISTANCE:
    - ALL trade entries are taken strictly at the CANDLE CLOSE (`df['close']`).
@@ -145,25 +196,41 @@ Start immediately with ```python and return ONLY clean, valid, executable Python
 
 
 def _clean_code_response(text: str) -> str:
-    """Extract python code from LLM markdown response, stripping think tags if present."""
+    """Extract python code from LLM markdown response, stripping think tags and auto-healing syntax anomalies."""
     if not text:
         return ""
-    # Strip <think>...</think> blocks
-    cleaned = re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE)
-    if '<think>' in cleaned.lower():
-        cleaned = re.sub(r'<think>[\s\S]*$', '', cleaned, flags=re.IGNORECASE)
 
-    # Try finding closed ```python ... ``` or ``` ... ```
-    match = re.search(r'```(?:python)?\s*([\s\S]*?)\s*```', cleaned, re.IGNORECASE)
-    if match:
-        return match.group(1).strip()
+    raw_code = ""
+    # 1. First, search for standard fenced code blocks containing calculate_signals
+    fenced_blocks = re.findall(r'```(?:python)?\s*([\s\S]*?)(?:```|$)', text, re.IGNORECASE)
+    for block in fenced_blocks:
+        if 'def calculate_signals' in block:
+            raw_code = block.strip()
+            break
 
-    # Try unclosed code block if truncated
-    match_unclosed = re.search(r'```(?:python)?\s*([\s\S]*)$', cleaned, re.IGNORECASE)
-    if match_unclosed:
-        return match_unclosed.group(1).strip()
+    if not raw_code:
+        # 2. Strip closed <think>...</think> blocks
+        cleaned = re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE)
 
-    return cleaned.strip()
+        # 3. If def calculate_signals is present anywhere in cleaned or raw text, slice from it
+        target = cleaned if 'def calculate_signals' in cleaned else text
+        if 'def calculate_signals' in target:
+            start_idx = target.find('def calculate_signals')
+            code_part = target[start_idx:]
+            # If there's an ending backtick or markdown fence, strip it
+            fence_end = re.search(r'```', code_part)
+            if fence_end:
+                code_part = code_part[:fence_end.start()]
+            raw_code = code_part.strip()
+        elif fenced_blocks and fenced_blocks[0].strip():
+            raw_code = fenced_blocks[0].strip()
+        else:
+            if '<think>' in cleaned.lower():
+                cleaned = re.sub(r'<think>[\s\S]*$', '', cleaned, flags=re.IGNORECASE)
+            raw_code = cleaned.strip()
+
+    # Pass through robust AST self-healer to normalize indentation and repair truncated expressions
+    return heal_strategy_code(raw_code)
 
 
 def call_ai_llm(provider: str, api_key: str, model: str, prompt: str, system_prompt: str = None, endpoint_url: str = None, temperature: float = 0.3) -> str:
@@ -171,9 +238,10 @@ def call_ai_llm(provider: str, api_key: str, model: str, prompt: str, system_pro
     Calls specified LLM provider with the hardcoded anti-lookahead system prompt.
     Supports OmniRoute, OpenAI, Google Gemini, Anthropic Claude, Groq, and OpenRouter.
     """
-    sys_prompt = HARDCODED_SYSTEM_PROMPT
+    no_think_rule = "\n\nCRITICAL OUTPUT RULE: Output valid executable Python code inside ```python ... ``` immediately. Do NOT output <think> tags, chain-of-thought, or conversational filler."
+    sys_prompt = HARDCODED_SYSTEM_PROMPT + no_think_rule
     if system_prompt:
-        sys_prompt = HARDCODED_SYSTEM_PROMPT + "\n\nUser Strategy Objectives:\n" + system_prompt
+        sys_prompt = HARDCODED_SYSTEM_PROMPT + "\n\nUser Strategy Objectives:\n" + system_prompt + no_think_rule
 
     provider = (provider or 'omniroute').lower()
 
@@ -202,29 +270,130 @@ def call_ai_llm(provider: str, api_key: str, model: str, prompt: str, system_pro
             url = url.rstrip('/') + '/chat/completions'
 
         default_models = {
-            'omniroute': 'auto/best-coding',
+            'omniroute': 'agentrouter/gpt-6-astra',
             'openai': 'gpt-4o-mini',
-            'groq': 'llama-3.3-70b-versatile',
+            'groq': 'openai/gpt-oss-120b',
             'openrouter': 'openai/gpt-4o-mini',
         }
-        active_key = api_key if api_key else ('sk-e9b30155d949b791-9b5481-fe8fbacd' if provider == 'omniroute' else '')
+        if provider == 'groq':
+            active_key = api_key if api_key else os.environ.get('GROQ_API_KEY', '')
+            if not active_key:
+                active_key = os.environ.get('OMNIROUTE_API_KEY', '')
+        else:
+            active_key = api_key if api_key else os.environ.get('OMNIROUTE_API_KEY', '')
+        if not active_key and provider in ('omniroute', 'groq'):
+            raise ValueError(f"{provider.upper()}_API_KEY environment variable is not set. See .env.example.")
+
         headers = {
             'Authorization': f"Bearer {active_key}",
             'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
         }
-        payload = {
-            'model': model or default_models.get(provider, 'auto/best-coding'),
-            'messages': [
-                {'role': 'system', 'content': sys_prompt},
-                {'role': 'user', 'content': prompt},
-            ],
-            'temperature': float(temperature),
-            'max_tokens': 4000,
-        }
-        res = requests.post(url, headers=headers, json=payload, timeout=120)
-        res.raise_for_status()
-        data = res.json()
-        return data['choices'][0]['message']['content']
+
+        # Resilient candidate model fallback if primary model hits 429/503 quota limits
+        primary_model = model or default_models.get(provider, 'agentrouter/gpt-6-astra')
+        if provider == 'omniroute':
+            if primary_model in ('auto/best-coding', 'auto/best-reasoning', 'auto', 'groq/qwen/qwen3.6-27b', 'qwen/qwen3.6-27b'):
+                primary_model = 'agentrouter/gpt-6-astra'
+            # Dedicated: agentrouter/gpt-6-astra is candidate #1 until full limit (429) is hit
+            raw_candidates = [
+                'agentrouter/gpt-6-astra',
+                'groq/openai/gpt-oss-120b',
+                'mistral/codestral-latest',
+                'groq/qwen/qwen3.8-27b',
+                'groq/openai/gpt-oss-20b'
+            ]
+            if primary_model not in raw_candidates:
+                raw_candidates.insert(0, primary_model)
+        elif provider == 'groq':
+            if primary_model in ('qwen/qwen3.6-27b', 'auto'):
+                primary_model = 'openai/gpt-oss-120b'
+            raw_candidates = [
+                primary_model,
+                'openai/gpt-oss-120b',
+                'qwen/qwen3.8-27b',
+                'openai/gpt-oss-20b'
+            ]
+        else:
+            raw_candidates = [primary_model]
+
+        # Deduplicate while preserving order
+        seen = set()
+        candidates = []
+        for c in raw_candidates:
+            if c not in seen:
+                seen.add(c)
+                candidates.append(c)
+
+        last_err = None
+        for cand_model in candidates:
+            payload = {
+                'model': cand_model,
+                'messages': [
+                    {'role': 'system', 'content': sys_prompt},
+                    {'role': 'user', 'content': prompt},
+                ],
+                'temperature': float(temperature),
+                'max_tokens': 1600,
+            }
+            try:
+                res = requests.post(url, headers=headers, json=payload, timeout=(10, 120))
+                if res.status_code in (400, 401, 404, 429, 500, 502, 503, 504):
+                    last_err = requests.HTTPError(f"HTTP {res.status_code} on model {cand_model}: {res.text[:120]}")
+                    time.sleep(1.0)
+                    continue
+                res.raise_for_status()
+                data = res.json()
+                if data.get('choices') and data['choices'][0].get('message'):
+                    msg = data['choices'][0]['message']
+                    content = msg.get('content', '') or ''
+                    # Some reasoning models might put generated code in reasoning or thought fields
+                    if not content.strip() and msg.get('reasoning'):
+                        content = msg.get('reasoning', '')
+                    if content.strip():
+                        update_engine_telemetry(
+                            mode="LLM",
+                            provider=provider,
+                            model=cand_model,
+                            endpoint=url,
+                            status="online",
+                            status_code=200,
+                            last_error=None,
+                            fallback_active=False,
+                            fallback_reason=None,
+                            active_display=f"🟢 Live LLM: {cand_model} (200 OK)"
+                        )
+                        return content
+            except Exception as e:
+                last_err = e
+                time.sleep(1.0)
+                continue
+
+        # If OmniRoute failed completely, but GROQ_API_KEY is available in env, seamlessly try Groq direct
+        if provider == 'omniroute' and os.environ.get('GROQ_API_KEY'):
+            try:
+                return call_ai_llm(
+                    provider='groq',
+                    api_key=os.environ.get('GROQ_API_KEY'),
+                    model='openai/gpt-oss-120b',
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    endpoint_url='https://api.groq.com/openai/v1',
+                    temperature=temperature
+                )
+            except Exception:
+                pass
+
+        err_msg = str(last_err) if last_err else "All candidate models failed or rate limited"
+        sc = 429 if "429" in err_msg else 503
+        set_engine_fallback(
+            reason=f"Upstream Rate Limit (Groq/OmniRoute {sc}) · Daily Quota Cooldown",
+            status_code=sc,
+            error_text=err_msg
+        )
+        if last_err:
+            raise last_err
+        raise RuntimeError("No response returned from AI provider.")
 
     elif provider == 'anthropic':
         # Anthropic Claude API
@@ -258,7 +427,9 @@ def generate_strategy_code(provider: str, api_key: str, model: str, user_prompt:
     """
     if not api_key:
         if provider == 'omniroute':
-            api_key = 'sk-e9b30155d949b791-9b5481-fe8fbacd'
+            api_key = os.environ.get('OMNIROUTE_API_KEY', '')
+            if not api_key:
+                return {'success': False, 'message': 'OMNIROUTE_API_KEY environment variable is not set. See .env.example.'}
         else:
             return {'success': False, 'message': 'API Key is required to call AI provider.'}
 

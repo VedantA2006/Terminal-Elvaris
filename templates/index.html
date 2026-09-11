@@ -14,7 +14,7 @@
     <!-- Monaco Editor (VS Code engine) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
     
-    <link rel="stylesheet" href="/static/styles.css?v=clean2">
+    <link rel="stylesheet" href="/static/styles.css?v=engine_telemetry_v1">
 </head>
 <body class="tv-theme-dark">
 
@@ -89,6 +89,28 @@
         <div class="tv-guard-badge" title="Hardcoded AST static analyzer active to prevent lookahead bias">
             <span class="guard-dot"></span>
             <span>ZERO LOOKAHEAD GUARD</span>
+        </div>
+
+        <!-- Live AI Generation Engine / Model Badge -->
+        <div class="tv-engine-badge badge-fallback" id="tvHeaderEngineBadge" title="Current Strategy Generation Engine & Model">
+            <span class="engine-dot" id="headerEngineDot"></span>
+            <span id="headerEngineText">AI: CHECKING...</span>
+        </div>
+
+        <div class="tv-divider-v"></div>
+
+        <!-- Global Multi-Agent Tournament Quick Controls -->
+        <div class="tv-header-tourn-group" id="headerTournGroup" title="Multi-Agent Autonomous Tournament Controls">
+            <span class="tv-tourn-status-pill idle" id="hdrTournPill">1000 ROUNDS: IDLE</span>
+            <button class="tv-tourn-btn btn-start-1000" id="hdrBtnStart1000" title="Start 1000 Round Autonomous Tournament">
+                ⚡ 1000 Rounds
+            </button>
+            <button class="tv-tourn-btn btn-pause" id="hdrBtnPause" style="display: none;" title="Pause and stop process of rounds">
+                ⏸ Pause
+            </button>
+            <button class="tv-tourn-btn btn-resume" id="hdrBtnResume" style="display: none;" title="Resume rounds from paused state">
+                ▶ Resume
+            </button>
         </div>
 
         <div class="tv-divider-v"></div>
@@ -330,7 +352,7 @@
                             <button class="subtab-btn active" data-subtab="overview">Overview</button>
                             <button class="subtab-btn" data-subtab="performance">Performance Summary</button>
                             <button class="subtab-btn" data-subtab="trades">List of Trades</button>
-                            <button class="subtab-btn" data-subtab="monteCarlo">🎲 Monte Carlo Stress Test</button>
+                            <button class="subtab-btn" data-subtab="monteCarlo">🎲 Monte Carlo Bootstrap</button>
                         </div>
                         <div class="tester-meta" id="testerMeta">
                             Initial Capital: <strong>$100,000</strong> · 1 Lot (100 oz) · Spread: $0.20 · Slippage: $0.05
@@ -410,14 +432,14 @@
                         </div>
                     </div>
 
-                    <!-- Subtab 4: Monte Carlo Stress Test -->
+                    <!-- Subtab 4: Monte Carlo Sequence-Risk Bootstrap -->
                     <div class="tester-subtab-pane" id="subtabMonteCarlo">
                         <div class="mc-layout">
                             <div class="mc-chart-col">
                                 <div class="mc-header-row">
                                     <div class="mc-title-block">
                                         <span class="mc-title">🎲 Monte Carlo Bootstrap Simulation (1,000 Reshuffled Paths)</span>
-                                        <span class="mc-subtitle">Stress-testing random trade sequence order, severe drawdowns & ruin</span>
+                                        <span class="mc-subtitle">Simulating trade sequence order risk, drawdown corridors & ruin probabilities</span>
                                     </div>
                                     <button class="tv-dock-btn-secondary" id="btnRerunMonteCarlo">
                                         <span>🔄 Resimulate 1,000 Paths</span>
@@ -497,6 +519,12 @@
                                     <button class="ai-cfg-link" id="aiConfigModalLink">Configure API Key</button>
                                 </h3>
 
+                                <!-- Live Engine Notice in AI Generator -->
+                                <div class="ai-active-engine-bar" id="aiActiveEngineBar">
+                                    <span class="engine-dot" id="aiActiveEngineDot"></span>
+                                    <span class="ai-aeb-text" id="aiActiveEngineText">Checking Generation Engine...</span>
+                                </div>
+
                                 <div class="ai-input-group">
                                     <label class="ai-label" for="aiPromptInput">Describe strategy or request improvements:</label>
                                     <textarea id="aiPromptInput" rows="4" class="ai-textarea" placeholder="e.g. Create a mean-reversion strategy using Bollinger Band squeeze and RSI divergence on 5-minute Gold, with 10 pt Stop Loss and 20 pt Take Profit."></textarea>
@@ -571,12 +599,21 @@
                         <div class="lb-header">
                             <div class="lb-title-block">
                                 <h3 class="lb-title">🏆 Quantitative Strategy Leaderboard & Hall of Fame</h3>
-                                <p class="lb-desc">Ranked by Total Net Return (R), High-Yield Months (>= +10.0R), Max Drawdown in R, and Monte Carlo 95% Stress VaR</p>
+                                <p class="lb-desc">Ranked by Total Net Return (R), High-Yield Months (>= +10.0R), Max Drawdown in R, and Monte Carlo 95% Sequence VaR</p>
                             </div>
                             <div class="lb-actions">
-                                <button class="ai-btn-primary" id="btnStartGenerationToLeaderboard">
-                                    <span class="btn-sparkle">🚀</span>
-                                    <span>Start Autonomous Strategy Generation</span>
+                                <div class="lb-tourn-status" id="lbTournStatusWrap">
+                                    <span class="tv-tourn-status-pill idle" id="lbTournPill">1000 ROUNDS: IDLE</span>
+                                </div>
+                                <button class="ai-btn-primary btn-start-1000-glow" id="btnLbStart1000" title="Launch 1,000 Round Autonomous Discovery Tournament">
+                                    <span class="btn-sparkle">⚡</span>
+                                    <span>Start 1000 Rounds</span>
+                                </button>
+                                <button class="btn-pause-research" id="btnLbPause" style="display: none;" title="Pause and stop process of rounds">
+                                    ⏸ Pause Rounds
+                                </button>
+                                <button class="btn-resume-research" id="btnLbResume" style="display: none;" title="Resume rounds from exact paused round">
+                                    ▶ Resume Rounds
                                 </button>
                                 <button class="tv-dock-btn-secondary" id="btnRefreshLeaderboard">
                                     <span>🔄 Refresh Leaderboard</span>
@@ -595,7 +632,7 @@
                                         <th style="text-align: right;">Max DD (R / %)</th>
                                         <th style="text-align: right;">Win Rate</th>
                                         <th style="text-align: right;">Profit Factor</th>
-                                        <th style="text-align: right;">Monte Carlo 95% VaR</th>
+                                        <th style="text-align: right;">Monte Carlo 95% Sequence VaR</th>
                                         <th style="text-align: center; width: 140px;">Action</th>
                                     </tr>
                                 </thead>
@@ -626,19 +663,50 @@
                             <div class="ql-controls">
                                 <div class="ql-rounds-wrap">
                                     <label for="qlRoundsInput">Rounds:</label>
-                                    <input type="number" id="qlRoundsInput" min="1" max="100" value="100" class="ql-input-num" />
+                                    <input type="number" id="qlRoundsInput" min="1" max="10000" value="1000" class="ql-input-num" oninput="document.getElementById('btnStartResearch').innerText='⚡ Start Autonomous Loop (' + (this.value || 1000) + ')'" />
                                     <div class="ql-quick-pills" style="display:flex;gap:4px;margin-left:4px;">
-                                        <button type="button" class="btn-ql-pill" onclick="document.getElementById('qlRoundsInput').value=10" style="padding:2px 8px;font-size:11px;background:#1e222d;border:1px solid #2a2e39;color:#d1d4dc;border-radius:4px;cursor:pointer;">10</button>
-                                        <button type="button" class="btn-ql-pill" onclick="document.getElementById('qlRoundsInput').value=50" style="padding:2px 8px;font-size:11px;background:#1e222d;border:1px solid #2a2e39;color:#d1d4dc;border-radius:4px;cursor:pointer;">50</button>
-                                        <button type="button" class="btn-ql-pill" onclick="document.getElementById('qlRoundsInput').value=100" style="padding:2px 8px;font-size:11px;background:rgba(41,98,255,0.2);border:1px solid #2962ff;color:#2962ff;font-weight:600;border-radius:4px;cursor:pointer;">100 (Goal)</button>
+                                        <button type="button" class="btn-ql-pill" onclick="document.getElementById('qlRoundsInput').value=50;document.getElementById('btnStartResearch').innerText='⚡ Start Autonomous Loop (50)'" style="padding:2px 8px;font-size:11px;background:#1e222d;border:1px solid #2a2e39;color:#d1d4dc;border-radius:4px;cursor:pointer;">50</button>
+                                        <button type="button" class="btn-ql-pill" onclick="document.getElementById('qlRoundsInput').value=100;document.getElementById('btnStartResearch').innerText='⚡ Start Autonomous Loop (100)'" style="padding:2px 8px;font-size:11px;background:#1e222d;border:1px solid #2a2e39;color:#d1d4dc;border-radius:4px;cursor:pointer;">100</button>
+                                        <button type="button" class="btn-ql-pill" onclick="document.getElementById('qlRoundsInput').value=500;document.getElementById('btnStartResearch').innerText='⚡ Start Autonomous Loop (500)'" style="padding:2px 8px;font-size:11px;background:#1e222d;border:1px solid #2a2e39;color:#d1d4dc;border-radius:4px;cursor:pointer;">500</button>
+                                        <button type="button" class="btn-ql-pill" onclick="document.getElementById('qlRoundsInput').value=1000;document.getElementById('btnStartResearch').innerText='⚡ Start Autonomous Loop (1000)'" style="padding:2px 8px;font-size:11px;background:rgba(41,98,255,0.2);border:1px solid #2962ff;color:#2962ff;font-weight:600;border-radius:4px;cursor:pointer;">1000 (Goal)</button>
                                     </div>
                                 </div>
-                                <button class="btn-start-research" id="btnStartResearch">
-                                    ⚡ Start Autonomous Loop (100)
+                                <button class="btn-start-research" id="btnStartResearch" title="Start Autonomous Loop for configured rounds">
+                                    ⚡ Start Autonomous Loop (1000)
                                 </button>
-                                <button class="btn-stop-research" id="btnStopResearch" disabled>
-                                    ⏹ Stop Loop
+                                <button class="btn-pause-research" id="btnPauseResearch" disabled title="Pause and stop process of rounds">
+                                    ⏸ Pause Rounds
                                 </button>
+                                <button class="btn-resume-research" id="btnResumeResearch" style="display:none;" title="Resume loop from exact round where paused">
+                                    ▶ Resume Loop
+                                </button>
+                                <button class="btn-stop-research" id="btnStopResearch" disabled title="Halt research loop and reset to idle">
+                                    ⏹ Stop
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Live AI Generation Engine & Model Banner -->
+                        <div class="ql-engine-banner llm-active" id="qlEngineBanner">
+                            <div class="ql-eb-col main">
+                                <span class="ql-eb-label">ACTIVE STRATEGY GENERATOR:</span>
+                                <div class="ql-eb-status">
+                                    <span class="engine-dot-lg llm" id="qlEngineDot"></span>
+                                    <span class="ql-eb-title" id="qlEngineTitle">OmniRoute LLM (agentrouter/gpt-6-astra)</span>
+                                    <span class="ql-eb-badge llm" id="qlEngineBadge">ONLINE (200 OK)</span>
+                                </div>
+                            </div>
+                            <div class="ql-eb-col">
+                                <span class="ql-eb-label">CONFIGURED MODEL:</span>
+                                <span class="ql-eb-val" id="qlEngineModel">agentrouter/gpt-6-astra</span>
+                            </div>
+                            <div class="ql-eb-col">
+                                <span class="ql-eb-label">GATEWAY / ENDPOINT:</span>
+                                <span class="ql-eb-val mono" id="qlEngineEndpoint">http://localhost:20128/v1 (OmniRoute)</span>
+                            </div>
+                            <div class="ql-eb-col detail">
+                                <span class="ql-eb-label">UPSTREAM / RATE LIMIT STATUS:</span>
+                                <span class="ql-eb-val success" id="qlEngineReason">AgentRouter GPT-6 Astra active via OmniRoute proxy gateway.</span>
                             </div>
                         </div>
 
@@ -841,8 +909,13 @@
             </div>
 
             <div class="modal-field">
-                <label for="cfgModel">Model Name (optional):</label>
-                <input type="text" id="cfgModel" class="modal-input" placeholder="e.g. gpt-4o, claude-3-5-sonnet, deepseek-chat, gemini-2.0-flash">
+                <label for="cfgModel">Model Name (Live LLM Engine):</label>
+                <input type="text" id="cfgModel" class="modal-input" placeholder="agentrouter/gpt-6-astra">
+                <div class="model-quick-picks" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+                    <button type="button" class="btn-micro-chip" style="border-color:var(--tv-blue);color:#fff;" onclick="document.getElementById('cfgModel').value='agentrouter/gpt-6-astra'">🌟 GPT-6 Astra (AgentRouter)</button>
+                    <button type="button" class="btn-micro-chip" onclick="document.getElementById('cfgModel').value='groq/openai/gpt-oss-120b'">⚡ GPT-OSS 120B</button>
+                    <button type="button" class="btn-micro-chip" onclick="document.getElementById('cfgModel').value='mistral/codestral-latest'">💻 Codestral</button>
+                </div>
             </div>
 
             <div class="modal-info-box">
@@ -905,6 +978,6 @@
 <!-- =========================================================================
      SCRIPTS: APPLICATION LOGIC
 ========================================================================= -->
-<script src="/static/app.js?v=align_trades_3"></script>
+<script src="/static/app.js?v=engine_telemetry_v1"></script>
 </body>
 </html>

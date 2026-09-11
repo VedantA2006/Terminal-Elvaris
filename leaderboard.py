@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 
 from monte_carlo import run_monte_carlo
+from strategy_executor import execute_strategy as _execute_strategy
 
 LEADERBOARD_FILE = Path(__file__).parent / 'data' / 'leaderboard.json'
 
@@ -72,31 +73,29 @@ def compute_monthly_r_breakdown(trades: List[Dict[str, Any]], lot_size: float = 
     return res
 
 
-def compute_rank_score(total_r: float, months_ge_10r: int, max_dd_r: float, profit_factor: float, win_rate: float) -> float:
+def compute_rank_score(total_r: float, months_ge_10r: int, max_dd_r: float, profit_factor: float, win_rate: float, total_trades: int = 100) -> float:
     """
     Composite Quantitative Alpha Score:
     Rewards total R-yield, consistency (months >= 10R), and high profit factor,
     while heavily penalizing large drawdowns in R.
+    Applies a confidence penalty for strategies with < 30 trades (statistically unreliable).
     """
     pf = min(profit_factor, 5.0)
     score = (total_r * 1.0) + (months_ge_10r * 8.0) - (max_dd_r * 2.0) + (pf * 15.0) + (win_rate * 0.2)
+    # Confidence penalty: strategies with < 30 trades get proportionally reduced scores
+    if total_trades < 30:
+        confidence = max(0.1, total_trades / 30.0)
+        score *= confidence
     return round(score, 1)
 
 
 def _get_champion_lss_code() -> str:
-    """Returns the code for the #1 81.8R Champion Runner-up strategy."""
-    champ_file = Path(__file__).parent / 'champion_lss_backtest.py'
-    if champ_file.exists():
-        try:
-            with open(champ_file, 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception:
-            pass
+    """Returns the code for the Champion LSS strategy."""
     return """# =============================================================================
-# 5 MONTHS >= 10R RUNNER-UP STRATEGY (+81.8R CHAMPION)
+# CHAMPION LSS STRATEGY — Candle-Close Execution
 # =============================================================================
-# Exact Parameters on Real Dukascopy M5 XAUUSD:
-#   SWING_LEN = 7, MAX_LEVELS = 3, ATR_LEN = 4, ATR_MULT = 0.19, RR_RATIO = 1.22
+# Parameters: SWING_LEN = 7, ATR_LEN = 4, ATR_MULT = 1.5, RR_RATIO = 1.22
+# SL/TP computed relative to df['close'] (matches backtest.py fill price)
 # =============================================================================
 import numpy as np
 import pandas as pd
@@ -106,116 +105,216 @@ def calculate_signals(df):
     sw_h, sw_l = find_swings(df, swing_len=7)
     b_fvg_t, b_fvg_b, s_fvg_t, s_fvg_b = find_fvgs(df)
     m = session_mask(df, 'london_ny')
-    a = atr(df, 4)
+    a = atr(df, 14)
     
     # BSL / SSL Sweeps
     bsl_sweep = (df['high'] > sw_h) & (df['close'] < sw_h)
     ssl_sweep = (df['low'] < sw_l) & (df['close'] > sw_l)
     
-    # Mitigation Entry with 1.22 R:R
-    df['bull_signal'] = ssl_sweep & m
-    df['bear_signal'] = bsl_sweep & m
+    # Anti-bleed transition signals
+    raw_bull = ssl_sweep & m
+    raw_bear = bsl_sweep & m
+    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))
+    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))
     
-    df['sl_long'] = df['low'] - (a * 0.19)
-    df['tp1_long'] = df['close'] + (abs(df['close'] - df['sl_long']) * 1.22)
-    df['sl_short'] = df['high'] + (a * 0.19)
-    df['tp1_short'] = df['close'] - (abs(df['sl_short'] - df['close']) * 1.22)
+    # SL/TP relative to candle close (matches backtest.py entry fill price)
+    df['sl_long'] = np.minimum(df['low'], sw_l) - (1.5 * a)
+    risk_long = np.maximum(df['close'] - df['sl_long'], 2.50)
+    df['tp1_long'] = df['close'] + (risk_long * 1.22)
+    
+    df['sl_short'] = np.maximum(df['high'], sw_h) + (1.5 * a)
+    risk_short = np.maximum(df['sl_short'] - df['close'], 2.50)
+    df['tp1_short'] = df['close'] - (risk_short * 1.22)
     return df
 """
 
 
-def _get_default_seed_strategies() -> List[Dict[str, Any]]:
-    """Seed leaderboard with audited Champion and Baseline strategies."""
-    champ_monthly = {
-        'Mar 2026': 0.9,
-        'Apr 2026': 5.2,
-        'May 2026': 0.5,
-        'Jun 2026': 2.0,
-        'Jul 2026': 7.5,
-        'Aug 2026': 4.7,
-        'Sep 2026': 3.4
-    }
-    champ_months_ge_10 = sum(1 for v in champ_monthly.values() if v >= 10.0)
+def _get_default_seed_strategies(full_df=None, train_df=None) -> List[Dict[str, Any]]:
+    """Seed leaderboard with Champion and Baseline strategies using REAL computed stats across full 6-month data."""
+    seeds = []
+    exec_df = full_df if full_df is not None and len(full_df) > 100 else train_df
 
-    champ = {
-        'id': 'champ_81_8r',
-        'name': 'Audited Real-World Champion (+24.2R Net)',
-        'concept': 'Candle-Close Entry + Full Spread/Slippage Deducted + Pessimistic SL Guard',
-        'author': 'Verified Dukascopy Champion',
-        'created_at': '2026-09-09 18:00:00',
-        'code': _get_champion_lss_code(),
-        'total_r': 24.2,
-        'total_trades': 349,
-        'winning_trades': 165,
-        'losing_trades': 184,
-        'win_rate': 47.3,
-        'profit_factor': 1.14,
-        'total_pnl': 24183.47,
-        'max_drawdown_r': 15.4,
-        'max_drawdown_pct': 12.32,
-        'sharpe_ratio': 2.45,
-        'monthly_r': champ_monthly,
-        'months_ge_10r': champ_months_ge_10,
-        'monte_carlo': {
-            'expected_max_dd_r': 16.38,
-            'var_95_max_dd_r': 28.86,
-            'risk_of_ruin_10r': 88.9,
-            'risk_of_ruin_20r': 23.4,
-            'probability_of_profit': 91.2,
-            'median_final_r': 23.85,
-        },
-        'rank_score': compute_rank_score(24.2, champ_months_ge_10, 15.4, 1.14, 47.3),
-    }
+    # Helper to compute a seed entry from real backtest
+    def _build_seed(seed_id, name, concept, author, code):
+        if not code or not code.strip():
+            return None
 
-    base_monthly = {
-        'Mar 2026': -0.9,
-        'Apr 2026': -1.5,
-        'May 2026': -8.2,
-        'Jun 2026': -2.3,
-        'Jul 2026': -11.0,
-        'Aug 2026': 1.7,
-        'Sep 2026': -1.9
-    }
-    base_months_ge_10 = sum(1 for v in base_monthly.values() if v >= 10.0)
+        entry = {
+            'id': seed_id,
+            'name': name,
+            'concept': concept,
+            'author': author,
+            'created_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+            'code': code,
+        }
 
-    base = {
-        'id': 'elvaris_v2_baseline',
-        'name': 'Elvaris River Strategy V2 (Baseline)',
-        'concept': 'Dual Smooth Range Filter + Bollinger Squeeze (55, 0.2)',
-        'author': 'Leo / TradingView Community',
-        'created_at': '2026-09-08 12:00:00',
-        'code': '', # Filled on demand from default_strategy.py
-        'total_r': -24.1,
-        'total_trades': 200,
-        'winning_trades': 77,
-        'losing_trades': 123,
-        'win_rate': 38.5,
-        'profit_factor': 0.81,
-        'total_pnl': -24173.52,
-        'max_drawdown_r': 36.0,
-        'max_drawdown_pct': 34.94,
-        'sharpe_ratio': -1.86,
-        'monthly_r': base_monthly,
-        'months_ge_10r': base_months_ge_10,
-        'monte_carlo': {
-            'expected_max_dd_r': 32.7,
-            'var_95_max_dd_r': 53.8,
-            'risk_of_ruin_10r': 99.3,
-            'risk_of_ruin_20r': 86.3,
-            'probability_of_profit': 6.4,
-            'median_final_r': -24.0,
-        },
-        'rank_score': compute_rank_score(-24.1, base_months_ge_10, 36.0, 0.81, 38.5),
-    }
+        if exec_df is not None:
+            try:
+                result = _execute_strategy(code, exec_df)
+                if result.get('success'):
+                    stats = result.get('stats', {})
+                    trades = result.get('trades', [])
+                    monthly_r = compute_monthly_r_breakdown(trades)
+                    months_ge_10 = sum(1 for v in monthly_r.values() if v >= 10.0)
+                    total_r = round(float(sum(monthly_r.values())), 1) if monthly_r else round(float(stats.get('total_pnl', 0.0) / 1000.0), 1)
+                    max_dd_r = round(float(stats.get('max_drawdown', 0.0) / 1000.0), 1)
 
-    return [champ, base]
+                    mc_results = run_monte_carlo(trades, num_simulations=1000)
+
+                    entry.update({
+                        'total_r': total_r,
+                        'total_trades': stats.get('total_trades', len(trades)),
+                        'winning_trades': stats.get('winning_trades', 0),
+                        'losing_trades': stats.get('losing_trades', 0),
+                        'win_rate': float(stats.get('win_rate', 0.0)),
+                        'profit_factor': float(stats.get('profit_factor', 0.0)),
+                        'total_pnl': float(stats.get('total_pnl', 0.0)),
+                        'max_drawdown_r': max_dd_r,
+                        'max_drawdown_pct': float(stats.get('max_drawdown_pct', 0.0)),
+                        'sharpe_ratio': float(stats.get('sharpe_ratio', 0.0)),
+                        'monthly_r': monthly_r,
+                        'months_ge_10r': months_ge_10,
+                        'monte_carlo': {
+                            'expected_max_dd_r': mc_results.get('expected_max_dd_r'),
+                            'var_95_max_dd_r': mc_results.get('var_95_max_dd_r'),
+                            'risk_of_ruin_10r': mc_results.get('risk_of_ruin_10r'),
+                            'risk_of_ruin_20r': mc_results.get('risk_of_ruin_20r'),
+                            'probability_of_profit': mc_results.get('probability_of_profit'),
+                            'median_final_r': mc_results.get('median_final_r'),
+                        },
+                        'rank_score': compute_rank_score(total_r, months_ge_10, max_dd_r, float(stats.get('profit_factor', 1.0)), float(stats.get('win_rate', 50.0)), int(stats.get('total_trades', 0))),
+                        'data_split': 'full_6m',
+                    })
+                    print(f"  [Leaderboard Seed] {name}: {total_r:+.1f}R, {stats.get('total_trades')} trades, PF={stats.get('profit_factor')} (computed from real backtest)")
+                    return entry
+            except Exception as e:
+                print(f"  [Leaderboard Seed] Warning: Failed to compute real stats for {name}: {e}")
+
+        # Fallback: minimal entry if no data available
+        entry.update({
+            'total_r': 0.0, 'total_trades': 0, 'winning_trades': 0, 'losing_trades': 0,
+            'win_rate': 0.0, 'profit_factor': 0.0, 'total_pnl': 0.0,
+            'max_drawdown_r': 0.0, 'max_drawdown_pct': 0.0, 'sharpe_ratio': 0.0,
+            'monthly_r': {}, 'months_ge_10r': 0,
+            'monte_carlo': {}, 'rank_score': 0.0, 'data_split': 'full_6m',
+        })
+        return entry
+
+    # Champion LSS Strategy
+    champ_code = _get_champion_lss_code()
+    champ = _build_seed(
+        'champion_lss', 'Champion LSS Strategy (Candle-Close Execution)',
+        'SSL/BSL Sweep + Anti-Bleed Transition + ATR Structural Stop',
+        'Verified Dukascopy Champion', champ_code
+    )
+    if champ:
+        seeds.append(champ)
+
+    # Baseline Elvaris V2
+    try:
+        from default_strategy import DEFAULT_STRATEGY_CODE
+        base = _build_seed(
+            'elvaris_v2_baseline', 'Elvaris River Strategy V2 (Baseline)',
+            'Dual Smooth Range Filter + Bollinger Squeeze (55, 0.2)',
+            'Leo / TradingView Community', DEFAULT_STRATEGY_CODE
+        )
+        if base:
+            seeds.append(base)
+    except Exception:
+        pass
+
+    return seeds
 
 
-def load_leaderboard() -> List[Dict[str, Any]]:
-    """Loads leaderboard list from disk, ensuring seed champions exist."""
-    LEADERBOARD_FILE.parent.mkdir(parents=True, exist_ok=True)
+def upgrade_leaderboard_to_full_6m(full_df) -> int:
+    """
+    Re-runs backtest across the full 6-month historical dataset for all
+    existing strategies on the leaderboard, ensuring all stats (total_r, trades,
+    win_rate, profit_factor, max_dd, monthly breakdown, monte carlo) reflect
+    the complete 6-month period.
+    """
+    if full_df is None or len(full_df) < 100:
+        return 0
     if not LEADERBOARD_FILE.exists():
-        seeds = _get_default_seed_strategies()
+        return 0
+
+    try:
+        with open(LEADERBOARD_FILE, 'r', encoding='utf-8') as f:
+            items = json.load(f)
+    except Exception:
+        return 0
+
+    if not isinstance(items, list) or len(items) == 0:
+        return 0
+
+    updated_count = 0
+    for entry in items:
+        if entry.get('data_split') == 'full_6m':
+            continue
+        code = entry.get('code', '')
+        if not code or not code.strip():
+            continue
+        try:
+            res = _execute_strategy(code, full_df)
+            if res.get('success'):
+                stats = res.get('stats', {})
+                trades = res.get('trades', [])
+                monthly_r = compute_monthly_r_breakdown(trades)
+                months_ge_10 = sum(1 for v in monthly_r.values() if v >= 10.0)
+                total_r = round(float(sum(monthly_r.values())), 1) if monthly_r else round(float(stats.get('total_pnl', 0.0) / 1000.0), 1)
+                max_dd_r = round(float(stats.get('max_drawdown', 0.0) / 1000.0), 1)
+                mc_results = run_monte_carlo(trades, num_simulations=1000)
+                pf = float(stats.get('profit_factor', 1.0))
+                win_rate = float(stats.get('win_rate', 50.0))
+                rank_score = compute_rank_score(total_r, months_ge_10, max_dd_r, pf, win_rate, int(stats.get('total_trades', len(trades))))
+
+                # Preserve old train_r if not set
+                if 'train_r' not in entry and entry.get('total_r') is not None:
+                    entry['train_r'] = entry.get('total_r')
+                    entry['train_pf'] = entry.get('profit_factor')
+                    entry['train_trades'] = entry.get('total_trades')
+
+                entry.update({
+                    'total_r': total_r,
+                    'total_trades': stats.get('total_trades', len(trades)),
+                    'winning_trades': stats.get('winning_trades', 0),
+                    'losing_trades': stats.get('losing_trades', 0),
+                    'win_rate': win_rate,
+                    'profit_factor': pf,
+                    'total_pnl': float(stats.get('total_pnl', 0.0)),
+                    'max_drawdown_r': max_dd_r,
+                    'max_drawdown_pct': float(stats.get('max_drawdown_pct', 0.0)),
+                    'sharpe_ratio': float(stats.get('sharpe_ratio', 0.0)),
+                    'monthly_r': monthly_r,
+                    'months_ge_10r': months_ge_10,
+                    'monte_carlo': {
+                        'expected_max_dd_r': mc_results.get('expected_max_dd_r'),
+                        'var_95_max_dd_r': mc_results.get('var_95_max_dd_r'),
+                        'risk_of_ruin_10r': mc_results.get('risk_of_ruin_10r'),
+                        'risk_of_ruin_20r': mc_results.get('risk_of_ruin_20r'),
+                        'probability_of_profit': mc_results.get('probability_of_profit'),
+                        'median_final_r': mc_results.get('median_final_r'),
+                    },
+                    'rank_score': rank_score,
+                    'data_split': 'full_6m'
+                })
+                updated_count += 1
+        except Exception as err:
+            print(f"  [Upgrade Error] {entry.get('name')}: {err}")
+
+    if updated_count > 0:
+        save_leaderboard(items)
+        print(f"  [Leaderboard] Successfully upgraded {updated_count} strategies to full 6-month backtest metrics!")
+    return updated_count
+
+
+def load_leaderboard(full_df=None, train_df=None) -> List[Dict[str, Any]]:
+    """Loads leaderboard list from disk, ensuring seed champions exist and reflect full 6-month backtests."""
+    LEADERBOARD_FILE.parent.mkdir(parents=True, exist_ok=True)
+    df_for_calc = full_df if full_df is not None and len(full_df) > 100 else train_df
+
+    if not LEADERBOARD_FILE.exists():
+        seeds = _get_default_seed_strategies(full_df=df_for_calc)
         save_leaderboard(seeds)
         return seeds
 
@@ -223,23 +322,32 @@ def load_leaderboard() -> List[Dict[str, Any]]:
         with open(LEADERBOARD_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
         if isinstance(data, list) and len(data) > 0:
+            # Upgrade any non-full_6m entries if data is provided
+            if df_for_calc is not None and len(df_for_calc) > 100:
+                has_old = any(item.get('data_split') != 'full_6m' for item in data)
+                if has_old:
+                    upgrade_leaderboard_to_full_6m(df_for_calc)
+                    with open(LEADERBOARD_FILE, 'r', encoding='utf-8') as f2:
+                        data = json.load(f2)
             # Sort by rank_score descending
             data.sort(key=lambda x: x.get('rank_score', 0.0), reverse=True)
             return data
     except Exception:
         pass
 
-    seeds = _get_default_seed_strategies()
+    seeds = _get_default_seed_strategies(full_df=df_for_calc)
     save_leaderboard(seeds)
     return seeds
 
 
 def save_leaderboard(items: List[Dict[str, Any]]):
-    """Persists leaderboard list to disk sorted by rank_score."""
+    """Persists leaderboard list to disk sorted by rank_score atomically."""
     LEADERBOARD_FILE.parent.mkdir(parents=True, exist_ok=True)
     items.sort(key=lambda x: x.get('rank_score', 0.0), reverse=True)
-    with open(LEADERBOARD_FILE, 'w', encoding='utf-8') as f:
+    tmp_path = LEADERBOARD_FILE.with_suffix('.tmp')
+    with open(tmp_path, 'w', encoding='utf-8') as f:
         json.dump(items, f, indent=2)
+    tmp_path.replace(LEADERBOARD_FILE)
 
 
 def add_strategy_to_leaderboard(name: str,
@@ -247,10 +355,15 @@ def add_strategy_to_leaderboard(name: str,
                                 code: str,
                                 stats: Dict[str, Any],
                                 trades: List[Dict[str, Any]],
-                                author: str = 'Autonomous AI Generator') -> Dict[str, Any]:
+                                author: str = 'Autonomous AI Generator',
+                                val_stats: Dict[str, Any] = None,
+                                test_stats: Dict[str, Any] = None,
+                                train_stats: Dict[str, Any] = None,
+                                data_split: str = 'full_6m') -> Dict[str, Any]:
     """
     Evaluates a newly discovered strategy with Monte Carlo stress test and monthly R breakdown,
     and inserts it into the persistent ranked leaderboard.
+    All primary stats reflect the full 6-month backtest.
     """
     current_board = load_leaderboard()
 
@@ -265,14 +378,6 @@ def add_strategy_to_leaderboard(name: str,
     norm_new = _norm_code(code)
     new_trades_count = stats.get('total_trades', len(trades))
     new_pnl = round(float(stats.get('total_pnl', 0.0)), 2)
-
-    for idx, existing in enumerate(current_board):
-        same_code = bool(norm_new and _norm_code(existing.get('code', '')) == norm_new)
-        same_stats = (existing.get('total_trades') == new_trades_count and
-                      abs(round(float(existing.get('total_pnl', 0.0)), 2) - new_pnl) < 0.05)
-        if same_code or same_stats:
-            existing['rank'] = idx + 1
-            return existing
 
     # 1. Run Monte Carlo simulation (1,000 iterations)
     mc_results = run_monte_carlo(trades, num_simulations=1000)
@@ -291,7 +396,7 @@ def add_strategy_to_leaderboard(name: str,
     pf = float(stats.get('profit_factor', 1.0))
     win_rate = float(stats.get('win_rate', 50.0))
 
-    rank_score = compute_rank_score(total_r, months_ge_10, max_dd_r, pf, win_rate)
+    rank_score = compute_rank_score(total_r, months_ge_10, max_dd_r, pf, win_rate, int(stats.get('total_trades', 0)))
 
     entry = {
         'id': f"strat_{int(datetime.utcnow().timestamp())}",
@@ -321,7 +426,69 @@ def add_strategy_to_leaderboard(name: str,
             'median_final_r': mc_results.get('median_final_r'),
         },
         'rank_score': rank_score,
+        'data_split': data_split,
     }
+
+    # Attach train, validation and test set stats if provided
+    if train_stats:
+        entry['train_r'] = round(float(train_stats.get('total_r', 0.0)), 1)
+        entry['train_pf'] = float(train_stats.get('profit_factor', 0.0))
+        entry['train_trades'] = int(train_stats.get('total_trades', 0))
+    if val_stats:
+        entry['val_r'] = round(float(val_stats.get('total_r', 0.0)), 1)
+        entry['val_pf'] = float(val_stats.get('profit_factor', 0.0))
+        entry['val_trades'] = int(val_stats.get('total_trades', 0))
+    if test_stats:
+        entry['test_r'] = round(float(test_stats.get('total_r', 0.0)), 1)
+        entry['test_pf'] = float(test_stats.get('profit_factor', 0.0))
+        entry['test_trades'] = int(test_stats.get('total_trades', 0))
+
+    for idx, existing in enumerate(current_board):
+        same_code = bool(norm_new and _norm_code(existing.get('code', '')) == norm_new)
+        same_stats = (existing.get('total_trades') == new_trades_count and
+                      abs(round(float(existing.get('total_pnl', 0.0)), 2) - new_pnl) < 0.05)
+        if same_code:
+            # Upgrade existing if new submission is full_6m
+            if data_split == 'full_6m' and existing.get('data_split') != 'full_6m':
+                existing.update({
+                    'total_r': entry['total_r'],
+                    'total_trades': entry['total_trades'],
+                    'winning_trades': entry['winning_trades'],
+                    'losing_trades': entry['losing_trades'],
+                    'win_rate': entry['win_rate'],
+                    'profit_factor': entry['profit_factor'],
+                    'total_pnl': entry['total_pnl'],
+                    'max_drawdown_r': entry['max_drawdown_r'],
+                    'max_drawdown_pct': entry['max_drawdown_pct'],
+                    'sharpe_ratio': entry['sharpe_ratio'],
+                    'monthly_r': entry['monthly_r'],
+                    'months_ge_10r': entry['months_ge_10r'],
+                    'monte_carlo': entry['monte_carlo'],
+                    'rank_score': entry['rank_score'],
+                    'data_split': 'full_6m',
+                })
+                if 'train_r' in entry:
+                    existing['train_r'] = entry['train_r']
+                    existing['train_pf'] = entry['train_pf']
+                    existing['train_trades'] = entry['train_trades']
+                if 'val_r' in entry:
+                    existing['val_r'] = entry['val_r']
+                    existing['val_pf'] = entry['val_pf']
+                    existing['val_trades'] = entry['val_trades']
+                if 'test_r' in entry:
+                    existing['test_r'] = entry['test_r']
+                    existing['test_pf'] = entry['test_pf']
+                    existing['test_trades'] = entry['test_trades']
+                save_leaderboard(current_board)
+                ranked = load_leaderboard()
+                rank = next((i + 1 for i, item in enumerate(ranked) if item['id'] == existing['id']), len(ranked))
+                existing['rank'] = rank
+                return existing
+            existing['rank'] = idx + 1
+            return existing
+        elif same_stats:
+            existing['rank'] = idx + 1
+            return existing
 
     # Add to list and re-sort
     current_board.append(entry)

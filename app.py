@@ -15,21 +15,27 @@ Endpoints:
   - /api/ai/optimize_step [POST]: Autonomous Continuous Optimizer loop
 """
 
+import os
 import json
 import math
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from download_data import load_or_download
+from data_split import split_data
 from strategy import calculate_signals
 from backtest import run_backtest
 from strategy_executor import execute_strategy
-from ai_generator import generate_strategy_code, optimize_strategy_step
+from ai_generator import generate_strategy_code, optimize_strategy_step, get_engine_telemetry
 from default_strategy import DEFAULT_STRATEGY_CODE
 from monte_carlo import run_monte_carlo
-from leaderboard import load_leaderboard, get_strategy_by_id, add_strategy_to_leaderboard
+from leaderboard import load_leaderboard, get_strategy_by_id, add_strategy_to_leaderboard, upgrade_leaderboard_to_full_6m
 
 app = Flask(__name__)
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 # ---------------------------------------------------------------------------
 # Global Cache
@@ -63,6 +69,19 @@ def _initialise():
     _cache['trades'] = trades
     _cache['equity'] = equity_curve
     _cache['stats'] = stats
+
+    # 4. Compute chronological train/validation/test split
+    print("[4/4] Computing train/validation/test split ...")
+    train_df, val_df, test_df = split_data(raw_df)
+    _cache['train_df'] = train_df
+    _cache['val_df'] = val_df
+    _cache['test_df'] = test_df
+
+    # 5. Upgrade all leaderboard entries to full 6-month backtest metrics
+    try:
+        upgrade_leaderboard_to_full_6m(raw_df)
+    except Exception as e:
+        print(f"      [Leaderboard Upgrade Notice]: {e}")
 
     print(f"      Total Trades: {stats['total_trades']}, Win Rate: {stats['win_rate']}%, Net PnL: ${stats['total_pnl']:,.2f}")
     print("\n" + "=" * 65)
@@ -253,17 +272,35 @@ def api_ai_optimize_step():
 @app.route('/api/leaderboard', methods=['GET'])
 def api_leaderboard():
     """Returns ranked strategies list with monthly R and Monte Carlo metrics."""
-    board = load_leaderboard()
+    _initialise()
+    board = load_leaderboard(_cache.get('raw_df'))
     return jsonify({'success': True, 'leaderboard': board})
 
 
 @app.route('/api/leaderboard/load', methods=['POST'])
 def api_leaderboard_load():
-    """Loads a strategy from leaderboard by ID and executes it."""
+    """Loads a strategy from leaderboard by ID or index and executes it."""
     _initialise()
     data = request.get_json() or {}
-    strat_id = data.get('id', '')
-    strat = get_strategy_by_id(strat_id)
+    strat_id = str(data.get('id', '')).strip()
+    idx = data.get('index')
+
+    strat = None
+    if strat_id and not strat_id.isdigit():
+        strat = get_strategy_by_id(strat_id)
+
+    if not strat and (idx is not None or strat_id.isdigit()):
+        try:
+            target_idx = int(idx if idx is not None else strat_id)
+            lb = load_leaderboard(_cache['raw_df'])
+            if 0 <= target_idx < len(lb):
+                strat = lb[target_idx]
+        except Exception:
+            pass
+
+    if not strat and strat_id:
+        strat = get_strategy_by_id(strat_id)
+
     if not strat:
         return jsonify({'success': False, 'message': 'Strategy not found'}), 404
 
@@ -313,9 +350,11 @@ def api_ai_start_generation():
 
     if provider == 'omniroute':
         if not api_key:
-            api_key = 'sk-e9b30155d949b791-9b5481-fe8fbacd'
-        if not model:
-            model = 'auto/best-coding'
+            api_key = os.environ.get('OMNIROUTE_API_KEY', '')
+            if not api_key:
+                return jsonify({'success': False, 'message': 'OMNIROUTE_API_KEY env var is not set. See .env.example.'}), 400
+        if not model or model in ('auto/best-coding', 'auto/best-reasoning', 'auto'):
+            model = 'groq/qwen/qwen3.8-27b'
         if not endpoint:
             endpoint = 'http://localhost:20128/v1'
     elif not api_key:
@@ -389,22 +428,48 @@ from autonomous_research_loop import research_manager
 
 @app.route('/api/research/start', methods=['POST'])
 def api_research_start():
-    data = request.get_json() or {}
-    rounds = int(data.get('rounds', 100))
+    data = request.get_json(silent=True) or {}
+    rounds = int(data.get('rounds', 1000))
     provider = data.get('provider', 'omniroute')
     api_key = data.get('api_key', '')
     model = data.get('model', '')
     endpoint = data.get('endpoint', '')
-    if provider == 'omniroute':
-        if not api_key:
-            api_key = 'sk-e9b30155d949b791-9b5481-fe8fbacd'
-        if not endpoint:
-            endpoint = 'http://localhost:20128/v1'
+    force_restart = bool(data.get('force_restart', False))
 
-    started = research_manager.start_loop(rounds=rounds, provider=provider, api_key=api_key, model=model, endpoint=endpoint)
+    omniroute_env_key = os.environ.get('OMNIROUTE_API_KEY', '')
+
+    # Route through OmniRoute proxy so requests and token analytics show up live in the OmniRoute UI
+    provider = 'omniroute'
+    api_key = api_key or omniroute_env_key
+    model = model or 'agentrouter/gpt-6-astra'
+    endpoint = endpoint or 'http://localhost:20128/v1'
+
+    started = research_manager.start_loop(rounds=rounds, provider=provider, api_key=api_key, model=model, endpoint=endpoint, force_restart=force_restart)
     if not started:
-        return jsonify({'success': False, 'message': 'Research loop is already running.'}), 400
+        return jsonify({'success': False, 'message': 'Research loop is already running. Click Pause to stop it first, or click Restart.'}), 400
     return jsonify({'success': True, 'message': f'Started Multi-Agent Research Loop ({rounds} rounds)'})
+
+
+@app.route('/api/research/pause', methods=['POST'])
+def api_research_pause():
+    paused = research_manager.pause_loop()
+    if not paused:
+        return jsonify({'success': False, 'message': f'Cannot pause loop in status "{research_manager.status}".'}), 400
+    return jsonify({'success': True, 'message': f'Pause signal sent. Loop halting at Round {research_manager.current_round}.'})
+
+
+@app.route('/api/research/resume', methods=['POST'])
+def api_research_resume():
+    data = request.get_json(silent=True) or {}
+    provider = data.get('provider')
+    api_key = data.get('api_key')
+    model = data.get('model')
+    endpoint = data.get('endpoint')
+    target_round = research_manager.current_round + 1 if getattr(research_manager, 'round_completed', True) else max(1, research_manager.current_round)
+    resumed = research_manager.resume_loop(provider=provider, api_key=api_key, model=model, endpoint=endpoint)
+    if not resumed:
+        return jsonify({'success': False, 'message': f'Cannot resume loop in status "{research_manager.status}".'}), 400
+    return jsonify({'success': True, 'message': f'Resumed research loop from round {target_round} of {research_manager.max_rounds}.'})
 
 
 @app.route('/api/research/stop', methods=['POST'])
@@ -416,6 +481,16 @@ def api_research_stop():
 @app.route('/api/research/status')
 def api_research_status():
     return jsonify(research_manager.get_state())
+
+
+@app.route('/api/engine/status')
+def api_engine_status():
+    return jsonify({
+        'success': True,
+        'engine': get_engine_telemetry(),
+        'research_active': research_manager.status == 'running',
+        'research_status': research_manager.status
+    })
 
 
 # ---------------------------------------------------------------------------

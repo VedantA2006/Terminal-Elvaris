@@ -11,13 +11,16 @@ import hashlib
 import re
 from datetime import datetime
 from typing import Dict, Any, List, Optional
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import pandas as pd
 
-from ai_research_agents import IdeaGeneratorAgent, RiskOfficerAgent, CriticPostMortem, ParameterGridSweeper, OptimizerAgent, ALPHA_ARCHETYPES
+from ai_research_agents import IdeaGeneratorAgent, RiskOfficerAgent, CriticPostMortem, ParameterGridSweeper, OptimizerAgent, ALPHA_ARCHETYPES, synthesize_archetype_code
+from ai_generator import get_engine_telemetry
 from strategy_executor import execute_strategy
 from monte_carlo import run_monte_carlo
 from leaderboard import add_strategy_to_leaderboard, compute_monthly_r_breakdown, compute_rank_score, load_leaderboard
 from download_data import load_or_download
+from data_split import split_data
 
 
 def _compute_code_hash(code: str) -> str:
@@ -48,9 +51,11 @@ class ResearchLoopManager:
         self._lock = threading.RLock()
         self._thread: Optional[threading.Thread] = None
         self._should_stop = False
+        self._should_pause = False
 
-        self.status = "idle"  # 'idle' | 'running' | 'stopping'
+        self.status = "idle"  # 'idle' | 'running' | 'pausing' | 'paused' | 'stopping'
         self.current_round = 0
+        self.round_completed = True
         self.max_rounds = 100
         self.total_candidates = 0
         self.active_agent = "Idle"
@@ -59,12 +64,28 @@ class ResearchLoopManager:
         self.survivors_added = []
         self.logs: List[Dict[str, Any]] = []
 
+        # Last configuration parameters for seamless resume
+        self._last_provider = "omniroute"
+        self._last_api_key = ""
+        self._last_model = "agentrouter/gpt-6-astra"
+        self._last_endpoint = "http://localhost:20128/v1"
+
         # Deduplication & Novelty Memory
         self.seen_code_hashes: set = set()
         self.seen_signal_fingerprints: set = set()
         self.recent_hypotheses: List[str] = []
 
+        # Upgrade 4: Failure Memory — stores last N rejection reasons so LLM learns from mistakes
+        self.failure_memory: List[str] = []
+
+        # Upgrade 2: Archetype performance tracking — which archetypes produce winners
+        self.archetype_wins: Dict[str, int] = {}
+        self.archetype_tries: Dict[str, int] = {}
+
         self._raw_df: Optional[pd.DataFrame] = None
+        self._train_df: Optional[pd.DataFrame] = None
+        self._val_df: Optional[pd.DataFrame] = None
+        self._test_df: Optional[pd.DataFrame] = None
 
     def _log(self, agent: str, message: str, level: str = "info"):
         """Appends a structured event log."""
@@ -79,36 +100,54 @@ class ResearchLoopManager:
             if len(self.logs) > 200:
                 self.logs.pop(0)
 
-    def _ensure_data(self) -> pd.DataFrame:
-        if self._raw_df is None:
+    def _ensure_data(self):
+        """Loads dataset and splits chronologically into 70% train, 15% val, 15% test."""
+        if self._raw_df is None or self._train_df is None:
             self._raw_df = load_or_download()
-        return self._raw_df
+            self._train_df, self._val_df, self._test_df = split_data(self._raw_df)
+            self._log("System", f"Loaded data: Train {len(self._train_df):,} bars | Val {len(self._val_df):,} bars | Test {len(self._test_df):,} bars", "info")
+        return self._train_df, self._val_df, self._test_df
 
-    def start_loop(self, rounds: int = 100, provider: str = "omniroute", api_key: str = "", model: str = "", endpoint: str = None) -> bool:
-        """Starts background exploration loop."""
+    def start_loop(self, rounds: int = 100, provider: str = "omniroute", api_key: str = "", model: str = "", endpoint: str = None, resume: bool = False, force_restart: bool = False) -> bool:
+        """Starts or resumes background exploration loop."""
         with self._lock:
-            if self.status == "running":
+            if self.status == "running" and not force_restart:
                 return False
+            if force_restart and self.status in ("running", "pausing"):
+                self._should_stop = True
+                self._should_pause = False
+                self.status = "stopping"
+                time.sleep(0.3)
+
             self.status = "running"
             self._should_stop = False
-            self.current_round = 0
-            self.max_rounds = max(1, min(rounds, 100))
-            self.logs = []
-            self.survivors_added = []
+            self._should_pause = False
 
-            # Initialize deduplication registry with existing leaderboard codes
-            self.seen_code_hashes.clear()
-            self.seen_signal_fingerprints.clear()
-            self.recent_hypotheses.clear()
-            try:
-                for strat in load_leaderboard():
-                    c = strat.get('code', '')
-                    if c:
-                        self.seen_code_hashes.add(_compute_code_hash(c))
-            except Exception:
-                pass
+            self._last_provider = provider
+            self._last_api_key = api_key
+            self._last_model = model
+            self._last_endpoint = endpoint
 
-        self._log("System", f"🚀 Starting Autonomous Exploration Tournament ({self.max_rounds} Rounds across 16 Archetypes)", "info")
+            if not resume:
+                self.current_round = 0
+                self.round_completed = True
+                self.max_rounds = max(1, min(rounds, 10000))
+                self.logs = []
+                self.survivors_added = []
+                self.seen_code_hashes.clear()
+                self.seen_signal_fingerprints.clear()
+                self.recent_hypotheses.clear()
+                try:
+                    for strat in load_leaderboard(self._train_df):
+                        c = strat.get('code', '')
+                        if c:
+                            self.seen_code_hashes.add(_compute_code_hash(c))
+                except Exception:
+                    pass
+                self._log("System", f"🚀 Starting Autonomous Exploration Tournament ({self.max_rounds} Rounds across 16 Archetypes)", "info")
+            else:
+                next_r = self.current_round + 1 if self.round_completed else max(1, self.current_round)
+                self._log("System", f"▶️ Resuming Autonomous Tournament from Round {next_r} of {self.max_rounds} (Progress Preserved)", "info")
 
         self._thread = threading.Thread(
             target=self._run_tournament,
@@ -118,16 +157,45 @@ class ResearchLoopManager:
         self._thread.start()
         return True
 
+    def pause_loop(self) -> bool:
+        """Signals background loop to pause gracefully and stop the process of rounds."""
+        with self._lock:
+            if self.status != "running":
+                return False
+            self.status = "pausing"
+            self._should_pause = True
+            self._log("System", f"⏸️ Pause signal received. Halting tournament at Round {self.current_round}...", "warning")
+            return True
+
+    def resume_loop(self, provider: str = None, api_key: str = None, model: str = None, endpoint: str = None) -> bool:
+        """Resumes a paused tournament from the exact round where it was paused."""
+        with self._lock:
+            if self.status != "paused":
+                return False
+        return self.start_loop(
+            rounds=self.max_rounds,
+            provider=provider or self._last_provider,
+            api_key=api_key or self._last_api_key,
+            model=model or self._last_model,
+            endpoint=endpoint or self._last_endpoint,
+            resume=True
+        )
+
     def stop_loop(self):
         """Signals the background loop to finish its current round and stop."""
         with self._lock:
-            if self.status == "running":
+            if self.status in ("running", "pausing"):
                 self.status = "stopping"
                 self._should_stop = True
+                self._should_pause = False
                 self._log("System", "🛑 Stop signal received. Finishing active agent step...", "warning")
+            elif self.status == "paused":
+                self.status = "idle"
+                self.active_agent = "Idle"
+                self._log("System", f"🛑 Tournament stopped from paused state ({self.current_round}/{self.max_rounds} completed).", "info")
 
     def get_state(self) -> Dict[str, Any]:
-        """Returns snapshot of current research progress."""
+        """Returns snapshot of current research progress and live engine telemetry."""
         with self._lock:
             return {
                 "status": self.status,
@@ -138,224 +206,544 @@ class ResearchLoopManager:
                 "current_hypothesis": self.current_hypothesis,
                 "best_candidate": self.best_candidate,
                 "survivors_count": len(self.survivors_added),
-                "recent_logs": self.logs[-40:]
+                "recent_logs": self.logs[-40:],
+                "engine": get_engine_telemetry()
             }
 
     def _run_tournament(self, provider: str, api_key: str, model: str, endpoint: str = None):
-        """Background execution loop with deduplication & novelty enforcement."""
+        """Background execution loop with deduplication & novelty enforcement across up to 10,000 rounds."""
         try:
-            df = self._ensure_data()
+            train_df, val_df, test_df = self._ensure_data()
             idea_agent = IdeaGeneratorAgent(provider, api_key, model, endpoint)
             risk_agent = RiskOfficerAgent(provider, api_key, model, endpoint)
             opt_agent = OptimizerAgent(provider, api_key, model, endpoint)
 
-            for r in range(1, self.max_rounds + 1):
+            start_round = self.current_round + 1 if self.round_completed else max(1, self.current_round)
+            for r in range(start_round, self.max_rounds + 1):
                 if self._should_stop:
                     break
-
-                with self._lock:
-                    self.current_round = r
-
-                archetype_idx = (r - 1) % len(ALPHA_ARCHETYPES)
-                arch = ALPHA_ARCHETYPES[archetype_idx]
-
-                # STEP 1: IDEA GENERATOR WITH NOVELTY ENFORCEMENT
-                with self._lock:
-                    self.active_agent = "Idea Generator"
-                    self.current_hypothesis = f"Round {r}: {arch['name']} - {arch['concept']}"
-                self._log("💡 Idea Generator", f"Mining combinatorial alpha: [{arch['name']}]", "info")
-
-                proposal = None
-                for attempt in range(1, 4):
-                    try:
-                        proposal = idea_agent.propose_strategy(archetype_idx, recent_hypotheses=self.recent_hypotheses)
-                        if proposal and proposal.get("code"):
-                            break
-                    except Exception as e:
-                        self._log("💡 Idea Generator", f"Attempt {attempt}/3 failed ({e}). Retrying in 4s...", "warning")
-                        time.sleep(4)
-
-                if not proposal or not proposal.get("code"):
-                    self._log("💡 Idea Generator", f"Skipping round {r} due to upstream LLM unavailability.", "error")
-                    time.sleep(5)
-                    continue
-
-                initial_code = proposal["code"]
-
-                if self._should_stop:
-                    break
-
-                # TIER 1 DEDUPLICATION CHECK: Normalized Code Hash
-                initial_hash = _compute_code_hash(initial_code)
-                if initial_hash in self.seen_code_hashes:
-                    self._log(
-                        "⚡ Deduplication Guard",
-                        f"Duplicate strategy code detected (already evaluated in tournament). Skipping backtest to save compute.",
-                        "warning"
-                    )
-                    time.sleep(1)
-                    continue
-                self.seen_code_hashes.add(initial_hash)
-
-                # STEP 2: RISK OFFICER AUDIT
-                with self._lock:
-                    self.active_agent = "Risk Officer"
-                self._log("🛡️ Risk Officer", "Auditing proposal for lookahead bias and defensive risk controls...", "info")
-
-                approved, audited_code, audit_notes = risk_agent.audit_and_refine(initial_code, arch["name"])
-                for note in audit_notes:
-                    self._log("🛡️ Risk Officer", note, "success" if "APPROVED" in note or "PASSED" in note else "warning")
-
-                if not approved:
-                    self._log("🛡️ Risk Officer", "Rejected proposal due to unresolvable lookahead bias.", "error")
-                    continue
-
-                # Re-check audited code hash in case risk officer injection created a duplicate
-                audited_hash = _compute_code_hash(audited_code)
-                if audited_hash != initial_hash and audited_hash in self.seen_code_hashes:
-                    self._log(
-                        "⚡ Deduplication Guard",
-                        f"Audited code matches an existing evaluated strategy. Skipping backtest to save compute.",
-                        "warning"
-                    )
-                    time.sleep(1)
-                    continue
-                self.seen_code_hashes.add(audited_hash)
-
-                # STEP 3: PARAMETER GRID OPTIMIZATION & FAST 1-PASS PRUNE
-                with self._lock:
-                    self.active_agent = "Backtester"
-                self._log("📊 Backtest Engine", f"Simulating on real Dukascopy 5m Gold ({len(df):,} bars) & sweeping parameter space...", "info")
-
-                opt_code, stats, trades, monthly_r = ParameterGridSweeper.sweep_and_optimize(audited_code, df)
-                audited_code = opt_code
-                self.total_candidates += 1
-
-                if not stats or len(trades) < 5:
-                    self._log("📊 Backtest Engine", f"Insufficient trades taken ({len(trades)} trades). Fast-pruning round to save compute.", "warning")
-                    continue
-
-                # TIER 2 DEDUPLICATION CHECK: Signal & Trade Footprint
-                sig_fp = _compute_signal_fingerprint(trades)
-                if sig_fp in self.seen_signal_fingerprints:
-                    self._log(
-                        "⚡ Deduplication Guard",
-                        f"Duplicate signal footprint detected (produces identical trade entries to prior strategy). Skipping backtest to save compute.",
-                        "warning"
-                    )
-                    time.sleep(1)
-                    continue
-                self.seen_signal_fingerprints.add(sig_fp)
-
-                # Update recent hypotheses window for Idea Generator novelty memory
-                self.recent_hypotheses.append(f"{arch['name']}: {arch['concept'][:60]}")
-                if len(self.recent_hypotheses) > 8:
-                    self.recent_hypotheses.pop(0)
-
-                months_10r = sum(1 for v in monthly_r.values() if v >= 10.0)
-                mc_res = run_monte_carlo(trades, num_simulations=1000)
-
-                net_r = round(float(sum(monthly_r.values())), 1) if monthly_r else round(float(stats.get('total_pnl', 0.0) / 1000.0), 1)
-                self._log(
-                    "📊 Backtest Engine",
-                    f"Grid Peak Result: {len(trades)} Trades | WR: {stats.get('win_rate')}% | Return: {net_r:+.1f}R | Months >= 10R: {months_10r}",
-                    "info"
-                )
-
-                if self._should_stop:
-                    break
-
-                # STEP 4: CRITIC POST-MORTEM
-                with self._lock:
-                    self.active_agent = "Critic Post-Mortem"
-                self._log("🔬 Critic Post-Mortem", "Diagnosing failure modes and loss concentrations...", "info")
-
-                post_mortem = CriticPostMortem.analyze_failures(trades, stats)
-                self._log("🔬 Critic Post-Mortem", f"Diagnosis: {post_mortem['diagnosis']}", "warning")
-
-                # STEP 5: OPTIMIZER REFINEMENT
-                with self._lock:
-                    self.active_agent = "Optimizer"
-                self._log("⚡ Optimizer Agent", "Applying empirical adjustments to boost monthly consistency...", "info")
-
-                opt_res = opt_agent.optimize_with_postmortem(
-                    audited_code, stats, mc_res, post_mortem, monthly_r, iteration=r
-                )
-
-                final_code = audited_code
-                final_stats = stats
-                final_trades = trades
-                final_monthly = monthly_r
-                final_mc = mc_res
-                final_r = net_r
-
-                if opt_res.get("success") and opt_res.get("code"):
-                    opt_exec = execute_strategy(opt_res["code"], df)
-                    if opt_exec.get("success") and len(opt_exec.get("trades", [])) >= 5:
-                        opt_trades = opt_exec["trades"]
-                        opt_stats = opt_exec["stats"]
-                        opt_monthly = compute_monthly_r_breakdown(opt_trades)
-                        opt_r = round(float(sum(opt_monthly.values())), 1) if opt_monthly else round(float(opt_stats.get('total_pnl', 0.0) / 1000.0), 1)
-
-                        if opt_r >= net_r:
-                            self._log("⚡ Optimizer Agent", f"Optimization SUCCEEDED: Return improved from {net_r:+.1f}R to {opt_r:+.1f}R!", "success")
-                            final_code = opt_res["code"]
-                            final_stats = opt_stats
-                            final_trades = opt_trades
-                            final_monthly = opt_monthly
-                            final_mc = run_monte_carlo(opt_trades, num_simulations=1000)
-                            final_r = opt_r
-                        else:
-                            self._log("⚡ Optimizer Agent", f"Optimized variation did not beat baseline ({opt_r:+.1f}R vs {net_r:+.1f}R). Keeping base candidate.", "info")
-
-                # STEP 6: LEADERBOARD QUALIFICATION
-                strat_title = f"{arch['name']} (Round #{r})"
-                months_ge_10 = sum(1 for v in final_monthly.values() if v >= 10.0)
-
-                # Add to persistent leaderboard if viable
-                entry = add_strategy_to_leaderboard(
-                    name=strat_title,
-                    concept=f"{arch['concept'][:75]}...",
-                    code=final_code,
-                    stats=final_stats,
-                    trades=final_trades,
-                    author="Multi-Agent Quant Team"
-                )
-                self.survivors_added.append(entry.get("id"))
-
-                with self._lock:
-                    if self.best_candidate is None or final_r > self.best_candidate.get("total_r", -999):
-                        self.best_candidate = {
-                            "name": strat_title,
-                            "total_r": final_r,
-                            "win_rate": final_stats.get("win_rate"),
-                            "trades": len(final_trades),
-                            "months_ge_10r": months_ge_10,
-                            "rank": entry.get("rank")
-                        }
-
-                if months_ge_10 >= 5:
-                    self._log(
-                        "🏆 CHAMPION DETECTED",
-                        f"🌟 Strategy '{strat_title}' achieved {months_ge_10} months >= +10R with {final_r:+.1f}R! Ranked #{entry.get('rank')}.",
-                        "success"
-                    )
-                else:
-                    self._log(
-                        "🏆 Leaderboard",
-                        f"Ranked '{strat_title}' as #{entry.get('rank')} on Strategy Leaderboard ({final_r:+.1f}R, {months_ge_10} high-yield months).",
-                        "success"
-                    )
-
-                time.sleep(1)
+                if self._should_pause:
+                    with self._lock:
+                        self.status = "paused"
+                        self.active_agent = "Paused"
+                    self._log("System", f"⏸️ Tournament PAUSED at Round {self.current_round}/{self.max_rounds}. Progress preserved. Click 'Resume' to continue seamlessly.", "warning")
+                    return
+                try:
+                    # Per-round timeout guard: 5 minutes max to prevent indefinite hangs
+                    with ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(
+                            self._execute_single_round, r, train_df, val_df, test_df, idea_agent, risk_agent, opt_agent
+                        )
+                        future.result(timeout=300)  # 5-minute hard timeout per round
+                    if self.status == "paused" or self._should_pause:
+                        return
+                except FuturesTimeoutError:
+                    self._log("System", f"⏰ Round {r} timed out after 5 minutes (likely upstream LLM hang). Skipping to round {r+1}...", "warning")
+                    with self._lock:
+                        self.round_completed = True
+                    time.sleep(2)
+                except Exception as round_err:
+                    self._log("System", f"Round {r} encountered non-fatal error ({round_err}). Resuming tournament on round {r+1}...", "warning")
+                    time.sleep(2)
 
         except Exception as e:
             self._log("System", f"Tournament halted due to exception: {e}", "error")
         finally:
             with self._lock:
-                self.status = "idle"
-                self.active_agent = "Idle"
-            self._log("System", f"🏁 Tournament complete ({self.current_round}/{self.max_rounds} strategies evaluated). Loop stopped.", "info")
+                if self.status != "paused":
+                    self.status = "idle"
+                    self.active_agent = "Idle"
+                    self._log("System", f"🏁 Tournament complete ({self.current_round}/{self.max_rounds} strategies evaluated). Loop stopped.", "info")
+
+    def _execute_single_round(self, r: int, train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame,
+                             idea_agent: IdeaGeneratorAgent, risk_agent: RiskOfficerAgent, opt_agent: OptimizerAgent):
+        """Executes a single end-to-end multi-agent discovery round."""
+        with self._lock:
+            self.current_round = r
+            self.round_completed = False
+
+        def _check_interrupted() -> bool:
+            if self._should_stop:
+                return True
+            if self._should_pause:
+                with self._lock:
+                    self.status = "paused"
+                    self.active_agent = "Paused"
+                self._log("System", f"⏸️ Tournament PAUSED at Round {self.current_round}/{self.max_rounds}. Progress preserved. Click 'Resume' to continue seamlessly.", "warning")
+                return True
+            return False
+
+        if _check_interrupted():
+            return
+
+        # UPGRADE 2: Smart Archetype Selection (Explore vs Exploit)
+        winning_arch_indices = []
+        for idx, a in enumerate(ALPHA_ARCHETYPES):
+            a_id = a.get('id', a['name'])
+            if self.archetype_wins.get(a_id, 0) > 0:
+                winning_arch_indices.append(idx)
+
+        # Every 4th round (if winners exist), exploit a winning archetype; otherwise explore systematically
+        if r > 3 and winning_arch_indices and (r % 4 == 0):
+            import random as _rnd
+            archetype_idx = _rnd.choice(winning_arch_indices)
+            arch = ALPHA_ARCHETYPES[archetype_idx]
+            arch_id = arch.get('id', arch['name'])
+            self._log("🎯 Alpha Explorer", f"Exploitation mode: Prioritizing proven high-yield archetype [{arch['name']}] ({self.archetype_wins[arch_id]} leaderboard wins).", "info")
+        else:
+            archetype_idx = (r - 1) % len(ALPHA_ARCHETYPES)
+            arch = ALPHA_ARCHETYPES[archetype_idx]
+
+        # UPGRADE 5: SMART BREEDING — Cross-pollinate top 3 parents every 3rd round
+        is_breeding_round = (r % 3 == 0)
+        champion_code = None
+        second_parent_code = None
+        if is_breeding_round:
+            try:
+                lb = load_leaderboard(train_df)
+                top_candidates = [s for s in (lb or [])[:5] if s.get('total_r', 0) > 0 and s.get('code')]
+                if top_candidates:
+                    import random as _rnd
+                    parent = _rnd.choice(top_candidates[:3]) if len(top_candidates) >= 3 else top_candidates[0]
+                    champion_code = parent['code']
+                    champion_name = parent.get('name', 'Champion')
+                    champion_r = parent.get('total_r', 0)
+                    champion_pf = parent.get('profit_factor', 0)
+                    # Pick a second parent for cross-pollination if available
+                    other_candidates = [s for s in top_candidates if s.get('id') != parent.get('id')]
+                    if other_candidates:
+                        second = _rnd.choice(other_candidates[:3])
+                        second_parent_code = second['code']
+                        self._log(
+                            "🧬 Genetic Breeder",
+                            f"Cross-breeding! Parent A: '{champion_name}' ({champion_r:+.1f}R) × Parent B: '{second.get('name', '?')}' ({second.get('total_r', 0):+.1f}R)",
+                            "info"
+                        )
+                    else:
+                        self._log(
+                            "🧬 Genetic Breeder",
+                            f"Breeding round! Using '{champion_name}' ({champion_r:+.1f}R, PF {champion_pf}) as parent for mutation.",
+                            "info"
+                        )
+            except Exception:
+                pass
+
+        # UPGRADE 3: Dual Candidate Exploration — Secondary Archetype for simultaneous tournament face-off
+        arch2_idx = (archetype_idx + max(1, len(ALPHA_ARCHETYPES) // 2)) % len(ALPHA_ARCHETYPES)
+        arch2 = ALPHA_ARCHETYPES[arch2_idx]
+
+        # Track archetype attempt counts
+        arch_id = arch.get('id', arch['name'])
+        self.archetype_tries[arch_id] = self.archetype_tries.get(arch_id, 0) + 1
+        arch2_id = arch2.get('id', arch2['name'])
+        self.archetype_tries[arch2_id] = self.archetype_tries.get(arch2_id, 0) + 1
+
+        # STEP 1: IDEA GENERATOR WITH NOVELTY ENFORCEMENT + UPGRADES 1, 3, 4
+        with self._lock:
+            self.active_agent = "Idea Generator"
+            if is_breeding_round and champion_code:
+                self.current_hypothesis = f"Round {r}: DUAL-MINING [Breeding: {arch['name']}] vs [Explorer: {arch2['name']}]"
+            else:
+                self.current_hypothesis = f"Round {r}: DUAL-MINING [{arch['name']}] vs [{arch2['name']}]"
+        self._log("💡 Idea Generator", f"Dual-Alpha Mining: Generating Candidate A [{arch['name']}] and Candidate B [{arch2['name']}] concurrently...", "info")
+
+        # UPGRADE 1: Gather top leaderboard CODE snippets for the LLM
+        leaderboard_code_context = []
+        try:
+            lb_top = load_leaderboard(train_df)
+            for s in (lb_top or [])[:5]:
+                if s.get('code') and s.get('total_r', 0) > 0:
+                    leaderboard_code_context.append({
+                        'name': s.get('name', '?'),
+                        'total_r': s.get('total_r', 0),
+                        'profit_factor': s.get('profit_factor', 0),
+                        'win_rate': s.get('win_rate', 0),
+                        'code': s['code'][:600]  # Truncate to save tokens
+                    })
+        except Exception:
+            pass
+
+        def _fetch_proposal(a_idx: int, c_code: str = None, s_code: str = None) -> Optional[Dict[str, Any]]:
+            for attempt in range(1, 4):
+                try:
+                    p = idea_agent.propose_strategy(
+                        a_idx,
+                        recent_hypotheses=self.recent_hypotheses,
+                        champion_code=c_code,
+                        second_parent_code=s_code,
+                        failure_memory=self.failure_memory,
+                        leaderboard_code_context=leaderboard_code_context
+                    )
+                    if p and p.get("code"):
+                        return p
+                except Exception as e:
+                    time.sleep(2)
+            return None
+
+        # Execute parallel generation with 1.0s stagger to avoid simultaneous provider burst limit
+        proposal_a = None
+        proposal_b = None
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            fut_a = pool.submit(_fetch_proposal, archetype_idx, champion_code, second_parent_code)
+            time.sleep(1.0)
+            fut_b = pool.submit(_fetch_proposal, arch2_idx, None, None)
+            proposal_a = fut_a.result()
+            proposal_b = fut_b.result()
+
+        if _check_interrupted():
+            return
+
+        if not proposal_a and not proposal_b:
+            self._log("💡 Idea Generator", f"Skipping round {r} due to upstream LLM unavailability.", "error")
+            time.sleep(5)
+            return
+
+        # STEP 2 & 3: RISK AUDIT & PARAMETER GRID BACKTEST FOR BOTH CANDIDATES
+        def _evaluate_candidate(prop: Optional[Dict[str, Any]], target_arch: Dict[str, Any], target_idx: int, label: str):
+            if not prop or not prop.get("code"):
+                return None
+            code = prop["code"]
+            c_hash = _compute_code_hash(code)
+            if c_hash in self.seen_code_hashes:
+                self._log("⚡ Deduplication Guard", f"Candidate {label} [{target_arch['name']}]: Duplicate code detected, skipping.", "warning")
+                return None
+            self.seen_code_hashes.add(c_hash)
+
+            # Audit with Risk Officer
+            approved, audited, notes = risk_agent.audit_and_refine(code, target_arch["name"], archetype_idx=target_idx)
+            if not approved:
+                self.failure_memory.append(f"'{target_arch['name']}': Rejected by Risk Officer AST audit — Lookahead bias")
+                if len(self.failure_memory) > 10:
+                    self.failure_memory.pop(0)
+                self._log("🛡️ Risk Officer", f"Candidate {label} [{target_arch['name']}]: Rejected by AST audit.", "warning")
+                return None
+
+            a_hash = _compute_code_hash(audited)
+            if a_hash != c_hash and a_hash in self.seen_code_hashes:
+                return None
+            self.seen_code_hashes.add(a_hash)
+
+            # Sweep on Train Split
+            opt_c, st, tr, m_r = ParameterGridSweeper.sweep_and_optimize(audited, train_df)
+
+            # Dynamic Alpha Recovery if low trades
+            if (not st or len(tr) < 5) and not prop.get("fallback_active"):
+                syn_c = synthesize_archetype_code(target_idx, champion_code=champion_code if target_idx == archetype_idx else None)
+                rec_c, rec_st, rec_tr, rec_mr = ParameterGridSweeper.sweep_and_optimize(syn_c, train_df)
+                if rec_st and len(rec_tr) >= 5:
+                    opt_c, st, tr, m_r = rec_c, rec_st, rec_tr, rec_mr
+
+            if not st or len(tr) < 5:
+                self.failure_memory.append(f"'{target_arch['name']}': Low trade frequency ({len(tr) if tr else 0} trades < 5)")
+                if len(self.failure_memory) > 10:
+                    self.failure_memory.pop(0)
+                return None
+
+            nr = round(float(sum(m_r.values())), 1) if m_r else round(float(st.get('total_pnl', 0.0) / 1000.0), 1)
+            return {
+                "arch": target_arch,
+                "arch_idx": target_idx,
+                "label": label,
+                "proposal": prop,
+                "audited_code": opt_c,
+                "stats": st,
+                "trades": tr,
+                "monthly_r": m_r,
+                "net_r": nr
+            }
+
+        with self._lock:
+            self.active_agent = "Risk Officer & Backtester"
+
+        cand_a = _evaluate_candidate(proposal_a, arch, archetype_idx, "A")
+        cand_b = _evaluate_candidate(proposal_b, arch2, arch2_idx, "B")
+
+        # Select tournament winner between candidates A and B
+        winner = None
+        if cand_a and cand_b:
+            if cand_b["net_r"] > cand_a["net_r"]:
+                self._log(
+                    "⚡ Dual-Alpha Tournament",
+                    f"Candidate B [{cand_b['arch']['name']}] ({cand_b['net_r']:+.1f}R, {len(cand_b['trades'])} trades) OUTPERFORMED Candidate A [{cand_a['arch']['name']}] ({cand_a['net_r']:+.1f}R)! Advancing Candidate B.",
+                    "success"
+                )
+                winner = cand_b
+            else:
+                self._log(
+                    "⚡ Dual-Alpha Tournament",
+                    f"Candidate A [{cand_a['arch']['name']}] ({cand_a['net_r']:+.1f}R, {len(cand_a['trades'])} trades) WON over Candidate B [{cand_b['arch']['name']}] ({cand_b['net_r']:+.1f}R). Advancing Candidate A.",
+                    "info"
+                )
+                winner = cand_a
+        elif cand_a:
+            winner = cand_a
+            self._log("⚡ Dual-Alpha Tournament", f"Candidate A [{cand_a['arch']['name']}] ({cand_a['net_r']:+.1f}R) passed backtest. Advancing.", "info")
+        elif cand_b:
+            winner = cand_b
+            self._log("⚡ Dual-Alpha Tournament", f"Candidate B [{cand_b['arch']['name']}] ({cand_b['net_r']:+.1f}R) passed backtest. Advancing.", "info")
+
+        self.total_candidates += (1 if cand_a else 0) + (1 if cand_b else 0)
+
+        if not winner:
+            self._log("📊 Backtest Engine", "Both candidates pruned due to low trade frequency or risk constraints. Exploring next round...", "info")
+            return
+
+        # Adopt winner's data
+        arch = winner["arch"]
+        archetype_idx = winner["arch_idx"]
+        proposal = winner["proposal"]
+        audited_code = winner["audited_code"]
+        stats = winner["stats"]
+        trades = winner["trades"]
+        monthly_r = winner["monthly_r"]
+        net_r = winner["net_r"]
+
+        initial_code = proposal.get("code", audited_code)
+        engine_mode = proposal.get("engine_mode", "LLM")
+        engine_name = proposal.get("engine_name", "OmniRoute")
+        fallback_active = proposal.get("fallback_active", False)
+        fallback_reason = proposal.get("fallback_reason")
+
+        if fallback_active:
+            self._log("⚡ Engine", f"Selected Candidate used [{engine_name}] · Fallback Active ({fallback_reason})", "warning")
+        else:
+            self._log("⚡ Engine", f"Selected Candidate used [{engine_name}] · Live LLM Generation (200 OK)", "success")
+
+        if _check_interrupted():
+            return
+
+        # TIER 2 DEDUPLICATION CHECK: Signal & Trade Footprint
+        sig_fp = _compute_signal_fingerprint(trades)
+        if sig_fp in self.seen_signal_fingerprints:
+            self._log(
+                "⚡ Deduplication Guard",
+                f"Duplicate signal footprint detected (produces identical trade entries to prior strategy). Skipping backtest to save compute.",
+                "warning"
+            )
+            time.sleep(1)
+            return
+        self.seen_signal_fingerprints.add(sig_fp)
+
+        # UPGRADE 2: Expanded novelty window (6→25) for Idea Generator memory
+        self.recent_hypotheses.append(f"{arch['name']}: {arch['concept'][:60]}")
+        if len(self.recent_hypotheses) > 25:
+            self.recent_hypotheses.pop(0)
+
+        months_10r = sum(1 for v in monthly_r.values() if v >= 10.0)
+        mc_res = run_monte_carlo(trades, num_simulations=1000)
+
+        net_r = round(float(sum(monthly_r.values())), 1) if monthly_r else round(float(stats.get('total_pnl', 0.0) / 1000.0), 1)
+        self._log(
+            "📊 Backtest Engine",
+            f"Train Grid Peak: {len(trades)} Trades | WR: {stats.get('win_rate')}% | Return: {net_r:+.1f}R | Months >= 10R: {months_10r}",
+            "info"
+        )
+
+        if _check_interrupted():
+            return
+
+        # STEP 4: CRITIC POST-MORTEM
+        with self._lock:
+            self.active_agent = "Critic Post-Mortem"
+        self._log("🔬 Critic Post-Mortem", "Diagnosing failure modes and loss concentrations...", "info")
+
+        post_mortem = CriticPostMortem.analyze_failures(trades, stats)
+        self._log("🔬 Critic Post-Mortem", f"Diagnosis: {post_mortem['diagnosis']}", "warning")
+
+        if _check_interrupted():
+            return
+
+        # STEP 5: OPTIMIZER REFINEMENT (UPGRADE 6: Skip for strong candidates)
+        pf_val = float(stats.get('profit_factor', 0))
+        if net_r >= 15.0 and pf_val >= 1.4:
+            self._log("⚡ Optimizer Agent", f"Strong candidate detected ({net_r:+.1f}R, PF {pf_val:.2f}). Skipping optimizer to preserve edge — proceeding to validation.", "success")
+        else:
+            with self._lock:
+                self.active_agent = "Optimizer"
+            self._log("⚡ Optimizer Agent", "Applying empirical adjustments to boost monthly consistency...", "info")
+
+            lb_context = None
+            try:
+                lb_curr = load_leaderboard(train_df)
+                if lb_curr:
+                    lb_context = lb_curr[:3]
+            except Exception:
+                pass
+
+            opt_res = opt_agent.optimize_with_postmortem(
+                audited_code, stats, mc_res, post_mortem, monthly_r, iteration=r,
+                leaderboard_context=lb_context
+            )
+
+            if opt_res.get("success") and opt_res.get("code"):
+                opt_exec = execute_strategy(opt_res["code"], train_df)
+                if opt_exec.get("success") and len(opt_exec.get("trades", [])) >= 5:
+                    opt_trades = opt_exec["trades"]
+                    opt_stats = opt_exec["stats"]
+                    opt_monthly = compute_monthly_r_breakdown(opt_trades)
+                    opt_r = round(float(sum(opt_monthly.values())), 1) if opt_monthly else round(float(opt_stats.get('total_pnl', 0.0) / 1000.0), 1)
+
+                    if opt_r >= net_r:
+                        self._log("⚡ Optimizer Agent", f"Optimization SUCCEEDED: Train return improved from {net_r:+.1f}R to {opt_r:+.1f}R!", "success")
+                        audited_code = opt_res["code"]
+                        stats = opt_stats
+                        trades = opt_trades
+                        monthly_r = opt_monthly
+                        mc_res = run_monte_carlo(opt_trades, num_simulations=1000)
+                        net_r = opt_r
+                    else:
+                        self._log("⚡ Optimizer Agent", f"Optimized variation did not beat baseline ({opt_r:+.1f}R vs {net_r:+.1f}R). Keeping base candidate.", "info")
+
+        final_code = audited_code
+        final_stats = stats
+        final_trades = trades
+        final_monthly = monthly_r
+        final_mc = mc_res
+        final_r = net_r
+
+        if _check_interrupted():
+            return
+
+        # STEP 6: OUT-OF-SAMPLE VALIDATION GATE (Overfit Protection)
+        strat_title = f"{arch['name']} (Round #{r})"
+        with self._lock:
+            self.active_agent = "Risk Officer"
+        self._log("🛡️ Validation Gate", f"Evaluating on held-out Validation Split ({len(val_df):,} bars)...", "info")
+        val_exec = execute_strategy(final_code, val_df)
+
+        if not val_exec.get("success") or len(val_exec.get("trades", [])) < 2:
+            fail_msg = f"'{strat_title}': Only {len(val_exec.get('trades', []))} validation trades — over-filtered entry conditions"
+            self._log(
+                "🛡️ Validation Gate",
+                f"❌ Rejected '{strat_title}': Insufficient validation trades ({len(val_exec.get('trades', []))}). Overfit protection triggered.",
+                "warning"
+            )
+            # UPGRADE 4: Record failure for LLM learning
+            self.failure_memory.append(fail_msg)
+            if len(self.failure_memory) > 10:
+                self.failure_memory.pop(0)
+            return
+
+        val_trades = val_exec["trades"]
+        val_stats = val_exec["stats"]
+        val_monthly = compute_monthly_r_breakdown(val_trades)
+        val_pf = float(val_stats.get("profit_factor", 0.0))
+        val_r = round(float(sum(val_monthly.values())), 1) if val_monthly else round(float(val_stats.get('total_pnl', 0.0) / 1000.0), 1)
+        val_stats['total_r'] = val_r
+
+        # Gate: Reject overfit strategies that lose money out-of-sample
+        if val_pf < 1.0 or val_r < 0:
+            fail_msg = f"'{strat_title}': OVERFIT — Train {final_r:+.1f}R but Val {val_r:+.1f}R (PF {val_pf:.2f}). Needs better out-of-sample robustness."
+            self._log(
+                "🛡️ Validation Gate",
+                f"❌ OVERFIT REJECTED: '{strat_title}' failed validation gate (Train: {final_r:+.1f}R, Val: {val_r:+.1f}R, Val PF: {val_pf:.2f}). Dropped from leaderboard.",
+                "warning"
+            )
+            # UPGRADE 4: Record failure for LLM learning
+            self.failure_memory.append(fail_msg)
+            if len(self.failure_memory) > 10:
+                self.failure_memory.pop(0)
+            return
+
+        if _check_interrupted():
+            return
+
+        # Also evaluate on held-out test split for reporting
+        test_exec = execute_strategy(final_code, test_df)
+        test_stats = None
+        if test_exec.get("success"):
+            test_trades = test_exec.get("trades", [])
+            test_st = test_exec.get("stats", {})
+            test_m = compute_monthly_r_breakdown(test_trades)
+            test_r = round(float(sum(test_m.values())), 1) if test_m else round(float(test_st.get('total_pnl', 0.0) / 1000.0), 1)
+            test_st['total_r'] = test_r
+            test_stats = test_st
+
+        self._log(
+            "🛡️ Validation Gate",
+            f"✅ VALIDATION PASSED: Train {final_r:+.1f}R | Val {val_r:+.1f}R (PF {val_pf:.2f})" +
+            (f" | Test {test_stats.get('total_r', 0):+.1f}R" if test_stats else ""),
+            "success"
+        )
+
+        # STEP 7: FULL 6-MONTH BACKTEST & LEADERBOARD REGISTRATION
+        # Strategy passed the anti-overfit validation gate!
+        # Now run full 6-month historical backtest (100% data) for leaderboard registration.
+        with self._lock:
+            self.active_agent = "Backtester & Monte Carlo"
+        self._log("Backtester & Monte Carlo", f"Executing complete 6-month backtest for leaderboard entry ({len(self._raw_df) if self._raw_df is not None else len(train_df):,} bars)...", "info")
+
+        full_exec = execute_strategy(final_code, self._raw_df if self._raw_df is not None else train_df)
+        if full_exec.get("success") and len(full_exec.get("trades", [])) > 0:
+            lb_stats = full_exec["stats"]
+            lb_trades = full_exec["trades"]
+            lb_monthly = compute_monthly_r_breakdown(lb_trades)
+            lb_r = round(float(sum(lb_monthly.values())), 1) if lb_monthly else round(float(lb_stats.get('total_pnl', 0.0) / 1000.0), 1)
+            months_ge_10 = sum(1 for v in lb_monthly.values() if v >= 10.0)
+        else:
+            lb_stats = final_stats
+            lb_trades = final_trades
+            lb_monthly = final_monthly
+            lb_r = final_r
+            months_ge_10 = sum(1 for v in final_monthly.values() if v >= 10.0)
+
+        train_stats_meta = {
+            'total_r': final_r,
+            'profit_factor': float(final_stats.get('profit_factor', 0.0)),
+            'total_trades': len(final_trades)
+        }
+
+        # Add to persistent leaderboard with full 6-month backtest results
+        entry = add_strategy_to_leaderboard(
+            name=strat_title,
+            concept=f"{arch['concept'][:75]}...",
+            code=final_code,
+            stats=lb_stats,
+            trades=lb_trades,
+            author="Multi-Agent Quant Team",
+            val_stats=val_stats,
+            test_stats=test_stats,
+            train_stats=train_stats_meta,
+            data_split="full_6m"
+        )
+        self.survivors_added.append(entry.get("id"))
+
+        # UPGRADE 2: Track archetype success for smarter rotation
+        self.archetype_wins[arch_id] = self.archetype_wins.get(arch_id, 0) + 1
+
+        with self._lock:
+            if self.best_candidate is None or lb_r > self.best_candidate.get("total_r", -999):
+                self.best_candidate = {
+                    "name": strat_title,
+                    "total_r": lb_r,
+                    "win_rate": lb_stats.get("win_rate"),
+                    "trades": len(lb_trades),
+                    "months_ge_10r": months_ge_10,
+                    "rank": entry.get("rank"),
+                    "val_r": val_r,
+                    "val_pf": val_pf
+                }
+
+        lb_trades_count = len(lb_trades)
+        lb_pf = float(lb_stats.get("profit_factor", 1.0))
+        if months_ge_10 >= 5:
+            self._log(
+                "🏆 CHAMPION DETECTED",
+                f"🌟 Strategy '{strat_title}' achieved {months_ge_10} months >= +10R with Full 6M Return: {lb_r:+.1f}R ({lb_trades_count} trades, PF {lb_pf:.2f})! Ranked #{entry.get('rank')}.",
+                "success"
+            )
+        else:
+            self._log(
+                "🏆 Leaderboard",
+                f"Ranked '{strat_title}' as #{entry.get('rank')} on Strategy Leaderboard with Full 6M Return: {lb_r:+.1f}R ({lb_trades_count} trades, PF {lb_pf:.2f}, {months_ge_10} high-yield months). [Train: {final_r:+.1f}R | Val: {val_r:+.1f}R | Test: {test_stats.get('total_r', 0):+.1f}R]",
+                "success"
+            )
+
+        with self._lock:
+            self.round_completed = True
+
+        time.sleep(1)
 
 
 # Global singleton instance
