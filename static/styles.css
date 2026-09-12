@@ -1808,6 +1808,16 @@ body.tv-theme-dark {
     background-color: var(--tv-bg-hover);
 }
 
+.lb-table tr.active-loaded-strategy {
+    background-color: rgba(41, 98, 255, 0.12) !important;
+    border-left: 3px solid #2962ff;
+}
+
+.lb-table tr.active-loaded-strategy .lb-btn-load {
+    background-color: #089981 !important;
+    color: #ffffff;
+}
+
 .lb-strat-name {
     font-weight: 700;
     color: var(--tv-text-primary);

@@ -18,9 +18,17 @@ from ai_research_agents import IdeaGeneratorAgent, RiskOfficerAgent, CriticPostM
 from ai_generator import get_engine_telemetry
 from strategy_executor import execute_strategy
 from monte_carlo import run_monte_carlo
-from leaderboard import add_strategy_to_leaderboard, compute_monthly_r_breakdown, compute_rank_score, load_leaderboard
+from leaderboard import add_strategy_to_leaderboard, compute_monthly_r_breakdown, compute_rank_score, load_leaderboard, get_research_candidates
 from download_data import load_or_download
 from data_split import split_data
+
+# Out-of-sample validation gate thresholds (Task 3 hardening).
+# Validation split is ~15% of the 6-month dataset (a few weeks of session-
+# filtered 5m bars). A strategy must show a real, not-merely-lucky edge here
+# before it's trusted enough to reach the leaderboard.
+MIN_VALIDATION_TRADES = 10
+MIN_VALIDATION_PROFIT_FACTOR = 1.15
+MIN_VALIDATION_R = 2.0
 
 
 def _compute_code_hash(code: str) -> str:
@@ -67,7 +75,7 @@ class ResearchLoopManager:
         # Last configuration parameters for seamless resume
         self._last_provider = "omniroute"
         self._last_api_key = ""
-        self._last_model = "agentrouter/gpt-6-astra"
+        self._last_model = "mistral/codestral-latest"
         self._last_endpoint = "http://localhost:20128/v1"
 
         # Deduplication & Novelty Memory
@@ -81,6 +89,13 @@ class ResearchLoopManager:
         # Upgrade 2: Archetype performance tracking — which archetypes produce winners
         self.archetype_wins: Dict[str, int] = {}
         self.archetype_tries: Dict[str, int] = {}
+
+        # Pre-LLM Negative Parameter Cache to eliminate duplicate footprints
+        self.recent_param_signatures: Dict[str, List[str]] = {}
+
+        # 15-Round Plateau Detection & Auto-Mutation Shift
+        self.rounds_since_top15_beat: int = 0
+        self._last_round_added_to_top15: bool = False
 
         self._raw_df: Optional[pd.DataFrame] = None
         self._train_df: Optional[pd.DataFrame] = None
@@ -101,11 +116,14 @@ class ResearchLoopManager:
                 self.logs.pop(0)
 
     def _ensure_data(self):
-        """Loads dataset and splits chronologically into 70% train, 15% val, 15% test."""
+        """Loads 2026 dataset (start till date) and splits chronologically into 70% train, 15% val, 15% test."""
         if self._raw_df is None or self._train_df is None:
-            self._raw_df = load_or_download()
+            full_df = load_or_download()
+            self._raw_df = full_df[full_df.index >= '2026-01-01'].copy()
             self._train_df, self._val_df, self._test_df = split_data(self._raw_df)
-            self._log("System", f"Loaded data: Train {len(self._train_df):,} bars | Val {len(self._val_df):,} bars | Test {len(self._test_df):,} bars", "info")
+            start_d = self._raw_df.index[0].strftime('%Y-%m-%d')
+            end_d = self._raw_df.index[-1].strftime('%Y-%m-%d')
+            self._log("System", f"Loaded 2026 dataset ({len(self._raw_df):,} bars from {start_d} till {end_d}): Train {len(self._train_df):,} | Val {len(self._val_df):,} | Test {len(self._test_df):,}", "info")
         return self._train_df, self._val_df, self._test_df
 
     def start_loop(self, rounds: int = 100, provider: str = "omniroute", api_key: str = "", model: str = "", endpoint: str = None, resume: bool = False, force_restart: bool = False) -> bool:
@@ -144,7 +162,7 @@ class ResearchLoopManager:
                             self.seen_code_hashes.add(_compute_code_hash(c))
                 except Exception:
                     pass
-                self._log("System", f"🚀 Starting Autonomous Exploration Tournament ({self.max_rounds} Rounds across 16 Archetypes)", "info")
+                self._log("System", f"🚀 Starting Autonomous Exploration Tournament ({self.max_rounds} Rounds across {len(ALPHA_ARCHETYPES)} Archetypes)", "info")
             else:
                 next_r = self.current_round + 1 if self.round_completed else max(1, self.current_round)
                 self._log("System", f"▶️ Resuming Autonomous Tournament from Round {next_r} of {self.max_rounds} (Progress Preserved)", "info")
@@ -229,21 +247,25 @@ class ResearchLoopManager:
                     self._log("System", f"⏸️ Tournament PAUSED at Round {self.current_round}/{self.max_rounds}. Progress preserved. Click 'Resume' to continue seamlessly.", "warning")
                     return
                 try:
-                    # Per-round timeout guard: 5 minutes max to prevent indefinite hangs
+                    # Per-round timeout guard: 3 minutes max to prevent indefinite stalls
                     with ThreadPoolExecutor(max_workers=1) as executor:
                         future = executor.submit(
                             self._execute_single_round, r, train_df, val_df, test_df, idea_agent, risk_agent, opt_agent
                         )
-                        future.result(timeout=300)  # 5-minute hard timeout per round
+                        future.result(timeout=180)  # 3-minute hard timeout per round
                     if self.status == "paused" or self._should_pause:
                         return
+                    if not getattr(self, '_last_round_added_to_top15', False):
+                        self.rounds_since_top15_beat += 1
                 except FuturesTimeoutError:
-                    self._log("System", f"⏰ Round {r} timed out after 5 minutes (likely upstream LLM hang). Skipping to round {r+1}...", "warning")
+                    self._log("System", f"⏰ Round {r} timed out after 3 minutes (upstream LLM latency). Skipping to round {r+1}...", "warning")
+                    self.rounds_since_top15_beat += 1
                     with self._lock:
                         self.round_completed = True
-                    time.sleep(2)
+                    time.sleep(1)
                 except Exception as round_err:
                     self._log("System", f"Round {r} encountered non-fatal error ({round_err}). Resuming tournament on round {r+1}...", "warning")
+                    self.rounds_since_top15_beat += 1
                     time.sleep(2)
 
         except Exception as e:
@@ -261,6 +283,7 @@ class ResearchLoopManager:
         with self._lock:
             self.current_round = r
             self.round_completed = False
+        self._last_round_added_to_top15 = False
 
         def _check_interrupted() -> bool:
             if self._should_stop:
@@ -276,14 +299,29 @@ class ResearchLoopManager:
         if _check_interrupted():
             return
 
-        # UPGRADE 2: Smart Archetype Selection (Explore vs Exploit)
+        # UPGRADE 2: Smart Archetype Selection with Saturation Ceiling (Anti-Echo Chamber)
+        top_15 = load_leaderboard()[:15]
+        saturated_arch_ids = set()
+        arch_counts_top15 = {}
+        for item in top_15:
+            iname = item.get('name', '').lower()
+            iconcept = item.get('concept', '').lower()
+            for a in ALPHA_ARCHETYPES:
+                a_name = a['name'].lower()
+                a_id = a.get('id', a['name'])
+                tokens = [t for t in a_name.split() if len(t) > 3 and t not in ['confluence', 'intraday', 'temporal', 'breakout']]
+                if a_name in iname or a_id.lower() in iname or any(tok in iname or tok in iconcept for tok in tokens[:2]):
+                    arch_counts_top15[a_id] = arch_counts_top15.get(a_id, 0) + 1
+                    if arch_counts_top15[a_id] >= 2:
+                        saturated_arch_ids.add(a_id)
+
         winning_arch_indices = []
         for idx, a in enumerate(ALPHA_ARCHETYPES):
             a_id = a.get('id', a['name'])
-            if self.archetype_wins.get(a_id, 0) > 0:
+            if self.archetype_wins.get(a_id, 0) > 0 and a_id not in saturated_arch_ids:
                 winning_arch_indices.append(idx)
 
-        # Every 4th round (if winners exist), exploit a winning archetype; otherwise explore systematically
+        # Every 4th round (if unsaturated winners exist), exploit a winning archetype; otherwise explore novel domains
         if r > 3 and winning_arch_indices and (r % 4 == 0):
             import random as _rnd
             archetype_idx = _rnd.choice(winning_arch_indices)
@@ -291,8 +329,20 @@ class ResearchLoopManager:
             arch_id = arch.get('id', arch['name'])
             self._log("🎯 Alpha Explorer", f"Exploitation mode: Prioritizing proven high-yield archetype [{arch['name']}] ({self.archetype_wins[arch_id]} leaderboard wins).", "info")
         else:
-            archetype_idx = (r - 1) % len(ALPHA_ARCHETYPES)
+            unsaturated_indices = [
+                idx for idx, a in enumerate(ALPHA_ARCHETYPES)
+                if a.get('id', a['name']) not in saturated_arch_ids
+            ]
+            if not unsaturated_indices:
+                unsaturated_indices = list(range(len(ALPHA_ARCHETYPES)))
+
+            # Select the least-attempted unsaturated archetype to systematically canvas all market regimes
+            unsaturated_indices.sort(key=lambda idx: (self.archetype_tries.get(ALPHA_ARCHETYPES[idx].get('id', ALPHA_ARCHETYPES[idx]['name']), 0), idx))
+            archetype_idx = unsaturated_indices[0]
             arch = ALPHA_ARCHETYPES[archetype_idx]
+            if saturated_arch_ids:
+                sat_names = [a['name'] for a in ALPHA_ARCHETYPES if a.get('id', a['name']) in saturated_arch_ids]
+                self._log("🌐 Alpha Explorer", f"Exploration mode: Saturated archetypes locked in Top 15 ({', '.join(sat_names[:2])}). Exploring novel domain: [{arch['name']}].", "info")
 
         # UPGRADE 5: SMART BREEDING — Cross-pollinate top 3 parents every 3rd round
         is_breeding_round = (r % 3 == 0)
@@ -300,71 +350,69 @@ class ResearchLoopManager:
         second_parent_code = None
         if is_breeding_round:
             try:
-                lb = load_leaderboard(train_df)
-                top_candidates = [s for s in (lb or [])[:5] if s.get('total_r', 0) > 0 and s.get('code')]
+                top_candidates = get_research_candidates(train_df, min_train_trades=10, limit=5)
                 if top_candidates:
                     import random as _rnd
                     parent = _rnd.choice(top_candidates[:3]) if len(top_candidates) >= 3 else top_candidates[0]
                     champion_code = parent['code']
                     champion_name = parent.get('name', 'Champion')
-                    champion_r = parent.get('total_r', 0)
-                    champion_pf = parent.get('profit_factor', 0)
-                    # Pick a second parent for cross-pollination if available
+                    champion_r = parent.get('train_r', 0)
+                    champion_pf = parent.get('train_pf', 0)
                     other_candidates = [s for s in top_candidates if s.get('id') != parent.get('id')]
                     if other_candidates:
                         second = _rnd.choice(other_candidates[:3])
                         second_parent_code = second['code']
                         self._log(
                             "🧬 Genetic Breeder",
-                            f"Cross-breeding! Parent A: '{champion_name}' ({champion_r:+.1f}R) × Parent B: '{second.get('name', '?')}' ({second.get('total_r', 0):+.1f}R)",
+                            f"Cross-breeding! Parent A: '{champion_name}' ({champion_r:+.1f}R train) × Parent B: '{second.get('name', '?')}' ({second.get('train_r', 0):+.1f}R train)",
                             "info"
                         )
                     else:
                         self._log(
                             "🧬 Genetic Breeder",
-                            f"Breeding round! Using '{champion_name}' ({champion_r:+.1f}R, PF {champion_pf}) as parent for mutation.",
+                            f"Breeding round! Using '{champion_name}' ({champion_r:+.1f}R train, PF {champion_pf}) as parent for mutation.",
                             "info"
                         )
             except Exception:
                 pass
 
-        # UPGRADE 3: Dual Candidate Exploration — Secondary Archetype for simultaneous tournament face-off
-        arch2_idx = (archetype_idx + max(1, len(ALPHA_ARCHETYPES) // 2)) % len(ALPHA_ARCHETYPES)
-        arch2 = ALPHA_ARCHETYPES[arch2_idx]
-
         # Track archetype attempt counts
         arch_id = arch.get('id', arch['name'])
         self.archetype_tries[arch_id] = self.archetype_tries.get(arch_id, 0) + 1
-        arch2_id = arch2.get('id', arch2['name'])
-        self.archetype_tries[arch2_id] = self.archetype_tries.get(arch2_id, 0) + 1
 
-        # STEP 1: IDEA GENERATOR WITH NOVELTY ENFORCEMENT + UPGRADES 1, 3, 4
+        # STEP 1: IDEA GENERATOR (High-Speed Single-Candidate Alpha Mining)
         with self._lock:
             self.active_agent = "Idea Generator"
             if is_breeding_round and champion_code:
-                self.current_hypothesis = f"Round {r}: DUAL-MINING [Breeding: {arch['name']}] vs [Explorer: {arch2['name']}]"
+                self.current_hypothesis = f"Round {r}: [Breeding: {arch['name']}]"
             else:
-                self.current_hypothesis = f"Round {r}: DUAL-MINING [{arch['name']}] vs [{arch2['name']}]"
-        self._log("💡 Idea Generator", f"Dual-Alpha Mining: Generating Candidate A [{arch['name']}] and Candidate B [{arch2['name']}] concurrently...", "info")
+                self.current_hypothesis = f"Round {r}: [{arch['name']}]"
+        self._log("💡 Idea Generator", f"Mining Alpha: Generating Candidate [{arch['name']}]...", "info")
 
-        # UPGRADE 1: Gather top leaderboard CODE snippets for the LLM
+        # Gather top leaderboard CODE snippets for the LLM
         leaderboard_code_context = []
         try:
-            lb_top = load_leaderboard(train_df)
-            for s in (lb_top or [])[:5]:
-                if s.get('code') and s.get('total_r', 0) > 0:
-                    leaderboard_code_context.append({
-                        'name': s.get('name', '?'),
-                        'total_r': s.get('total_r', 0),
-                        'profit_factor': s.get('profit_factor', 0),
-                        'win_rate': s.get('win_rate', 0),
-                        'code': s['code'][:600]  # Truncate to save tokens
-                    })
+            for s in get_research_candidates(train_df, min_train_trades=10, limit=3):
+                leaderboard_code_context.append({
+                    'name': s.get('name', '?'),
+                    'total_r': s.get('train_r', 0),          # TRAIN-split only — never val/test
+                    'profit_factor': s.get('train_pf', 0),   # TRAIN-split only
+                    'win_rate': s.get('train_win_rate', 0),  # TRAIN-split only
+                    'code': s['code'][:600]
+                })
         except Exception:
             pass
 
+        # Check if 15-round plateau is active (Mutation Shift)
+        is_mutation_shift = self.rounds_since_top15_beat >= 15
+        round_temp = 0.85 if is_mutation_shift else 0.70
+        if is_mutation_shift:
+            self._log("🧬 Mutation Engine", f"15-round plateau detected ({self.rounds_since_top15_beat} rounds without new Top-15). Generative temperature boosted (0.70 -> 0.85) to force breakthrough mutations!", "warning")
+
+        neg_constraints = self.recent_param_signatures.get(arch_id, [])
+
         def _fetch_proposal(a_idx: int, c_code: str = None, s_code: str = None) -> Optional[Dict[str, Any]]:
-            for attempt in range(1, 4):
+            for attempt in range(1, 3):
                 try:
                     p = idea_agent.propose_strategy(
                         a_idx,
@@ -372,43 +420,45 @@ class ResearchLoopManager:
                         champion_code=c_code,
                         second_parent_code=s_code,
                         failure_memory=self.failure_memory,
-                        leaderboard_code_context=leaderboard_code_context
+                        leaderboard_code_context=leaderboard_code_context,
+                        negative_constraints=neg_constraints,
+                        temperature=round_temp
                     )
                     if p and p.get("code"):
                         return p
                 except Exception as e:
-                    time.sleep(2)
+                    time.sleep(1)
             return None
 
-        # Execute parallel generation with 1.0s stagger to avoid simultaneous provider burst limit
-        proposal_a = None
-        proposal_b = None
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-            fut_a = pool.submit(_fetch_proposal, archetype_idx, champion_code, second_parent_code)
-            time.sleep(1.0)
-            fut_b = pool.submit(_fetch_proposal, arch2_idx, None, None)
-            proposal_a = fut_a.result()
-            proposal_b = fut_b.result()
+        proposal = _fetch_proposal(archetype_idx, champion_code, second_parent_code)
 
         if _check_interrupted():
             return
 
-        if not proposal_a and not proposal_b:
+        if not proposal:
             self._log("💡 Idea Generator", f"Skipping round {r} due to upstream LLM unavailability.", "error")
-            time.sleep(5)
+            time.sleep(2)
             return
 
-        # STEP 2 & 3: RISK AUDIT & PARAMETER GRID BACKTEST FOR BOTH CANDIDATES
+        # STEP 2 & 3: RISK AUDIT & PARAMETER GRID BACKTEST
         def _evaluate_candidate(prop: Optional[Dict[str, Any]], target_arch: Dict[str, Any], target_idx: int, label: str):
             if not prop or not prop.get("code"):
                 return None
             code = prop["code"]
             c_hash = _compute_code_hash(code)
             if c_hash in self.seen_code_hashes:
-                self._log("⚡ Deduplication Guard", f"Candidate {label} [{target_arch['name']}]: Duplicate code detected, skipping.", "warning")
+                self._log("⚡ Deduplication Guard", f"Candidate [{target_arch['name']}]: Duplicate code detected, skipping.", "warning")
                 return None
             self.seen_code_hashes.add(c_hash)
+
+            # Record parameter signature in Pre-LLM Negative Cache to avoid future duplicate generation
+            raw_params = re.findall(r'(?:swing_len|period|atr_len|span|period_fast|ema_period|period_slow)\s*=\s*(\d+)', code)
+            if raw_params:
+                sig = f"lookbacks={','.join(raw_params[:4])}"
+                arch_sigs = self.recent_param_signatures.setdefault(target_arch.get('id', target_arch['name']), [])
+                arch_sigs.append(sig)
+                if len(arch_sigs) > 10:
+                    arch_sigs.pop(0)
 
             # Audit with Risk Officer
             approved, audited, notes = risk_agent.audit_and_refine(code, target_arch["name"], archetype_idx=target_idx)
@@ -416,7 +466,7 @@ class ResearchLoopManager:
                 self.failure_memory.append(f"'{target_arch['name']}': Rejected by Risk Officer AST audit — Lookahead bias")
                 if len(self.failure_memory) > 10:
                     self.failure_memory.pop(0)
-                self._log("🛡️ Risk Officer", f"Candidate {label} [{target_arch['name']}]: Rejected by AST audit.", "warning")
+                self._log("🛡️ Risk Officer", f"Candidate [{target_arch['name']}]: Rejected by AST audit.", "warning")
                 return None
 
             a_hash = _compute_code_hash(audited)
@@ -456,37 +506,11 @@ class ResearchLoopManager:
         with self._lock:
             self.active_agent = "Risk Officer & Backtester"
 
-        cand_a = _evaluate_candidate(proposal_a, arch, archetype_idx, "A")
-        cand_b = _evaluate_candidate(proposal_b, arch2, arch2_idx, "B")
-
-        # Select tournament winner between candidates A and B
-        winner = None
-        if cand_a and cand_b:
-            if cand_b["net_r"] > cand_a["net_r"]:
-                self._log(
-                    "⚡ Dual-Alpha Tournament",
-                    f"Candidate B [{cand_b['arch']['name']}] ({cand_b['net_r']:+.1f}R, {len(cand_b['trades'])} trades) OUTPERFORMED Candidate A [{cand_a['arch']['name']}] ({cand_a['net_r']:+.1f}R)! Advancing Candidate B.",
-                    "success"
-                )
-                winner = cand_b
-            else:
-                self._log(
-                    "⚡ Dual-Alpha Tournament",
-                    f"Candidate A [{cand_a['arch']['name']}] ({cand_a['net_r']:+.1f}R, {len(cand_a['trades'])} trades) WON over Candidate B [{cand_b['arch']['name']}] ({cand_b['net_r']:+.1f}R). Advancing Candidate A.",
-                    "info"
-                )
-                winner = cand_a
-        elif cand_a:
-            winner = cand_a
-            self._log("⚡ Dual-Alpha Tournament", f"Candidate A [{cand_a['arch']['name']}] ({cand_a['net_r']:+.1f}R) passed backtest. Advancing.", "info")
-        elif cand_b:
-            winner = cand_b
-            self._log("⚡ Dual-Alpha Tournament", f"Candidate B [{cand_b['arch']['name']}] ({cand_b['net_r']:+.1f}R) passed backtest. Advancing.", "info")
-
-        self.total_candidates += (1 if cand_a else 0) + (1 if cand_b else 0)
+        winner = _evaluate_candidate(proposal, arch, archetype_idx, "A")
+        self.total_candidates += 1
 
         if not winner:
-            self._log("📊 Backtest Engine", "Both candidates pruned due to low trade frequency or risk constraints. Exploring next round...", "info")
+            self._log("📊 Backtest Engine", "Candidate pruned due to low trade frequency or risk constraints. Exploring next round...", "info")
             return
 
         # Adopt winner's data
@@ -554,20 +578,32 @@ class ResearchLoopManager:
         if _check_interrupted():
             return
 
-        # STEP 5: OPTIMIZER REFINEMENT (UPGRADE 6: Skip for strong candidates)
+        # STEP 5: OPTIMIZER REFINEMENT (High-Speed Edge Gating & Critic 1-Shot Near-Miss Auto-Repair)
         pf_val = float(stats.get('profit_factor', 0))
-        if net_r >= 15.0 and pf_val >= 1.4:
+        is_strong = (net_r >= 15.0 and pf_val >= 1.4)
+        is_near_miss = (-15.0 <= net_r <= 0.0) and (pf_val >= 0.70) and (len(trades) >= 15)
+        is_refinable = (net_r > 0.0 and pf_val >= 1.0 and len(trades) >= 8)
+
+        if is_strong:
             self._log("⚡ Optimizer Agent", f"Strong candidate detected ({net_r:+.1f}R, PF {pf_val:.2f}). Skipping optimizer to preserve edge — proceeding to validation.", "success")
+        elif not is_refinable and not is_near_miss:
+            self._log("⚡ Optimizer Agent", f"Candidate edge below refinement threshold ({net_r:+.1f}R, PF {pf_val:.2f}, {len(trades)} trades). Skipping optimizer to accelerate loop.", "info")
+            if net_r <= 0.0:
+                self._log("🛡️ Validation Gate", f"Fast-fail: Candidate Train return ({net_r:+.1f}R, PF {pf_val:.2f}) unviable. Pruning without validation.", "warning")
+                return
         else:
             with self._lock:
                 self.active_agent = "Optimizer"
-            self._log("⚡ Optimizer Agent", "Applying empirical adjustments to boost monthly consistency...", "info")
+            if is_near_miss:
+                self._log("⚡ Optimizer Agent", f"Near-miss candidate detected ({net_r:+.1f}R, PF {pf_val:.2f}, {len(trades)} trades). Triggering Critic 1-Shot Auto-Repair...", "info")
+            else:
+                self._log("⚡ Optimizer Agent", "Applying empirical adjustments to boost monthly consistency...", "info")
 
             lb_context = None
             try:
-                lb_curr = load_leaderboard(train_df)
+                lb_curr = get_research_candidates(train_df, min_train_trades=10, limit=3)
                 if lb_curr:
-                    lb_context = lb_curr[:3]
+                    lb_context = lb_curr
             except Exception:
                 pass
 
@@ -584,7 +620,7 @@ class ResearchLoopManager:
                     opt_monthly = compute_monthly_r_breakdown(opt_trades)
                     opt_r = round(float(sum(opt_monthly.values())), 1) if opt_monthly else round(float(opt_stats.get('total_pnl', 0.0) / 1000.0), 1)
 
-                    if opt_r >= net_r:
+                    if opt_r > net_r:
                         self._log("⚡ Optimizer Agent", f"Optimization SUCCEEDED: Train return improved from {net_r:+.1f}R to {opt_r:+.1f}R!", "success")
                         audited_code = opt_res["code"]
                         stats = opt_stats
@@ -594,6 +630,10 @@ class ResearchLoopManager:
                         net_r = opt_r
                     else:
                         self._log("⚡ Optimizer Agent", f"Optimized variation did not beat baseline ({opt_r:+.1f}R vs {net_r:+.1f}R). Keeping base candidate.", "info")
+
+            if is_near_miss and net_r <= 0.0:
+                self._log("⚡ Optimizer Agent", f"1-Shot Near-Miss repair unviable (Final Train: {net_r:+.1f}R). Pruning candidate.", "warning")
+                return
 
         final_code = audited_code
         final_stats = stats
@@ -612,14 +652,14 @@ class ResearchLoopManager:
         self._log("🛡️ Validation Gate", f"Evaluating on held-out Validation Split ({len(val_df):,} bars)...", "info")
         val_exec = execute_strategy(final_code, val_df)
 
-        if not val_exec.get("success") or len(val_exec.get("trades", [])) < 2:
-            fail_msg = f"'{strat_title}': Only {len(val_exec.get('trades', []))} validation trades — over-filtered entry conditions"
+        min_val_trades = min(10, max(5, int(len(final_trades) * 0.08)))
+        if not val_exec.get("success") or len(val_exec.get("trades", [])) < min_val_trades:
+            fail_msg = f"'{strat_title}': Only {len(val_exec.get('trades', []))} validation trades (need >= {min_val_trades} based on {len(final_trades)} train trades) — over-filtered entry conditions or too small a sample to trust"
             self._log(
                 "🛡️ Validation Gate",
-                f"❌ Rejected '{strat_title}': Insufficient validation trades ({len(val_exec.get('trades', []))}). Overfit protection triggered.",
+                f"❌ Rejected '{strat_title}': Insufficient validation trades ({len(val_exec.get('trades', []))} < {min_val_trades}). Overfit protection triggered.",
                 "warning"
             )
-            # UPGRADE 4: Record failure for LLM learning
             self.failure_memory.append(fail_msg)
             if len(self.failure_memory) > 10:
                 self.failure_memory.pop(0)
@@ -632,15 +672,14 @@ class ResearchLoopManager:
         val_r = round(float(sum(val_monthly.values())), 1) if val_monthly else round(float(val_stats.get('total_pnl', 0.0) / 1000.0), 1)
         val_stats['total_r'] = val_r
 
-        # Gate: Reject overfit strategies that lose money out-of-sample
-        if val_pf < 1.0 or val_r < 0:
-            fail_msg = f"'{strat_title}': OVERFIT — Train {final_r:+.1f}R but Val {val_r:+.1f}R (PF {val_pf:.2f}). Needs better out-of-sample robustness."
+        # Gate: Reject strategies without a real, not-merely-lucky out-of-sample edge
+        if val_pf < MIN_VALIDATION_PROFIT_FACTOR or val_r < MIN_VALIDATION_R:
+            fail_msg = f"'{strat_title}': OVERFIT — Train {final_r:+.1f}R but Val {val_r:+.1f}R (PF {val_pf:.2f}, need R>={MIN_VALIDATION_R} and PF>={MIN_VALIDATION_PROFIT_FACTOR}). Needs better out-of-sample robustness."
             self._log(
                 "🛡️ Validation Gate",
                 f"❌ OVERFIT REJECTED: '{strat_title}' failed validation gate (Train: {final_r:+.1f}R, Val: {val_r:+.1f}R, Val PF: {val_pf:.2f}). Dropped from leaderboard.",
                 "warning"
             )
-            # UPGRADE 4: Record failure for LLM learning
             self.failure_memory.append(fail_msg)
             if len(self.failure_memory) > 10:
                 self.failure_memory.pop(0)
@@ -667,14 +706,19 @@ class ResearchLoopManager:
             "success"
         )
 
-        # STEP 7: FULL 6-MONTH BACKTEST & LEADERBOARD REGISTRATION
+        # STEP 7: 2026 MT5 BACKTEST & LEADERBOARD REGISTRATION
         # Strategy passed the anti-overfit validation gate!
-        # Now run full 6-month historical backtest (100% data) for leaderboard registration.
+        # Now run 2026 historical backtest for leaderboard registration.
         with self._lock:
             self.active_agent = "Backtester & Monte Carlo"
-        self._log("Backtester & Monte Carlo", f"Executing complete 6-month backtest for leaderboard entry ({len(self._raw_df) if self._raw_df is not None else len(train_df):,} bars)...", "info")
+        
+        df_full = self._raw_df if self._raw_df is not None else train_df
+        df_2026 = df_full[df_full.index >= '2026-01-01']
+        if len(df_2026) < 100:
+            df_2026 = df_full
+        self._log("Backtester & Monte Carlo", f"Executing 2026 MT5 broker backtest for leaderboard entry ({len(df_2026):,} bars)...", "info")
 
-        full_exec = execute_strategy(final_code, self._raw_df if self._raw_df is not None else train_df)
+        full_exec = execute_strategy(final_code, df_2026)
         if full_exec.get("success") and len(full_exec.get("trades", [])) > 0:
             lb_stats = full_exec["stats"]
             lb_trades = full_exec["trades"]
@@ -694,7 +738,7 @@ class ResearchLoopManager:
             'total_trades': len(final_trades)
         }
 
-        # Add to persistent leaderboard with full 6-month backtest results
+        # Add to persistent leaderboard with 2026 backtest results
         entry = add_strategy_to_leaderboard(
             name=strat_title,
             concept=f"{arch['concept'][:75]}...",
@@ -705,9 +749,18 @@ class ResearchLoopManager:
             val_stats=val_stats,
             test_stats=test_stats,
             train_stats=train_stats_meta,
-            data_split="full_6m"
+            data_split="mt5_ecn_2026"
         )
         self.survivors_added.append(entry.get("id"))
+
+        # Track Top-15 plateau reset
+        strat_rank = entry.get("rank")
+        if strat_rank is not None and isinstance(strat_rank, int) and strat_rank <= 15:
+            self.rounds_since_top15_beat = 0
+            self._last_round_added_to_top15 = True
+            self._log("🏆 Breakthrough", f"New Top 15 Strategy Discovered! Ranked #{strat_rank}. Plateau counter reset to 0.", "success")
+        else:
+            self._last_round_added_to_top15 = False
 
         # UPGRADE 2: Track archetype success for smarter rotation
         self.archetype_wins[arch_id] = self.archetype_wins.get(arch_id, 0) + 1

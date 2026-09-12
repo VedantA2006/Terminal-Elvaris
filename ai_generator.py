@@ -29,14 +29,14 @@ from strategy_executor import execute_strategy
 ENGINE_TELEMETRY: Dict[str, Any] = {
     "mode": "IDLE",
     "provider": "omniroute",
-    "model": "agentrouter/gpt-6-astra",
+    "model": "mistral/codestral-latest",
     "endpoint": "http://localhost:20128/v1",
     "status": "idle",
     "status_code": None,
     "last_error": None,
     "fallback_active": False,
     "fallback_reason": None,
-    "active_display": "OmniRoute LLM (agentrouter/gpt-6-astra)",
+    "active_display": "OmniRoute LLM (mistral/codestral-latest)",
     "last_updated": datetime.utcnow().strftime("%H:%M:%S")
 }
 
@@ -167,7 +167,7 @@ CRITICAL INSTITUTIONAL TRADE EXECUTION & PROFITABILITY RULES:
 
 3. INSTITUTIONAL RISK MANAGEMENT & MINIMUM STOP DISTANCE:
    - ALL trade entries are taken strictly at the CANDLE CLOSE (`df['close']`).
-   - Stop Loss MUST have a healthy institutional buffer to survive Dukascopy spread ($0.20) and slippage ($0.05):
+   - Stop Loss MUST have a healthy institutional buffer to survive MT5 broker spread ($0.20) and slippage ($0.05):
      Use a 1.2x to 2.2x ATR buffer:
      `sl_long = np.minimum(df['low'], swing_lows) - (1.5 * atr(df, 14))`
      `sl_short = np.maximum(df['high'], swing_highs) + (1.5 * atr(df, 14))`
@@ -270,7 +270,7 @@ def call_ai_llm(provider: str, api_key: str, model: str, prompt: str, system_pro
             url = url.rstrip('/') + '/chat/completions'
 
         default_models = {
-            'omniroute': 'agentrouter/gpt-6-astra',
+            'omniroute': 'mistral/codestral-latest',
             'openai': 'gpt-4o-mini',
             'groq': 'openai/gpt-oss-120b',
             'openrouter': 'openai/gpt-4o-mini',
@@ -290,18 +290,17 @@ def call_ai_llm(provider: str, api_key: str, model: str, prompt: str, system_pro
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
         }
 
-        # Resilient candidate model fallback if primary model hits 429/503 quota limits
-        primary_model = model or default_models.get(provider, 'agentrouter/gpt-6-astra')
+        # Resilient candidate model fallback prioritizing ultra-fast (<5s) coding models
+        primary_model = model or default_models.get(provider, 'mistral/codestral-latest')
         if provider == 'omniroute':
-            if primary_model in ('auto/best-coding', 'auto/best-reasoning', 'auto', 'groq/qwen/qwen3.6-27b', 'qwen/qwen3.6-27b'):
-                primary_model = 'agentrouter/gpt-6-astra'
-            # Dedicated: agentrouter/gpt-6-astra is candidate #1 until full limit (429) is hit
+            if primary_model in ('auto/best-coding', 'auto/best-reasoning', 'auto', 'groq/qwen/qwen3.6-27b', 'qwen/qwen3.6-27b', 'agentrouter/gpt-6-astra'):
+                primary_model = 'mistral/codestral-latest'
             raw_candidates = [
-                'agentrouter/gpt-6-astra',
-                'groq/openai/gpt-oss-120b',
                 'mistral/codestral-latest',
                 'groq/qwen/qwen3.8-27b',
-                'groq/openai/gpt-oss-20b'
+                'groq/openai/gpt-oss-120b',
+                'groq/openai/gpt-oss-20b',
+                'agentrouter/gpt-6-astra'
             ]
             if primary_model not in raw_candidates:
                 raw_candidates.insert(0, primary_model)
@@ -310,8 +309,8 @@ def call_ai_llm(provider: str, api_key: str, model: str, prompt: str, system_pro
                 primary_model = 'openai/gpt-oss-120b'
             raw_candidates = [
                 primary_model,
-                'openai/gpt-oss-120b',
                 'qwen/qwen3.8-27b',
+                'openai/gpt-oss-120b',
                 'openai/gpt-oss-20b'
             ]
         else:
@@ -337,7 +336,7 @@ def call_ai_llm(provider: str, api_key: str, model: str, prompt: str, system_pro
                 'max_tokens': 1600,
             }
             try:
-                res = requests.post(url, headers=headers, json=payload, timeout=(10, 120))
+                res = requests.post(url, headers=headers, json=payload, timeout=(5, 40))
                 if res.status_code in (400, 401, 404, 429, 500, 502, 503, 504):
                     last_err = requests.HTTPError(f"HTTP {res.status_code} on model {cand_model}: {res.text[:120]}")
                     time.sleep(1.0)
@@ -481,7 +480,7 @@ Here is the current strategy code:
 {current_code}
 ```
 
-Previous Backtest Performance on 5-min Dukascopy Gold data:
+Previous Backtest Performance on 5-min MT5 Broker ECN Gold data (100,000 candles):
 - Total Trades: {previous_stats.get('total_trades', 0)}
 - Win Rate: {previous_stats.get('win_rate', 0)}%
 - Net Profit: ${previous_stats.get('total_pnl', 0):,.2f}

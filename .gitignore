@@ -39,3 +39,6 @@ logs_dump.json
 logs_live.json
 scratch_dashboard.py
 temp_dashboard.html
+scratch/
+scratch_*.py
+data/*_backup.*

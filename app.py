@@ -3,7 +3,7 @@ TradingView Replica Web Terminal — Flask Application.
 
 Endpoints:
   - /                         : Main TradingView duplicate UI
-  - /api/ohlc                 : Dukascopy XAUUSD 5m candlestick data
+  - /api/ohlc                 : MetaTrader 5 ECN XAUUSD 5m candlestick data (100,000 bars)
   - /api/indicators           : Baseline indicator lines
   - /api/signals              : Baseline buy/sell markers
   - /api/trades               : Baseline trade records
@@ -24,7 +24,7 @@ from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
 load_dotenv()
 
-from download_data import load_or_download
+from download_data import load_or_download, load_timeframe_data, TIMEFRAME_MAP
 from data_split import split_data
 from strategy import calculate_signals
 from backtest import run_backtest
@@ -32,7 +32,7 @@ from strategy_executor import execute_strategy
 from ai_generator import generate_strategy_code, optimize_strategy_step, get_engine_telemetry
 from default_strategy import DEFAULT_STRATEGY_CODE
 from monte_carlo import run_monte_carlo
-from leaderboard import load_leaderboard, get_strategy_by_id, add_strategy_to_leaderboard, upgrade_leaderboard_to_full_6m
+from leaderboard import load_leaderboard, get_strategy_by_id, add_strategy_to_leaderboard, upgrade_leaderboard_to_mt5_data
 
 app = Flask(__name__)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -49,14 +49,16 @@ def _initialise():
         return
 
     print("\n" + "=" * 65)
-    print("  TRADINGVIEW PYTHON STRATEGY TERMINAL (Dukascopy XAUUSD 5m)")
+    print("  TRADINGVIEW PYTHON STRATEGY TERMINAL (MetaTrader 5 ECN XAUUSD)")
     print("=" * 65)
 
-    # 1. Load raw Dukascopy data
-    print("\n[1/3] Loading 6-month Dukascopy XAUUSD 5m data ...")
+    # 1. Load raw MT5 broker data
+    print("\n[1/3] Loading MT5 Broker XAUUSD 5m data ...")
     raw_df = load_or_download()
     _cache['raw_df'] = raw_df
-    print(f"      {len(raw_df)} real candles ready")
+    df_2026 = raw_df[raw_df.index >= '2026-01-01'].copy()
+    _cache['df_2026'] = df_2026
+    print(f"      {len(raw_df):,} real candles ready (2026 YTD: {len(df_2026):,} candles)")
 
     # 2. Calculate baseline signals (Elvaris v2)
     print("[2/3] Computing baseline Elvaris v2 indicators & signals ...")
@@ -77,9 +79,9 @@ def _initialise():
     _cache['val_df'] = val_df
     _cache['test_df'] = test_df
 
-    # 5. Upgrade all leaderboard entries to full 6-month backtest metrics
+    # 5. Upgrade all leaderboard entries to MT5 broker backtest metrics
     try:
-        upgrade_leaderboard_to_full_6m(raw_df)
+        upgrade_leaderboard_to_mt5_data(raw_df, train_df, val_df, test_df)
     except Exception as e:
         print(f"      [Leaderboard Upgrade Notice]: {e}")
 
@@ -111,22 +113,59 @@ def index():
 
 @app.route('/api/ohlc')
 def api_ohlc():
-    """Return OHLC candlestick data for Lightweight Charts."""
+    """Return OHLC candlestick data for Lightweight Charts. Supports ?timeframe= (e.g. 1m, 5m, 15m, 1h, 4h, 1d)."""
     _initialise()
-    df = _cache['raw_df']
+    tf = request.args.get('timeframe', '5m').lower().strip()
+    if tf and tf != '5m':
+        try:
+            df = load_timeframe_data(tf)
+        except Exception as e:
+            print(f"Warning loading timeframe {tf}: {e}")
+            df = _cache['raw_df']
+    else:
+        df = _cache['raw_df']
 
     data = []
     for ts, row in df.iterrows():
         t = int(ts.timestamp())
-        data.append({
+        item = {
             'time': t,
             'open': _clean(row['open']),
             'high': _clean(row['high']),
             'low': _clean(row['low']),
             'close': _clean(row['close']),
             'volume': _clean(row.get('volume', 0)),
-        })
+        }
+        if 'spread' in row:
+            item['spread'] = _clean(row['spread'])
+        data.append(item)
     return jsonify(data)
+
+
+@app.route('/api/timeframes')
+def api_timeframes():
+    """Return summary of all downloaded MT5 timeframes and their bar counts / ranges."""
+    _initialise()
+    res = {}
+    from pathlib import Path
+    data_dir = Path(__file__).parent / 'data'
+    for tf_key, (mt5_tf, fname, _) in TIMEFRAME_MAP.items():
+        fpath = data_dir / fname
+        if fpath.exists():
+            try:
+                import pandas as pd
+                df = pd.read_csv(fpath, index_col=0, parse_dates=True)
+                res[tf_key] = {
+                    'timeframe': tf_key,
+                    'mt5_code': mt5_tf,
+                    'filename': fname,
+                    'bars': len(df),
+                    'start': str(df.index[0]),
+                    'end': str(df.index[-1]),
+                }
+            except Exception:
+                pass
+    return jsonify(res)
 
 
 @app.route('/api/indicators')
@@ -263,8 +302,9 @@ def api_ai_optimize_step():
     if not current_code:
         return jsonify({'success': False, 'message': 'Current strategy code is required.'}), 400
 
+    target_df = _cache.get('df_2026', _cache['raw_df'])
     res = optimize_strategy_step(
-        provider, api_key, model, current_code, previous_stats, iteration, _cache['raw_df'], endpoint_url=endpoint
+        provider, api_key, model, current_code, previous_stats, iteration, target_df, endpoint_url=endpoint
     )
     return jsonify(res)
 
@@ -308,7 +348,10 @@ def api_leaderboard_load():
     if not code or not code.strip():
         code = DEFAULT_STRATEGY_CODE
 
-    exec_res = execute_strategy(code, _cache['raw_df'])
+    target_df = _cache.get('df_2026')
+    if target_df is None or len(target_df) < 100:
+        target_df = _cache['raw_df']
+    exec_res = execute_strategy(code, target_df)
     return jsonify({
         'success': True,
         'strategy': strat,
@@ -336,7 +379,7 @@ def api_ai_start_generation():
     Autonomous strategy creation step:
     1. Generates candidate code with Anti-Lookahead System Prompt
     2. Runs AST & Runtime lookahead verification
-    3. Executes backtest against Dukascopy 5m Gold data
+    3. Executes backtest against MT5 Broker ECN 5m Gold data (100,000 bars)
     4. Runs 1,000-path Monte Carlo stress test
     5. Evaluates monthly R-returns and saves candidate to Leaderboard
     """
@@ -368,8 +411,9 @@ def api_ai_start_generation():
 
     code = gen_res['code']
 
-    # Execute backtest
-    exec_res = execute_strategy(code, _cache['raw_df'])
+    # Execute backtest on 2026 data
+    target_df = _cache.get('df_2026', _cache['raw_df'])
+    exec_res = execute_strategy(code, target_df)
     if not exec_res.get('success'):
         return jsonify({
             'success': False,
@@ -410,7 +454,8 @@ def api_ai_start_generation():
         code=code,
         stats=stats,
         trades=trades,
-        author='Autonomous AI Generator'
+        author='Autonomous AI Generator',
+        data_split='mt5_ecn_2026'
     )
 
     return jsonify({
@@ -441,7 +486,9 @@ def api_research_start():
     # Route through OmniRoute proxy so requests and token analytics show up live in the OmniRoute UI
     provider = 'omniroute'
     api_key = api_key or omniroute_env_key
-    model = model or 'agentrouter/gpt-6-astra'
+    model = model or 'mistral/codestral-latest'
+    if model in ('agentrouter/gpt-6-astra', 'auto', 'auto/best-coding'):
+        model = 'mistral/codestral-latest'
     endpoint = endpoint or 'http://localhost:20128/v1'
 
     started = research_manager.start_loop(rounds=rounds, provider=provider, api_key=api_key, model=model, endpoint=endpoint, force_restart=force_restart)

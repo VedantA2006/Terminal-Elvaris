@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TradingView — XAUUSD (Gold 5m) · Python Strategy Terminal</title>
-    <meta name="description" content="TradingView duplicate terminal featuring live Python strategy scripting, bar-by-bar backtesting on Dukascopy data, AST anti-lookahead guard, and AI continuous optimizer.">
+    <meta name="description" content="TradingView duplicate terminal featuring live Python strategy scripting, bar-by-bar backtesting on MetaTrader 5 ECN broker data, AST anti-lookahead guard, and AI continuous optimizer.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
@@ -40,7 +40,7 @@
         <button class="tv-symbol-btn" id="symbolBtn" title="Symbol Search">
             <span class="tv-symbol-ticker">XAUUSD</span>
             <span class="tv-symbol-desc">Gold / US Dollar</span>
-            <span class="tv-source-tag">DUKASCOPY</span>
+            <span class="tv-source-tag">MT5 ECN</span>
         </button>
 
         <div class="tv-divider-v"></div>
@@ -206,7 +206,7 @@
             <!-- Dynamic OHLCV Hover Legend -->
             <div id="chartLegend">
                 <div class="legend-row-primary">
-                    <span class="legend-symbol">XAUUSD · 5 · DUKASCOPY</span>
+                    <span class="legend-symbol">XAUUSD · 5 · MT5 ECN</span>
                     <span class="legend-ohlc" id="legendOhlc">O: —  H: —  L: —  C: —</span>
                 </div>
             </div>
@@ -263,8 +263,9 @@
                     <span class="tnav-pnl positive" id="tnavPnl">+$1,139.00</span>
                 </div>
                 <button class="tnav-btn" id="tnavNextBtn" title="Next Trade">Next ▶</button>
+                <button class="tnav-btn" id="tnavFitBtn" title="Zoom out to fit all trades on chart" style="margin-left: 4px;">🔍 Fit All</button>
                 <div class="tnav-divider"></div>
-                <button class="tnav-btn-list" id="tnavOpenListBtn" title="Open Complete Trades Table in Strategy Tester">📋 View 200 Trades</button>
+                <button class="tnav-btn-list" id="tnavOpenListBtn" title="Open Complete Trades Table in Strategy Tester">📋 View Trades</button>
             </div>
         </div>
 
@@ -544,7 +545,7 @@
                                     <span class="ai-status-pill" id="optStatusPill">Idle</span>
                                 </h3>
                                 <p class="ai-card-desc">
-                                    The AI iteratively mutates parameters, evaluates Sharpe Ratio & Profit Factor on Dukascopy data, enforces zero lookahead bias, and keeps the best strategy.
+                                    The AI iteratively mutates parameters, evaluates Sharpe Ratio & Profit Factor on MetaTrader 5 ECN broker data, enforces zero lookahead bias, and keeps the best strategy.
                                 </p>
                                 
                                 <div class="opt-controls-row">
@@ -586,7 +587,7 @@
                 -------------------------------------------------------------- -->
                 <div class="tv-tab-content" id="tabLogsConsole">
                     <div class="console-box" id="consoleOutput">
-                        <div class="console-line info">[System] Dukascopy 5m XAUUSD Engine Ready. 34,744 candles loaded.</div>
+                        <div class="console-line info">[System] MetaTrader 5 ECN XAUUSD Engine Ready. 100,000 candles loaded.</div>
                         <div class="console-line info">[Guard] AST & Runtime Anti-Lookahead Guard active.</div>
                     </div>
                 </div>
@@ -599,7 +600,7 @@
                         <div class="lb-header">
                             <div class="lb-title-block">
                                 <h3 class="lb-title">🏆 Quantitative Strategy Leaderboard & Hall of Fame</h3>
-                                <p class="lb-desc">Ranked by Total Net Return (R), High-Yield Months (>= +10.0R), Max Drawdown in R, and Monte Carlo 95% Sequence VaR</p>
+                                <p class="lb-desc">Ranked by 2026 Year-to-Date Backtest (49,091 MT5 Candles · Jan–Sep 2026): Total R, High-Yield Months (≥ +10.0R), Profit Factor, and Out-of-Sample Edge</p>
                             </div>
                             <div class="lb-actions">
                                 <div class="lb-tourn-status" id="lbTournStatusWrap">
@@ -618,6 +619,15 @@
                                 <button class="tv-dock-btn-secondary" id="btnRefreshLeaderboard">
                                     <span>🔄 Refresh Leaderboard</span>
                                 </button>
+                                <a href="/static/top10_equity_and_drawdown.png" target="_blank" class="tv-dock-btn-secondary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; color: #00E676; border-color: #00E67644;" title="View Top 10 Equity & Underwater Drawdown Curves">
+                                    <span>📈 Top 10 Equity Graph</span>
+                                </a>
+                                <a href="/static/top10_return_vs_drawdown_frontier.png" target="_blank" class="tv-dock-btn-secondary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; color: #00B0FF; border-color: #00B0FF44;" title="View Top 10 Risk-Return Frontier Scatter">
+                                    <span>🎯 Risk Frontier</span>
+                                </a>
+                                <a href="/static/top10_separate_grid.png" target="_blank" class="tv-dock-btn-secondary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; color: #FFD600; border-color: #FFD60044;" title="View Separate Individual Graphs for Each Strategy (5x2 Grid)">
+                                    <span>📊 Separate Graphs (10-Grid)</span>
+                                </a>
                             </div>
                         </div>
 
@@ -692,13 +702,13 @@
                                 <span class="ql-eb-label">ACTIVE STRATEGY GENERATOR:</span>
                                 <div class="ql-eb-status">
                                     <span class="engine-dot-lg llm" id="qlEngineDot"></span>
-                                    <span class="ql-eb-title" id="qlEngineTitle">OmniRoute LLM (agentrouter/gpt-6-astra)</span>
+                                    <span class="ql-eb-title" id="qlEngineTitle">OmniRoute LLM (mistral/codestral-latest)</span>
                                     <span class="ql-eb-badge llm" id="qlEngineBadge">ONLINE (200 OK)</span>
                                 </div>
                             </div>
                             <div class="ql-eb-col">
                                 <span class="ql-eb-label">CONFIGURED MODEL:</span>
-                                <span class="ql-eb-val" id="qlEngineModel">agentrouter/gpt-6-astra</span>
+                                <span class="ql-eb-val" id="qlEngineModel">mistral/codestral-latest</span>
                             </div>
                             <div class="ql-eb-col">
                                 <span class="ql-eb-label">GATEWAY / ENDPOINT:</span>
@@ -706,7 +716,7 @@
                             </div>
                             <div class="ql-eb-col detail">
                                 <span class="ql-eb-label">UPSTREAM / RATE LIMIT STATUS:</span>
-                                <span class="ql-eb-val success" id="qlEngineReason">AgentRouter GPT-6 Astra active via OmniRoute proxy gateway.</span>
+                                <span class="ql-eb-val success" id="qlEngineReason">Mistral Codestral active via OmniRoute proxy gateway (High Speed ~3s).</span>
                             </div>
                         </div>
 
@@ -726,7 +736,7 @@
                             <div class="agent-arrow">➔</div>
                             <div class="agent-card" id="agentCardBacktest">
                                 <div class="agent-badge">📊 Backtest & MC</div>
-                                <div class="agent-sub">Dukascopy Friction & 1000 VaR</div>
+                                <div class="agent-sub">MT5 Real Spread & 1000 VaR</div>
                                 <div class="agent-detail" id="agentBacktestDetail">Standby</div>
                             </div>
                             <div class="agent-arrow">➔</div>
@@ -867,8 +877,8 @@
                     <div class="card-stat"><span class="cs-lbl">Low (6M)</span><span class="cs-val" id="csLow">—</span></div>
                 </div>
                 <div class="card-stats-row">
-                    <div class="card-stat"><span class="cs-lbl">Bars</span><span class="cs-val">34,596</span></div>
-                    <div class="card-stat"><span class="cs-lbl">Source</span><span class="cs-val">Dukascopy</span></div>
+                    <div class="card-stat"><span class="cs-lbl">Bars</span><span class="cs-val">100,000</span></div>
+                    <div class="card-stat"><span class="cs-lbl">Source</span><span class="cs-val">MT5 ECN</span></div>
                 </div>
             </div>
         </div>
@@ -910,11 +920,11 @@
 
             <div class="modal-field">
                 <label for="cfgModel">Model Name (Live LLM Engine):</label>
-                <input type="text" id="cfgModel" class="modal-input" placeholder="agentrouter/gpt-6-astra">
+                <input type="text" id="cfgModel" class="modal-input" placeholder="mistral/codestral-latest">
                 <div class="model-quick-picks" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
-                    <button type="button" class="btn-micro-chip" style="border-color:var(--tv-blue);color:#fff;" onclick="document.getElementById('cfgModel').value='agentrouter/gpt-6-astra'">🌟 GPT-6 Astra (AgentRouter)</button>
-                    <button type="button" class="btn-micro-chip" onclick="document.getElementById('cfgModel').value='groq/openai/gpt-oss-120b'">⚡ GPT-OSS 120B</button>
-                    <button type="button" class="btn-micro-chip" onclick="document.getElementById('cfgModel').value='mistral/codestral-latest'">💻 Codestral</button>
+                    <button type="button" class="btn-micro-chip" style="border-color:var(--tv-blue);color:#fff;" onclick="document.getElementById('cfgModel').value='mistral/codestral-latest'">⚡ Codestral (Ultra-Fast ~3s)</button>
+                    <button type="button" class="btn-micro-chip" onclick="document.getElementById('cfgModel').value='groq/qwen/qwen3.8-27b'">🚀 Qwen 3.8 27B</button>
+                    <button type="button" class="btn-micro-chip" onclick="document.getElementById('cfgModel').value='groq/openai/gpt-oss-120b'">💡 GPT-OSS 120B</button>
                 </div>
             </div>
 
@@ -970,7 +980,7 @@
 ========================================================================= -->
 <div id="loadingOverlay">
     <div class="tv-spinner"></div>
-    <div class="tv-loading-text" id="loadingText">Loading Dukascopy XAUUSD 5m data...</div>
+    <div class="tv-loading-text" id="loadingText">Loading MetaTrader 5 XAUUSD 5m data...</div>
 </div>
 
 <div id="tvToast" class="tv-toast"></div>

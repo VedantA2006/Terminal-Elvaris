@@ -42,19 +42,28 @@ def split_data(df: pd.DataFrame,
     train_end = int(n * train_pct)
     val_end = int(n * (train_pct + val_pct))
 
+    warmup_bars = 100
+
     train_df = df.iloc[:train_end].copy()
-    val_df = df.iloc[train_end:val_end].copy()
-    test_df = df.iloc[val_end:].copy()
+
+    # Prepend 100-bar warm-up buffer to prevent Day 1 indicator NaNs/cold-start distortion
+    val_start = max(0, train_end - warmup_bars)
+    val_df = df.iloc[val_start:val_end].copy()
+    val_df.attrs['eval_start_time'] = df.index[train_end]
+
+    test_start = max(0, val_end - warmup_bars)
+    test_df = df.iloc[test_start:].copy()
+    test_df.attrs['eval_start_time'] = df.index[val_end]
 
     # Log split boundaries for auditability
     print(f"  [Data Split] Train: {len(train_df):,} bars "
           f"({train_df.index[0].date() if hasattr(train_df.index[0], 'date') else '?'} -> "
           f"{train_df.index[-1].date() if hasattr(train_df.index[-1], 'date') else '?'})")
-    print(f"  [Data Split] Validation: {len(val_df):,} bars "
-          f"({val_df.index[0].date() if hasattr(val_df.index[0], 'date') else '?'} -> "
+    print(f"  [Data Split] Validation: {len(val_df):,} bars (incl. {warmup_bars} warm-up bars) "
+          f"(Eval Start: {df.index[train_end].date() if hasattr(df.index[train_end], 'date') else '?'} -> "
           f"{val_df.index[-1].date() if hasattr(val_df.index[-1], 'date') else '?'})")
-    print(f"  [Data Split] Test/Holdout: {len(test_df):,} bars "
-          f"({test_df.index[0].date() if hasattr(test_df.index[0], 'date') else '?'} -> "
+    print(f"  [Data Split] Test/Holdout: {len(test_df):,} bars (incl. {warmup_bars} warm-up bars) "
+          f"(Eval Start: {df.index[val_end].date() if hasattr(df.index[val_end], 'date') else '?'} -> "
           f"{test_df.index[-1].date() if hasattr(test_df.index[-1], 'date') else '?'})")
 
     return train_df, val_df, test_df

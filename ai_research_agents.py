@@ -301,6 +301,80 @@ Focus on Opening Range Directional Drives:
 3. Filter: `session_mask(df, 'london_ny')` and ADX > 20.
 4. Risk: SL at Opening Range Midpoint or 1.5x ATR buffer (minimum $2.50). Target 1.5R to 2.2R.
 """
+    },
+    {
+        "id": "ny_midnight_true_day_open",
+        "name": "NY Midnight (00:00 UTC) True Day Open Sweep + VWAP Confluence",
+        "concept": "Exploits institutional discount/premium sweeps around the 00:00 UTC True Day Open: buys when price sweeps below Midnight Open and reclaims it during London/NY with VWAP slope confirmation.",
+        "instructions": """
+Focus on True Day Open Liquidity Engineering:
+1. Midnight Open Calculation:
+   - Identify candle at 00:00 UTC: `is_midnight = (df.index.hour == 0) & (df.index.minute == 0)`
+   - Midnight Open line: `df['open'].where(is_midnight).ffill()`
+2. Discount/Premium Sweep:
+   - Bullish: Price sweeps below Midnight Open during London/NY, then closes back above Midnight Open with heavy volume (`rvol(df, 20) > 1.2`) and `df['close'] > vwap(df)`.
+   - Bearish: Price sweeps above Midnight Open, then closes back below with `rvol(df, 20) > 1.2` and `df['close'] < vwap(df)`.
+   - Anti-bleed: fire only on the first reclaim bar.
+3. Multi-Target Runner Risk:
+   - SL anchored to sweep extreme + 1.5x ATR (min $3.50).
+   - Multi-target scaling: `tp1` at 2.0x risk (close 50%), `tp2` at 4.2x risk (trail 50%), `df['use_breakeven'] = True`.
+"""
+    },
+    {
+        "id": "multi_timeframe_1h_trend_pullback",
+        "name": "Multi-Timeframe 1-Hour Macro Trend Confluence (HTF EMA 200)",
+        "concept": "Enforces macro higher-timeframe trend alignment: enters 5-minute pullbacks into EMA 34/55 strictly in the direction of the 1-Hour HTF EMA 200.",
+        "instructions": """
+Focus on Multi-Timeframe Alignment:
+1. Higher-Timeframe Trend Engine:
+   - `htf_line = htf_ema(df['close'], 200, '1h')`
+   - Bullish Regime: `df['close'] > htf_line` and `htf_line > htf_line.shift(12)`
+   - Bearish Regime: `df['close'] < htf_line` and `htf_line < htf_line.shift(12)`
+2. 5-Minute Pullback Trigger:
+   - `fast_ema = ema(df['close'], 34)`, `slow_ema = ema(df['close'], 55)`
+   - Bullish Entry: Bullish Regime & `(df['low'] <= fast_ema) & (df['close'] > fast_ema) & session_mask(df, 'london_ny')`
+   - Bearish Entry: Bearish Regime & `(df['high'] >= fast_ema) & (df['close'] < fast_ema) & session_mask(df, 'london_ny')`
+   - Anti-bleed: transition touch only (`~((df['low'].shift(1) <= fast_ema.shift(1)) & (df['close'].shift(1) > fast_ema.shift(1)))`).
+3. Multi-Target Runners:
+   - SL anchored below slow EMA + 1.5x ATR (min $3.50).
+   - Set `tp1` at 2.0x risk, `tp2` at 4.5x risk, `df['use_breakeven'] = True`.
+"""
+    },
+    {
+        "id": "london_fix_volume_surge",
+        "name": "London 15:00 UTC Fixation Institutional Volume Surge",
+        "concept": "Captures institutional benchmark fixing flows between 14:45 and 15:30 UTC when global bullion banks settle the official LBMA Gold Price.",
+        "instructions": """
+Focus on Institutional Fixing Window:
+1. Fixing Session Window:
+   - Minutes from midnight: `mins = df.index.hour * 60 + df.index.minute`
+   - Fix Window: `(14 * 60 + 45 <= mins) & (mins <= 15 * 60 + 35)`
+2. Institutional Surge Detection:
+   - Relative volume spike: `rvol(df, 20) > 1.5`
+   - Momentum breakout of the last 6 bars high/low with Kaufman Efficiency Ratio (`er > 0.30`).
+   - Anti-bleed: fire only on the breakout bar.
+3. Runner Scaling:
+   - SL placed 1.5x ATR away (min $3.50).
+   - Scale out: `tp1` at 2.2x risk (bank 50%), `tp2` at 4.0x risk (trail 50%), `df['use_breakeven'] = True`.
+"""
+    },
+    {
+        "id": "institutional_breaker_multi_runner",
+        "name": "Institutional Breaker Block + Multi-Target Trailing Runners",
+        "concept": "Trades high-conviction Breaker Blocks (failed order blocks that broke market structure), executing causal retests with multi-target runners.",
+        "instructions": """
+Focus on Market Structure Shift & Breaker Retest:
+1. Breaker Block Identification:
+   - Swings: `sw_h, sw_l = find_swings(df, 7)`
+   - Bullish Breaker: A prior swing high that price violently displacement-broke above (`df['close'] > sw_h + 1.2*atr(df, 14)`).
+   - When price pulls back to touch `sw_h` from above, it flips to institutional support.
+2. Retest Entry:
+   - `retest_long = (df['low'] <= sw_h) & (df['close'] > sw_h) & session_mask(df, 'london_ny')`
+   - Anti-bleed: fire strictly on the first retest candle.
+3. Asymmetric Runner Risk:
+   - SL placed below breaker wick + 1.4x ATR (min $3.50).
+   - Scale out: `tp1` = 2.0x risk, `tp2` = 4.5x risk, `df['use_breakeven'] = True`.
+"""
     }
 ]
 
@@ -318,14 +392,15 @@ class IdeaGeneratorAgent:
     def __init__(self, provider: str = 'omniroute', api_key: str = '', model: str = '', endpoint: str = None):
         self.provider = (provider or 'omniroute').lower()
         self.api_key = api_key or os.environ.get('OMNIROUTE_API_KEY', '') or os.environ.get('GROQ_API_KEY', '')
-        self.model = model or 'agentrouter/gpt-6-astra'
-        if self.model in ('auto/best-coding', 'auto/best-reasoning', 'auto', 'groq/qwen/qwen3.6-27b', 'qwen/qwen3.6-27b'):
-            self.model = 'agentrouter/gpt-6-astra'
+        self.model = model or 'mistral/codestral-latest'
+        if self.model in ('auto/best-coding', 'auto/best-reasoning', 'auto', 'groq/qwen/qwen3.6-27b', 'qwen/qwen3.6-27b', 'agentrouter/gpt-6-astra'):
+            self.model = 'mistral/codestral-latest'
         self.endpoint = endpoint or os.environ.get('OMNIROUTE_ENDPOINT', 'http://localhost:20128/v1')
 
     def propose_strategy(self, archetype_idx: int = 0, recent_hypotheses: List[str] = None, custom_focus: str = None,
                          champion_code: str = None, second_parent_code: str = None,
-                         failure_memory: List[str] = None, leaderboard_code_context: List[Dict] = None) -> Dict[str, Any]:
+                         failure_memory: List[str] = None, leaderboard_code_context: List[Dict] = None,
+                         negative_constraints: List[str] = None, temperature: float = 0.7) -> Dict[str, Any]:
         """Generates an initial strategy code proposal based on a chosen archetype or breeds a champion parent."""
         archetype = ALPHA_ARCHETYPES[archetype_idx % len(ALPHA_ARCHETYPES)]
 
@@ -339,6 +414,18 @@ The following concepts were ALREADY explored in recent rounds:
 
 You MUST NOT replicate the exact indicator parameters, indicator combinations, or setup logic of the above.
 Innovate with alternative threshold values, unique filter combinations, or distinct execution confirmations to guarantee that this strategy is genuinely novel!
+"""
+
+        # Pre-LLM Negative Parameter Cache to prevent duplicate signal footprints
+        negative_section = ""
+        if negative_constraints:
+            formatted_negatives = "\n".join(f"- {c}" for c in negative_constraints[-8:])
+            negative_section = f"""
+🚫 NEGATIVE PARAMETER CACHE (DO NOT DUPLICATE RECENT PARAMETERS):
+The following parameter combinations were RECENTLY TESTED for this archetype:
+{formatted_negatives}
+
+CRITICAL MANDATE: You MUST use DIFFERENT lookbacks, periods, or multipliers! For example, if recent runs used swing_len=7 and period=20, you must explore swing_len in [10, 14, 21], ema in [34, 89], or wider ATR multipliers in [1.8, 2.4, 3.0]. Do NOT replicate the same parameter footprint!
 """
 
         # UPGRADE 4: Failure Memory — teach LLM from past mistakes
@@ -372,31 +459,33 @@ Create a NOVEL strategy that is DIFFERENT from these but learns from their struc
 
         breeding_mandate = ""
         if champion_code:
-            # UPGRADE 5: Second parent for cross-pollination
+            # UPGRADE 5: Second parent for structured cross-pollination
             second_parent_section = ""
             if second_parent_code:
                 second_parent_section = f"""
-SECOND PARENT FOR CROSS-POLLINATION:
+PARENT B (REGIME FILTER & EXIT MODEL PROVIDER):
 ```python
-{second_parent_code[:500]}
+{second_parent_code[:1500]}
 ```
-Cross-breed elements from BOTH parents: combine Parent A's entry logic with Parent B's risk management,
-or merge Parent A's filters with Parent B's signal structure. Create a genuinely novel hybrid!
+STRUCTURED SYNTHESIZER CONTRACT:
+- Inherit ENTRY TRIGGER & LEVEL CALCULATIONS from PARENT A (Champion).
+- Inherit REGIME FILTER, VOLATILITY GATING & EXIT MODEL (SL/TP runners) from PARENT B.
+- Do NOT simply copy Parent A; create a true functional hybrid of both parents!
 """
             breeding_mandate = f"""
-🧬 GENETIC MUTATION / CROSS-BREEDING MANDATE:
-Below is our current Champion Strategy from the Leaderboard (proven positive Net R and high win rate):
+🧬 STRUCTURED GENETIC SYNTHESIS & CROSS-BREEDING MANDATE:
+Below is PARENT A (Current Leaderboard Champion - proven positive Net R and high win rate):
 ```python
 {champion_code}
 ```
 {second_parent_section}
 YOUR BREEDING MISSION:
-Do NOT discard the winning logic! Mutate and evolve this champion by cross-breeding it with the Archetype: "{archetype['name']}" ({archetype['concept']}).
+Evolve a new high-alpha hybrid by cross-breeding Parent A with Archetype: "{archetype['name']}" ({archetype['concept']}){' and Parent B' if second_parent_code else ''}.
 Guidelines for mutation:
-1. Retain the core winning edge of the parent strategy (e.g. key filters, signal structure, ATR risk management).
-2. Inject innovative confluences from {archetype['name']} (e.g. enhanced volume gating, session VWAP context, higher-timeframe trend alignment, or dynamic volatility expansion).
-3. Evolve the risk management (keep stop loss at least 1.5x-2.0x ATR and min $4.00, improve Take Profit targeting with 1.8R-2.5R).
-4. Prune noisy/redundant conditions if they cause over-fitting or unnecessary bleed.
+1. Retain the core winning signal edge from Parent A (trigger structure, key price levels).
+2. Inject regime filters and confirmation from {archetype['name']}{' and Parent B' if second_parent_code else ''} (e.g. session VWAP slope, ATR expansion, volume gating).
+3. Evolve the risk management: Use ATR stop loss (min $4.00), scale with multi-target runners (tp1 at 1.8R-2.5R, tp2 at 3.5R-4.5R, or use_breakeven=True).
+4. Eliminate noisy redundant conditions to ensure high trade execution fidelity (120 to 300 trades).
 Produce a refined, evolved strategy that outperforms the parent champion!
 """
 
@@ -412,6 +501,7 @@ Research Guidelines:
 
 {f'Specialized Focus: {custom_focus}' if custom_focus else ''}
 {breeding_mandate if champion_code else novelty_mandate}
+{negative_section}
 {failure_section}
 {leaderboard_section}
 
@@ -421,26 +511,28 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
    - Use strictly causal rolling: `df['high'].rolling(15).max().shift(1)` or call the built-in `find_swings(df)`.
 2. REALISTIC CONFLUENCES (PREVENT ZERO-TRADE OVER-FILTERING):
    - Use 2 to 3 confluences MAXIMUM: [Macro Trend Context] + [Archetype Entry Trigger] + [Session Mask].
-   - Examples of macro context: Intraday VWAP (`df['close'] > vwap(df)`), Daily Pivots (`levels['pp']`), or EMA 21/55.
+   - Examples of macro context: Intraday VWAP (`df['close'] > vwap(df)`), Daily Pivots (`levels['pp']`), or Higher-Timeframe Trend (`df['close'] > htf_ema(df['close'], 200, '1h')`).
    - CRITICAL: Do NOT stack 5 or 6 simultaneous indicators with `&`. Over-filtering causes 0 trades to ever trigger!
-   - Target 15 to 45 quality trades over the 6-month train period (approx. 1 to 2 trades per week).
+   - Target 120 to 300 selective institutional trades over the 6-month train period (approx. 1 to 3 high-conviction trades per day). This ensures sufficient sample size and cumulative R-multiple to achieve high-yield alpha (>100R).
 3. ANTI-BLEED / NON-REPEATING TRANSITION SIGNALS (PREVENT OVERTRADING CHURN):
    - Entry signals MUST trigger ONLY on the FIRST candle transition of a setup:
      `raw_bull = setup_condition & sess`
      `bull_signal = raw_bull & (~raw_bull.shift(1).fillna(False))`
    - NEVER fire repeatedly on consecutive bars during a rolling window!
-4. INSTITUTIONAL STOP LOSS & TAKE PROFIT:
+4. INSTITUTIONAL STOP LOSS, BREAKEVEN & MULTI-TARGET RUNNERS:
     - ALL trade entries are taken strictly at the CANDLE CLOSE (`df['close']`).
     - Stop Loss MUST use a FULL ATR multiplier (1.2x to 2.2x) — NOT a tiny fractional multiplier:
-      CORRECT:   `sl_long = np.minimum(df['low'], swing_lows) - (1.5 * atr(df, 14))`
-      WRONG:     `sl_long = df['low'] - (0.25 * atr(df, 14))`  ← This creates micro-stops that get eaten by spread!
+      `sl_long = np.minimum(df['low'], swing_lows) - (1.5 * atr(df, 14))`
       `sl_short = np.maximum(df['high'], swing_highs) + (1.5 * atr(df, 14))`
     - The stop distance from entry MUST be at least $4.00 (Gold spreads + slippage = $0.25):
       `risk_long = np.maximum(df['close'] - sl_long, 4.00)`
       `risk_short = np.maximum(sl_short - df['close'], 4.00)`
-    - Dynamically scale Take Profit directly from close using 1.5R to 2.5R Risk-to-Reward:
-      `df['tp1_long'] = df['close'] + (risk_long * 1.8)`
-      `df['tp1_short'] = df['close'] - (risk_short * 1.8)`
+    - Multi-Target Scaling & Breakeven Protection:
+      `df['use_breakeven'] = True   # Automatically ratchets stop to entry at +1.2R, eliminating full losses`
+      `df['tp1_long'] = df['close'] + (risk_long * 2.0)   # Primary target (2.0R): Banks 50% profit`
+      `df['tp2_long'] = df['close'] + (risk_long * 4.5)   # Multi-target runner (4.5R): Trails to ride mega-trends`
+      `df['tp1_short'] = df['close'] - (risk_short * 2.0)`
+      `df['tp2_short'] = df['close'] - (risk_short * 4.5)`
     - NEVER use buffer_factor < 1.0 for ATR multipliers! Values like 0.20, 0.25, 0.35 are FORBIDDEN.
     - NEVER invert Risk-to-Reward or use micro-stops (< $4.00)!
 5. Mandatory Session Gating: Wrap all entries in `session_mask(df, 'london_ny')`.
@@ -448,7 +540,7 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
 7. MUST end with `return df`.
 8. Return ONLY executable Python code in ```python ... ``` block.
 """
-        # Call with higher temperature (0.7) to maximize generative diversity across rounds
+        # Call with dynamic temperature (0.7 default, up to 0.85 on mutation shifts)
         sys_msg = (
             "You are the Lead Genetic Quantitative Research Agent. Your goal is to mutate and evolve top-performing champion strategies into even higher-alpha variations."
             if champion_code else
@@ -466,7 +558,7 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
                 self.provider, self.api_key, self.model, user_prompt,
                 system_prompt=sys_msg,
                 endpoint_url=self.endpoint,
-                temperature=0.7
+                temperature=float(temperature)
             )
             code = _clean_code_response(raw_resp)
         except Exception as err:
@@ -867,7 +959,7 @@ class CriticPostMortem:
 class ParameterGridSweeper:
     """
     Fast vectorized parameter optimizer:
-    Evaluates a 12-point grid of (atr_mult, rr_ratio) on real Dukascopy data
+    Evaluates a 12-point grid of (atr_mult, rr_ratio) on real MetaTrader 5 ECN broker data
     to discover the mathematical alpha peak for any strategy candidate.
     """
 
@@ -928,14 +1020,22 @@ class ParameterGridSweeper:
         best_monthly = base_monthly
         base_net_r = sum(base_monthly.values()) if base_monthly else base_stats.get('total_pnl', 0.0) / 1000.0
         base_months_10 = sum(1 for v in base_monthly.values() if v >= 10.0)
-        base_pf = float(base_stats.get('profit_factor', 1.0))
-        best_score = (base_net_r * 1.5) + (base_months_10 * 15.0) + (base_pf * 10.0)
-        if len(base_trades) < 25:
-            best_score *= (len(base_trades) / 25.0)
+        base_pf = min(float(base_stats.get('profit_factor', 1.0)), 5.0)
+        base_dd_r = float(base_stats.get('max_drawdown', 0.0) / 1000.0)
+        base_wr = float(base_stats.get('win_rate', 0.0))
 
-        # Institutional ATR stop buffers and Risk-to-Reward ratios
-        atr_mults = [1.2, 1.5, 2.0]
-        rr_ratios = [1.5, 1.8, 2.2, 2.5]
+        # High-Speed Prune: If baseline is severely bleeding (Net R < -8.0R) or has too few trades (< 8),
+        # abort immediately without running full grid sweeps — saves 15-20s per bad candidate.
+        if base_net_r < -8.0 or len(base_trades) < 8:
+            return base_code, base_stats, base_trades, base_monthly
+
+        best_score = (base_net_r * 1.0) + (base_months_10 * 8.0) - (base_dd_r * 2.0) + (base_pf * 15.0) + (base_wr * 0.2)
+        if len(base_trades) < 30:
+            best_score *= max(0.1, len(base_trades) / 30.0)
+
+        # High-Speed Alpha Sweep Grid (2 ATRs x 4 RRs) for wide alpha & runner coverage
+        atr_mults = [1.4, 1.8]
+        rr_ratios = [1.8, 2.2, 2.6, 3.0]
 
         consecutive_dead = 0
         for am in atr_mults:
@@ -961,18 +1061,13 @@ class ParameterGridSweeper:
                         monthly = compute_monthly_r_breakdown(trades)
                         months_10 = sum(1 for v in monthly.values() if v >= 10.0)
                         net_r = sum(monthly.values()) if monthly else stats.get('total_pnl', 0.0) / 1000.0
-                        pf = float(stats.get('profit_factor', 1.0))
-                        score = (net_r * 1.5) + (months_10 * 15.0) + (pf * 10.0)
-
-                        # Sample size confidence penalty
-                        if len(trades) < 25:
-                            score *= (len(trades) / 25.0)
-
-                        # Penalize overtrading churn and reward selective high-conviction frequency
-                        if len(trades) > 300:
-                            score -= 40.0
-                        elif 40 <= len(trades) <= 220:
-                            score += 15.0
+                        pf = min(float(stats.get('profit_factor', 1.0)), 5.0)
+                        dd_r = float(stats.get('max_drawdown', 0.0) / 1000.0)
+                        wr = float(stats.get('win_rate', 0.0))
+                        
+                        score = (net_r * 1.0) + (months_10 * 8.0) - (dd_r * 2.0) + (pf * 15.0) + (wr * 0.2)
+                        if len(trades) < 30:
+                            score *= max(0.1, len(trades) / 30.0)
 
                         if score > best_score:
                             best_score = score
@@ -1016,8 +1111,8 @@ class OptimizerAgent:
             benchmarks = []
             for i, top in enumerate(leaderboard_context[:3]):
                 benchmarks.append(
-                    f"  #{i+1} [{top.get('name', 'Champion')}]: {top.get('total_r', 0):+.1f}R | "
-                    f"PF: {top.get('profit_factor', 0)} | WR: {top.get('win_rate', 0)}% | Trades: {top.get('total_trades', 0)}"
+                    f"  #{i+1} [{top.get('name', 'Champion')}]: {top.get('train_r', 0):+.1f}R (train) | "
+                    f"PF: {top.get('train_pf', 0)} | WR: {top.get('train_win_rate', 0)}% | Trades: {top.get('train_trades', 0)}"
                 )
             lb_section = f"""
 CURRENT TOURNAMENT BENCHMARKS (TOP PERFORMERS ON LEADERBOARD):
@@ -1034,7 +1129,7 @@ CURRENT CODE:
 {current_code}
 ```
 
-EMPIRICAL BACKTEST PERFORMANCE (6-Month Dukascopy 5m Gold):
+EMPIRICAL BACKTEST PERFORMANCE (100,000 Bar MT5 Broker ECN 5m Gold):
 - Total Trades: {stats.get('total_trades', 0)}
 - Win Rate: {stats.get('win_rate', 0)}%
 - Net PnL: ${stats.get('total_pnl', 0):,.2f}

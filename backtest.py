@@ -31,7 +31,7 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
     partial_tp : bool
         If True, closes fractional positions across available TP levels.
     spread : float
-        Dukascopy bid-ask spread in USD per oz (default $0.20).
+        MetaTrader 5 ECN broker bid-ask spread in USD per oz (default $0.20).
     slippage : float
         Estimated execution slippage in USD per oz (default $0.05).
 
@@ -51,6 +51,7 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
     total_friction_cost = 0.0
 
     cost_per_oz = (spread / 2.0) + slippage
+    eval_start_time = df.attrs.get('eval_start_time') if hasattr(df, 'attrs') else None
 
     # Check available TP/SL columns in df
     has_multi_tp = 'tp1_long' in df.columns
@@ -81,8 +82,16 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
         # ---- CHECK EXITS FOR OPEN POSITION ----
         if position is not None:
             closed = False
+            risk_dist = abs(position['entry_price'] - (position.get('initial_sl') or position['sl'])) if position.get('sl') else 10.0
 
             if position['direction'] == 'long':
+                # Dynamic Breakeven Stop: active for multi-target scaling or when use_breakeven is enabled
+                if position.get('use_breakeven') and not position.get('be_activated') and (row['high'] >= position['entry_price'] + (1.2 * risk_dist)):
+                    be_level = position['entry_price'] + cost_per_oz
+                    if position['sl'] is None or position['sl'] < be_level:
+                        position['sl'] = be_level
+                        position['be_activated'] = True
+
                 tp_val = position['tps'][0] if (position.get('tps') and len(position['tps']) > 0 and position['tps'][0] is not None) else None
                 sl_val = position['sl']
 
@@ -105,17 +114,31 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
 
                 if take_tp:
                     fill_price = tp_val - cost_per_oz
-                    pnl = (fill_price - position['entry_price']) * position['remaining_size']
-                    cumulative_pnl += pnl
-                    position['pnl'] += pnl
-                    position['exit_price'] = fill_price
-                    position['exit_time'] = bar_time
-                    position['exit_time_ts'] = bar_ts
-                    position['exit_reason'] = 'TP'
-                    position['remaining_size'] = 0.0
-                    trades.append(_finalize_trade(position, cumulative_pnl, initial_capital))
-                    position = None
-                    closed = True
+                    # Multi-target scaling: if multiple TPs defined, scale out 50% at TP1 and let remaining run
+                    has_runner = len(position.get('tps', [])) > 1 and (position['remaining_size'] > round(position['initial_size'] * 0.45, 2))
+                    if has_runner:
+                        scale_size = round(position['initial_size'] * 0.5, 2)
+                        pnl = (fill_price - position['entry_price']) * scale_size
+                        cumulative_pnl += pnl
+                        position['pnl'] += pnl
+                        position['remaining_size'] -= scale_size
+                        position['tp_hits'].append(1)
+                        # Guarantee breakeven stop for the runner
+                        position['sl'] = max(position['sl'] or 0.0, position['entry_price'] + cost_per_oz)
+                        position['be_activated'] = True
+                        position['tps'].pop(0)  # Next target is TP2
+                    else:
+                        pnl = (fill_price - position['entry_price']) * position['remaining_size']
+                        cumulative_pnl += pnl
+                        position['pnl'] += pnl
+                        position['exit_price'] = fill_price
+                        position['exit_time'] = bar_time
+                        position['exit_time_ts'] = bar_ts
+                        position['exit_reason'] = 'TP' if not position.get('tp_hits') else 'TP_Runner'
+                        position['remaining_size'] = 0.0
+                        trades.append(_finalize_trade(position, cumulative_pnl, initial_capital))
+                        position = None
+                        closed = True
                 elif take_sl:
                     exit_price = sl_val - cost_per_oz
                     pnl = (exit_price - position['entry_price']) * position['remaining_size']
@@ -124,13 +147,20 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
                     position['exit_price'] = exit_price
                     position['exit_time'] = bar_time
                     position['exit_time_ts'] = bar_ts
-                    position['exit_reason'] = 'SL'
+                    position['exit_reason'] = 'BE' if position.get('be_activated') and abs(pnl) < 150.0 else ('TP1_SL' if position.get('tp_hits') else 'SL')
                     position['remaining_size'] = 0.0
                     trades.append(_finalize_trade(position, cumulative_pnl, initial_capital))
                     position = None
                     closed = True
 
             elif position['direction'] == 'short':
+                # Dynamic Breakeven Stop: active for multi-target scaling or when use_breakeven is enabled
+                if position.get('use_breakeven') and not position.get('be_activated') and (row['low'] <= position['entry_price'] - (1.2 * risk_dist)):
+                    be_level = position['entry_price'] - cost_per_oz
+                    if position['sl'] is None or position['sl'] > be_level:
+                        position['sl'] = be_level
+                        position['be_activated'] = True
+
                 tp_val = position['tps'][0] if (position.get('tps') and len(position['tps']) > 0 and position['tps'][0] is not None) else None
                 sl_val = position['sl']
 
@@ -153,17 +183,31 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
 
                 if take_tp:
                     fill_price = tp_val + cost_per_oz
-                    pnl = (position['entry_price'] - fill_price) * position['remaining_size']
-                    cumulative_pnl += pnl
-                    position['pnl'] += pnl
-                    position['exit_price'] = fill_price
-                    position['exit_time'] = bar_time
-                    position['exit_time_ts'] = bar_ts
-                    position['exit_reason'] = 'TP'
-                    position['remaining_size'] = 0.0
-                    trades.append(_finalize_trade(position, cumulative_pnl, initial_capital))
-                    position = None
-                    closed = True
+                    # Multi-target scaling: if multiple TPs defined, scale out 50% at TP1 and let remaining run
+                    has_runner = len(position.get('tps', [])) > 1 and (position['remaining_size'] > round(position['initial_size'] * 0.45, 2))
+                    if has_runner:
+                        scale_size = round(position['initial_size'] * 0.5, 2)
+                        pnl = (position['entry_price'] - fill_price) * scale_size
+                        cumulative_pnl += pnl
+                        position['pnl'] += pnl
+                        position['remaining_size'] -= scale_size
+                        position['tp_hits'].append(1)
+                        # Guarantee breakeven stop for the runner
+                        position['sl'] = min(position['sl'] or 1e9, position['entry_price'] - cost_per_oz)
+                        position['be_activated'] = True
+                        position['tps'].pop(0)  # Next target is TP2
+                    else:
+                        pnl = (position['entry_price'] - fill_price) * position['remaining_size']
+                        cumulative_pnl += pnl
+                        position['pnl'] += pnl
+                        position['exit_price'] = fill_price
+                        position['exit_time'] = bar_time
+                        position['exit_time_ts'] = bar_ts
+                        position['exit_reason'] = 'TP' if not position.get('tp_hits') else 'TP_Runner'
+                        position['remaining_size'] = 0.0
+                        trades.append(_finalize_trade(position, cumulative_pnl, initial_capital))
+                        position = None
+                        closed = True
                 elif take_sl:
                     exit_price = sl_val + cost_per_oz
                     pnl = (position['entry_price'] - exit_price) * position['remaining_size']
@@ -172,7 +216,7 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
                     position['exit_price'] = exit_price
                     position['exit_time'] = bar_time
                     position['exit_time_ts'] = bar_ts
-                    position['exit_reason'] = 'SL'
+                    position['exit_reason'] = 'BE' if position.get('be_activated') and abs(pnl) < 150.0 else ('TP1_SL' if position.get('tp_hits') else 'SL')
                     position['remaining_size'] = 0.0
                     trades.append(_finalize_trade(position, cumulative_pnl, initial_capital))
                     position = None
@@ -200,7 +244,13 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
                     position = None
 
         # ---- CHECK NEW ENTRIES ----
-        if position is None:
+        in_warmup = False
+        if eval_start_time is not None:
+            current_bar_time = df.index[i] if isinstance(df.index, pd.DatetimeIndex) else row.get('dt')
+            if current_bar_time is not None and current_bar_time < eval_start_time:
+                in_warmup = True
+
+        if position is None and not in_warmup:
             bull = bool(row.get('bull_signal', False))
             bear = bool(row.get('bear_signal', False))
 
@@ -249,6 +299,9 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
                     'entry_time_ts': bar_ts,
                     'entry_bar_idx': i,
                     'sl': sl,
+                    'initial_sl': sl,
+                    'be_activated': False,
+                    'use_breakeven': bool(row.get('use_breakeven', False) or len(tps) > 1 or partial_tp),
                     'tps': tps.copy(),
                     'tps_original': tps.copy(),
                     'initial_size': calc_size,
@@ -304,6 +357,9 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
                     'entry_time_ts': bar_ts,
                     'entry_bar_idx': i,
                     'sl': sl,
+                    'initial_sl': sl,
+                    'be_activated': False,
+                    'use_breakeven': bool(row.get('use_breakeven', False) or len(tps) > 1 or partial_tp),
                     'tps': tps.copy(),
                     'tps_original': tps.copy(),
                     'initial_size': calc_size,

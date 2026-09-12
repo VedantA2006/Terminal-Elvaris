@@ -23,17 +23,79 @@ from backtest import run_backtest
 from stats_utils import compute_sharpe_sortino
 
 
+import functools
+
+# ---------------------------------------------------------------------------
+# INDICATOR MEMOIZATION CACHE (Task 4 — grid-sweep speedup)
+#
+# train_df/val_df/test_df/raw_df are loaded once per process and reused for
+# an entire tournament session (see ResearchLoopManager._ensure_data()), and
+# execute_strategy() always works on a *copy* of the same underlying data.
+# The indicator helpers below are pure functions of (data, params), so their
+# results are safe to cache keyed on a cheap content fingerprint rather than
+# object identity — this avoids re-running expensive Python-loop indicators
+# (find_swings, supertrend) and groupby-based ones (vwap, daily_levels) on
+# every one of the ~13 backtests inside a single parameter grid sweep.
+# ---------------------------------------------------------------------------
+_INDICATOR_CACHE: Dict[Any, Any] = {}
+_INDICATOR_CACHE_MAX_ENTRIES = 500
+
+
+def _fingerprint(obj) -> tuple:
+    """Cheap, stable fingerprint for a Series or DataFrame. Stable across a
+    fresh .copy() of the same underlying data (execute_strategy always
+    passes a copy), so repeated calls on 'the same data' correctly hit
+    the cache even though object identity differs each time."""
+    if isinstance(obj, pd.DataFrame):
+        ref = obj['close'] if 'close' in obj.columns else obj.iloc[:, 0]
+    else:
+        ref = obj
+    n = len(ref)
+    if n == 0:
+        return ('empty',)
+    first, last = ref.iloc[0], ref.iloc[-1]
+    return (
+        n,
+        str(ref.index[0]),
+        str(ref.index[-1]),
+        round(float(first), 5) if pd.notna(first) else None,
+        round(float(last), 5) if pd.notna(last) else None,
+    )
+
+
+def _memoize_indicator(fn):
+    """Decorator for pure indicator helpers: fn(data, *args, **kwargs) -> Series | DataFrame | tuple thereof."""
+    @functools.wraps(fn)
+    def wrapper(data, *args, **kwargs):
+        key = (fn.__name__, _fingerprint(data), args, tuple(sorted(kwargs.items())))
+        cached = _INDICATOR_CACHE.get(key)
+        if cached is not None:
+            if isinstance(cached, tuple):
+                return tuple(c.copy() if hasattr(c, 'copy') else c for c in cached)
+            return cached.copy() if hasattr(cached, 'copy') else cached
+        result = fn(data, *args, **kwargs)
+        if len(_INDICATOR_CACHE) >= _INDICATOR_CACHE_MAX_ENTRIES:
+            _INDICATOR_CACHE.clear()
+        _INDICATOR_CACHE[key] = result
+        return result
+    return wrapper
+
+
 # Standard Indicator Helpers available to any strategy code
+@_memoize_indicator
 def sma(series: pd.Series, period: int) -> pd.Series:
     return series.rolling(window=period).mean()
 
+@_memoize_indicator
 def ema(series: pd.Series, period: int) -> pd.Series:
     return series.ewm(span=period, adjust=False).mean()
 
+@_memoize_indicator
 def smma(series: pd.Series, period: int) -> pd.Series:
     """Smoothed Moving Average (Wilder's MA)"""
     return series.ewm(alpha=1.0 / period, adjust=False).mean()
 
+@_memoize_indicator
 def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     high_low = df['high'] - df['low']
     high_close = (df['high'] - df['close'].shift(1)).abs()
@@ -41,6 +103,7 @@ def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
     return smma(tr, period)
 
+@_memoize_indicator
 def rsi(series: pd.Series, period: int = 14) -> pd.Series:
     delta = series.diff()
     gain = delta.clip(lower=0)
@@ -50,11 +113,13 @@ def rsi(series: pd.Series, period: int = 14) -> pd.Series:
     rs = avg_gain / avg_loss.replace(0, np.nan)
     return 100.0 - (100.0 / (1.0 + rs))
 
+@_memoize_indicator
 def bollinger_bands(series: pd.Series, period: int = 20, mult: float = 2.0):
     basis = series.rolling(period).mean()
     dev = series.rolling(period).std() * mult
     return basis + dev, basis - dev, basis
 
+@_memoize_indicator
 def macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9):
     fast_ema = ema(series, fast)
     slow_ema = ema(series, slow)
@@ -63,6 +128,7 @@ def macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9):
     hist = macd_line - signal_line
     return macd_line, signal_line, hist
 
+@_memoize_indicator
 def vwap(df: pd.DataFrame) -> pd.Series:
     """Intraday Volume-Weighted Average Price resetting daily."""
     tp = (df['high'] + df['low'] + df['close']) / 3.0
@@ -72,6 +138,7 @@ def vwap(df: pd.DataFrame) -> pd.Series:
     v_cum = vol.groupby(date_col).cumsum()
     return pv_cum / v_cum.replace(0, np.nan)
 
+@_memoize_indicator
 def adx(df: pd.DataFrame, period: int = 14):
     """Average Directional Index (ADX, +DI, -DI)."""
     high, low, close = df['high'], df['low'], df['close']
@@ -87,6 +154,7 @@ def adx(df: pd.DataFrame, period: int = 14):
     dx = 100.0 * ((p_di - m_di).abs() / (p_di + m_di).replace(0, np.nan))
     return smma(dx, period), p_di, m_di
 
+@_memoize_indicator
 def supertrend(df: pd.DataFrame, period: int = 10, mult: float = 3.0):
     """Causal Supertrend: returns (supertrend_line, direction_series [+1/-1])."""
     atr_val = atr(df, period)
@@ -110,22 +178,26 @@ def supertrend(df: pd.DataFrame, period: int = 10, mult: float = 3.0):
             st[i] = f_lb[i] if direction[i] == 1 else f_ub[i]
     return pd.Series(st, index=df.index), pd.Series(direction, index=df.index)
 
+@_memoize_indicator
 def zscore(series: pd.Series, period: int = 20) -> pd.Series:
     """Rolling statistical Z-score: (price - mean) / std."""
     m = series.rolling(period).mean()
     s = series.rolling(period).std().replace(0, np.nan)
     return (series - m) / s
 
+@_memoize_indicator
 def keltner_channels(df: pd.DataFrame, ema_period: int = 20, atr_period: int = 10, mult: float = 2.0):
     mid = ema(df['close'], ema_period)
     atr_v = atr(df, atr_period)
     return mid + mult * atr_v, mid - mult * atr_v, mid
 
+@_memoize_indicator
 def donchian_channels(df: pd.DataFrame, period: int = 20):
     up = df['high'].rolling(period).max()
     lo = df['low'].rolling(period).min()
     return up, lo, (up + lo) / 2.0
 
+@_memoize_indicator
 def stochastic(df: pd.DataFrame, k_period: int = 14, d_period: int = 3):
     lo = df['low'].rolling(k_period).min()
     hi = df['high'].rolling(k_period).max()
@@ -133,6 +205,7 @@ def stochastic(df: pd.DataFrame, k_period: int = 14, d_period: int = 3):
     d = sma(k, d_period)
     return k, d
 
+@_memoize_indicator
 def find_swings(df: pd.DataFrame, swing_len: int = 7):
     n = len(df)
     h_vals, l_vals = df['high'].values, df['low'].values
@@ -148,6 +221,7 @@ def find_swings(df: pd.DataFrame, swing_len: int = 7):
     s_l = pd.Series(sl, index=df.index).ffill()
     return s_h, s_l
 
+@_memoize_indicator
 def find_fvgs(df: pd.DataFrame):
     h, l = df['high'], df['low']
     b_mask = l > h.shift(2)
@@ -179,6 +253,7 @@ def session_mask(df: pd.DataFrame, session: str = 'london_ny') -> pd.Series:
         m = ((6 * 60 <= mins) & (mins < 11 * 60)) | ((12 * 60 + 20 <= mins) & (mins < 17 * 60 + 30))
     return pd.Series(m, index=df.index)
 
+@_memoize_indicator
 def daily_levels(df: pd.DataFrame) -> pd.DataFrame:
     """
     Returns causal Previous Day High (PDH), Low (PDL), Close (PDC),
@@ -204,12 +279,14 @@ def daily_levels(df: pd.DataFrame) -> pd.DataFrame:
     mapped.index = df.index
     return mapped
 
+@_memoize_indicator
 def rvol(df: pd.DataFrame, period: int = 20) -> pd.Series:
     """Relative Volume (volume / rolling mean volume)."""
     vol = df['volume'] if 'volume' in df.columns and (df['volume'] > 0).any() else pd.Series(1.0, index=df.index)
     avg_vol = vol.rolling(period).mean().replace(0, np.nan)
     return vol / avg_vol
 
+@_memoize_indicator
 def linear_regression_slope(series: pd.Series, period: int = 20) -> pd.Series:
     """Vectorized linear regression slope over rolling window."""
     x = np.arange(period)
@@ -218,12 +295,14 @@ def linear_regression_slope(series: pd.Series, period: int = 20) -> pd.Series:
     conv = np.convolve(series.values, weights[::-1], mode='valid')
     return pd.Series(np.concatenate([np.full(period - 1, np.nan), conv]), index=series.index)
 
+@_memoize_indicator
 def efficiency_ratio(series: pd.Series, period: int = 20) -> pd.Series:
     """Kaufman Efficiency Ratio (1.0 = clean trend, ~0.0 = pure noise/chop)."""
     direction = (series - series.shift(period)).abs()
     volatility = (series - series.shift(1)).abs().rolling(period).sum()
     return direction / volatility.replace(0, np.nan)
 
+@_memoize_indicator
 def chandelier_exit(df: pd.DataFrame, period: int = 22, mult: float = 3.0):
     """Chandelier Exit trailing stop line for longs and shorts."""
     atr_val = atr(df, period)
@@ -232,6 +311,16 @@ def chandelier_exit(df: pd.DataFrame, period: int = 22, mult: float = 3.0):
     long_stop = highest_high - (atr_val * mult)
     short_stop = lowest_low + (atr_val * mult)
     return long_stop, short_stop
+
+@_memoize_indicator
+def htf_ema(series: pd.Series, period: int = 200, timeframe: str = '1h') -> pd.Series:
+    """
+    Computes strictly causal Higher Timeframe (HTF) Exponential Moving Average.
+    Aggregates 5m bars to HTF scale (1h = 12 bars, 4h = 48 bars).
+    """
+    tf = str(timeframe).lower()
+    ratio = 48 if '4h' in tf else (12 if '1h' in tf or '60' in tf else 12)
+    return ema(series, period * ratio)
 
 
 class RuntimeLookaheadTrap:
@@ -535,6 +624,7 @@ def execute_strategy(code_str: str, raw_df: pd.DataFrame, initial_capital: float
         'linear_regression_slope': linear_regression_slope,
         'efficiency_ratio': efficiency_ratio,
         'chandelier_exit': chandelier_exit,
+        'htf_ema': htf_ema,
     }
 
     try:
@@ -611,6 +701,9 @@ def execute_strategy(code_str: str, raw_df: pd.DataFrame, initial_capital: float
         # Fill NaNs in signals
         res_df['bull_signal'] = res_df['bull_signal'].fillna(False).astype(bool)
         res_df['bear_signal'] = res_df['bear_signal'].fillna(False).astype(bool)
+
+        if hasattr(raw_df, 'attrs') and 'eval_start_time' in raw_df.attrs:
+            res_df.attrs['eval_start_time'] = raw_df.attrs['eval_start_time']
 
         if not native_sim_handled:
             # Run bar-by-bar backtest

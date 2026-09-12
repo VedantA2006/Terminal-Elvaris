@@ -183,9 +183,9 @@ def _get_default_seed_strategies(full_df=None, train_df=None) -> List[Dict[str, 
                             'median_final_r': mc_results.get('median_final_r'),
                         },
                         'rank_score': compute_rank_score(total_r, months_ge_10, max_dd_r, float(stats.get('profit_factor', 1.0)), float(stats.get('win_rate', 50.0)), int(stats.get('total_trades', 0))),
-                        'data_split': 'full_6m',
+                        'data_split': 'mt5_ecn',
                     })
-                    print(f"  [Leaderboard Seed] {name}: {total_r:+.1f}R, {stats.get('total_trades')} trades, PF={stats.get('profit_factor')} (computed from real backtest)")
+                    print(f"  [Leaderboard Seed] {name}: {total_r:+.1f}R, {stats.get('total_trades')} trades, PF={stats.get('profit_factor')} (computed from MT5 broker backtest)")
                     return entry
             except Exception as e:
                 print(f"  [Leaderboard Seed] Warning: Failed to compute real stats for {name}: {e}")
@@ -196,7 +196,7 @@ def _get_default_seed_strategies(full_df=None, train_df=None) -> List[Dict[str, 
             'win_rate': 0.0, 'profit_factor': 0.0, 'total_pnl': 0.0,
             'max_drawdown_r': 0.0, 'max_drawdown_pct': 0.0, 'sharpe_ratio': 0.0,
             'monthly_r': {}, 'months_ge_10r': 0,
-            'monte_carlo': {}, 'rank_score': 0.0, 'data_split': 'full_6m',
+            'monte_carlo': {}, 'rank_score': 0.0, 'data_split': 'mt5_ecn',
         })
         return entry
 
@@ -205,7 +205,7 @@ def _get_default_seed_strategies(full_df=None, train_df=None) -> List[Dict[str, 
     champ = _build_seed(
         'champion_lss', 'Champion LSS Strategy (Candle-Close Execution)',
         'SSL/BSL Sweep + Anti-Bleed Transition + ATR Structural Stop',
-        'Verified Dukascopy Champion', champ_code
+        'Verified MT5 ECN Champion', champ_code
     )
     if champ:
         seeds.append(champ)
@@ -226,12 +226,12 @@ def _get_default_seed_strategies(full_df=None, train_df=None) -> List[Dict[str, 
     return seeds
 
 
-def upgrade_leaderboard_to_full_6m(full_df) -> int:
+def upgrade_leaderboard_to_mt5_data(full_df, train_df=None, val_df=None, test_df=None, force=False) -> int:
     """
-    Re-runs backtest across the full 6-month historical dataset for all
-    existing strategies on the leaderboard, ensuring all stats (total_r, trades,
-    win_rate, profit_factor, max_dd, monthly breakdown, monte carlo) reflect
-    the complete 6-month period.
+    Re-runs backtest across the full MetaTrader 5 ECN broker dataset (100,000 candles) for all
+    existing strategies on the leaderboard, ensuring all stats (total_r, trades, win_rate,
+    profit_factor, max_dd, monthly breakdown across 17 months, monte carlo, and train/val/test splits)
+    reflect the MT5 dataset.
     """
     if full_df is None or len(full_df) < 100:
         return 0
@@ -247,9 +247,16 @@ def upgrade_leaderboard_to_full_6m(full_df) -> int:
     if not isinstance(items, list) or len(items) == 0:
         return 0
 
+    if train_df is None or val_df is None:
+        from data_split import split_data
+        train_df, val_df, test_df = split_data(full_df)
+
+    train_end = train_df.index[-1]
+    val_end = val_df.index[-1]
+
     updated_count = 0
     for entry in items:
-        if entry.get('data_split') == 'full_6m':
+        if not force and entry.get('data_split') in ('mt5_ecn', 'mt5_ecn_2026'):
             continue
         code = entry.get('code', '')
         if not code or not code.strip():
@@ -263,20 +270,34 @@ def upgrade_leaderboard_to_full_6m(full_df) -> int:
                 months_ge_10 = sum(1 for v in monthly_r.values() if v >= 10.0)
                 total_r = round(float(sum(monthly_r.values())), 1) if monthly_r else round(float(stats.get('total_pnl', 0.0) / 1000.0), 1)
                 max_dd_r = round(float(stats.get('max_drawdown', 0.0) / 1000.0), 1)
-                mc_results = run_monte_carlo(trades, num_simulations=1000)
+                mc_results = run_monte_carlo(trades, num_simulations=400)
                 pf = float(stats.get('profit_factor', 1.0))
                 win_rate = float(stats.get('win_rate', 50.0))
-                rank_score = compute_rank_score(total_r, months_ge_10, max_dd_r, pf, win_rate, int(stats.get('total_trades', len(trades))))
+                total_trades = int(stats.get('total_trades', len(trades)))
+                rank_score = compute_rank_score(total_r, months_ge_10, max_dd_r, pf, win_rate, total_trades)
 
-                # Preserve old train_r if not set
-                if 'train_r' not in entry and entry.get('total_r') is not None:
-                    entry['train_r'] = entry.get('total_r')
-                    entry['train_pf'] = entry.get('profit_factor')
-                    entry['train_trades'] = entry.get('total_trades')
+                tr_trades = [t for t in trades if pd.to_datetime(t['entry_time']) <= train_end]
+                v_trades = [t for t in trades if train_end < pd.to_datetime(t['entry_time']) <= val_end]
+                te_trades = [t for t in trades if pd.to_datetime(t['entry_time']) > val_end]
+
+                def _calc_split(sub_t):
+                    if not sub_t:
+                        return 0.0, 0.0, 0, 0.0
+                    r_val = round(float(sum(compute_monthly_r_breakdown(sub_t).values())), 1)
+                    wins = len([t for t in sub_t if t.get('pnl', 0) > 0])
+                    wr = round(wins / len(sub_t) * 100.0, 1)
+                    gw = sum(t.get('pnl', 0) for t in sub_t if t.get('pnl', 0) > 0)
+                    gl = abs(sum(t.get('pnl', 0) for t in sub_t if t.get('pnl', 0) < 0))
+                    sub_pf = round(float(gw / max(0.01, gl)), 2)
+                    return r_val, sub_pf, len(sub_t), wr
+
+                tr_r, tr_pf, tr_tr, tr_wr = _calc_split(tr_trades)
+                v_r, v_pf, v_tr, v_wr = _calc_split(v_trades)
+                te_r, te_pf, te_tr, te_wr = _calc_split(te_trades)
 
                 entry.update({
                     'total_r': total_r,
-                    'total_trades': stats.get('total_trades', len(trades)),
+                    'total_trades': total_trades,
                     'winning_trades': stats.get('winning_trades', 0),
                     'losing_trades': stats.get('losing_trades', 0),
                     'win_rate': win_rate,
@@ -296,7 +317,17 @@ def upgrade_leaderboard_to_full_6m(full_df) -> int:
                         'median_final_r': mc_results.get('median_final_r'),
                     },
                     'rank_score': rank_score,
-                    'data_split': 'full_6m'
+                    'data_split': 'mt5_ecn',
+                    'train_r': tr_r,
+                    'train_pf': tr_pf,
+                    'train_trades': tr_tr,
+                    'train_win_rate': tr_wr,
+                    'val_r': v_r,
+                    'val_pf': v_pf,
+                    'val_trades': v_tr,
+                    'test_r': te_r,
+                    'test_pf': te_pf,
+                    'test_trades': te_tr,
                 })
                 updated_count += 1
         except Exception as err:
@@ -304,12 +335,15 @@ def upgrade_leaderboard_to_full_6m(full_df) -> int:
 
     if updated_count > 0:
         save_leaderboard(items)
-        print(f"  [Leaderboard] Successfully upgraded {updated_count} strategies to full 6-month backtest metrics!")
+        print(f"  [Leaderboard] Successfully upgraded {updated_count} strategies to MT5 broker metrics!")
     return updated_count
+
+# Backwards compatibility alias
+upgrade_leaderboard_to_full_6m = upgrade_leaderboard_to_mt5_data
 
 
 def load_leaderboard(full_df=None, train_df=None) -> List[Dict[str, Any]]:
-    """Loads leaderboard list from disk, ensuring seed champions exist and reflect full 6-month backtests."""
+    """Loads leaderboard list from disk, ensuring seed champions exist and reflect MT5 broker data."""
     LEADERBOARD_FILE.parent.mkdir(parents=True, exist_ok=True)
     df_for_calc = full_df if full_df is not None and len(full_df) > 100 else train_df
 
@@ -322,11 +356,11 @@ def load_leaderboard(full_df=None, train_df=None) -> List[Dict[str, Any]]:
         with open(LEADERBOARD_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
         if isinstance(data, list) and len(data) > 0:
-            # Upgrade any non-full_6m entries if data is provided
+            # Upgrade any non-mt5_ecn entries if data is provided
             if df_for_calc is not None and len(df_for_calc) > 100:
-                has_old = any(item.get('data_split') != 'full_6m' for item in data)
+                has_old = any(item.get('data_split') not in ('mt5_ecn', 'mt5_ecn_2026') for item in data)
                 if has_old:
-                    upgrade_leaderboard_to_full_6m(df_for_calc)
+                    upgrade_leaderboard_to_mt5_data(df_for_calc)
                     with open(LEADERBOARD_FILE, 'r', encoding='utf-8') as f2:
                         data = json.load(f2)
             # Sort by rank_score descending
@@ -340,14 +374,61 @@ def load_leaderboard(full_df=None, train_df=None) -> List[Dict[str, Any]]:
     return seeds
 
 
+def get_research_candidates(train_df=None, min_train_trades: int = 10, limit: int = 10) -> List[Dict[str, Any]]:
+    """
+    Returns leaderboard entries ranked by TRAIN-SPLIT performance only, for use
+    by the autonomous research loop (few-shot LLM context, genetic breeding
+    parent selection). Deliberately excludes validation/test performance so
+    strategy generation never sees out-of-sample results — this prevents the
+    held-out data from leaking back into the discovery process.
+
+    Entries without a recorded train_r (legacy/seed entries added before
+    train/val/test tracking existed) are excluded, since their reported
+    performance can't be verified as leak-free.
+    """
+    all_entries = load_leaderboard(train_df)
+    candidates = [
+        e for e in all_entries
+        if e.get('train_r') is not None
+        and e.get('train_trades', 0) >= min_train_trades
+        and e.get('code')
+    ]
+    candidates.sort(key=lambda e: e.get('train_r', -999), reverse=True)
+    return candidates[:limit]
+
+
 def save_leaderboard(items: List[Dict[str, Any]]):
-    """Persists leaderboard list to disk sorted by rank_score atomically."""
+    """Persists leaderboard list to disk sorted by rank_score atomically with exact integer ranks."""
     LEADERBOARD_FILE.parent.mkdir(parents=True, exist_ok=True)
     items.sort(key=lambda x: x.get('rank_score', 0.0), reverse=True)
+    for i, item in enumerate(items):
+        item['rank'] = i + 1
     tmp_path = LEADERBOARD_FILE.with_suffix('.tmp')
     with open(tmp_path, 'w', encoding='utf-8') as f:
         json.dump(items, f, indent=2)
     tmp_path.replace(LEADERBOARD_FILE)
+
+
+def _backfill_validation_metadata(existing: Dict[str, Any], entry: Dict[str, Any]) -> bool:
+    """
+    Copies train/val/test provenance from a newly-evaluated `entry` into an
+    already-registered `existing` leaderboard record, for any split where
+    `existing` doesn't already have it. Never overwrites data that's already
+    present. Returns True if anything changed (caller should persist).
+    """
+    changed = False
+    for prefix in ('train', 'val', 'test'):
+        r_key, pf_key, tr_key, wr_key = f'{prefix}_r', f'{prefix}_pf', f'{prefix}_trades', f'{prefix}_win_rate'
+        if r_key in entry and r_key not in existing:
+            existing[r_key] = entry[r_key]
+            if pf_key in entry:
+                existing[pf_key] = entry[pf_key]
+            if tr_key in entry:
+                existing[tr_key] = entry[tr_key]
+            if wr_key in entry:
+                existing[wr_key] = entry[wr_key]
+            changed = True
+    return changed
 
 
 def add_strategy_to_leaderboard(name: str,
@@ -359,11 +440,11 @@ def add_strategy_to_leaderboard(name: str,
                                 val_stats: Dict[str, Any] = None,
                                 test_stats: Dict[str, Any] = None,
                                 train_stats: Dict[str, Any] = None,
-                                data_split: str = 'full_6m') -> Dict[str, Any]:
+                                data_split: str = 'mt5_ecn_2026') -> Dict[str, Any]:
     """
     Evaluates a newly discovered strategy with Monte Carlo stress test and monthly R breakdown,
     and inserts it into the persistent ranked leaderboard.
-    All primary stats reflect the full 6-month backtest.
+    All primary stats reflect the MT5 broker dataset.
     """
     current_board = load_leaderboard()
 
@@ -434,6 +515,7 @@ def add_strategy_to_leaderboard(name: str,
         entry['train_r'] = round(float(train_stats.get('total_r', 0.0)), 1)
         entry['train_pf'] = float(train_stats.get('profit_factor', 0.0))
         entry['train_trades'] = int(train_stats.get('total_trades', 0))
+        entry['train_win_rate'] = float(train_stats.get('win_rate', 0.0))
     if val_stats:
         entry['val_r'] = round(float(val_stats.get('total_r', 0.0)), 1)
         entry['val_pf'] = float(val_stats.get('profit_factor', 0.0))
@@ -445,11 +527,17 @@ def add_strategy_to_leaderboard(name: str,
 
     for idx, existing in enumerate(current_board):
         same_code = bool(norm_new and _norm_code(existing.get('code', '')) == norm_new)
-        same_stats = (existing.get('total_trades') == new_trades_count and
+        same_strat_identity = (existing.get('name') == name and existing.get('author') == author)
+        same_stats = (same_strat_identity and existing.get('total_trades') == new_trades_count and
                       abs(round(float(existing.get('total_pnl', 0.0)), 2) - new_pnl) < 0.05)
-        if same_code:
-            # Upgrade existing if new submission is full_6m
-            if data_split == 'full_6m' and existing.get('data_split') != 'full_6m':
+
+        if same_code or same_stats:
+            backfilled = _backfill_validation_metadata(existing, entry)
+
+            upgraded_to_full = (
+                same_code and data_split == 'mt5_ecn' and existing.get('data_split') != 'mt5_ecn'
+            )
+            if upgraded_to_full:
                 existing.update({
                     'total_r': entry['total_r'],
                     'total_trades': entry['total_trades'],
@@ -465,28 +553,16 @@ def add_strategy_to_leaderboard(name: str,
                     'months_ge_10r': entry['months_ge_10r'],
                     'monte_carlo': entry['monte_carlo'],
                     'rank_score': entry['rank_score'],
-                    'data_split': 'full_6m',
+                    'data_split': 'mt5_ecn',
                 })
-                if 'train_r' in entry:
-                    existing['train_r'] = entry['train_r']
-                    existing['train_pf'] = entry['train_pf']
-                    existing['train_trades'] = entry['train_trades']
-                if 'val_r' in entry:
-                    existing['val_r'] = entry['val_r']
-                    existing['val_pf'] = entry['val_pf']
-                    existing['val_trades'] = entry['val_trades']
-                if 'test_r' in entry:
-                    existing['test_r'] = entry['test_r']
-                    existing['test_pf'] = entry['test_pf']
-                    existing['test_trades'] = entry['test_trades']
+
+            if backfilled or upgraded_to_full:
                 save_leaderboard(current_board)
                 ranked = load_leaderboard()
                 rank = next((i + 1 for i, item in enumerate(ranked) if item['id'] == existing['id']), len(ranked))
                 existing['rank'] = rank
                 return existing
-            existing['rank'] = idx + 1
-            return existing
-        elif same_stats:
+
             existing['rank'] = idx + 1
             return existing
 

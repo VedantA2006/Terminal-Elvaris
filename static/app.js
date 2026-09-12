@@ -26,6 +26,8 @@ let currentTrades = [];
 let currentStats = {};
 let currentCode = '';
 let currentMarkers = [];
+let currentLoadedStrategyId = '';
+let currentLoadedStrategyName = '';
 let isOptimizing = false;
 let stopOptimizationRequested = false;
 
@@ -219,7 +221,7 @@ function updateDefaultLegend() {
 }
 
 // =============================================================================
-// PARSE & FORMAT TIMESTAMPS (Ensure exact consistency with Dukascopy bar times)
+// PARSE & FORMAT TIMESTAMPS (Ensure exact consistency with MetaTrader 5 broker bar times)
 // =============================================================================
 function parseTimestamp(ts) {
     if (!ts) return null;
@@ -442,16 +444,11 @@ function drawResultBadge(ctx, x, y, text, bg) {
     ctx.fillText(text, x + paddingH + 2, y + 3.5);
 }
 
-// Clean Chart Marker Display Manager: Only displays trades taken
+// Chart Marker Display Manager: Displays buy/sell markers for all trades taken
 function updateMarkersDisplay() {
     if (!candleSeries) return;
-    if (showTradeBoxes) {
-        // Trade Position Boxes canvas is active: clear candle markers so no duplicate text clutters the chart
-        candleSeries.setMarkers([]);
-    } else {
-        // When Trade Position boxes are toggled off: show clean entry/exit markers for trades taken directly on candles
-        candleSeries.setMarkers(currentMarkers || []);
-    }
+    // Always render trade markers so the trader can see all entry and exit signals across the entire timeline
+    candleSeries.setMarkers(currentMarkers || []);
 }
 
 // =============================================================================
@@ -498,12 +495,16 @@ function renderFloatingMonthlyStats(trades, stats) {
     // Summary footer
     const maxDD = stats.max_drawdown ?? 0;
     const rDD = Math.round(maxDD / avgRisk);
-    document.getElementById('fswMaxDD').textContent = `-$${maxDD.toLocaleString()} (-${rDD}R)`;
-    document.getElementById('fswPF').textContent = stats.profit_factor >= 999 ? '∞' : (stats.profit_factor ?? 0);
+    const maxDdEl = document.getElementById('fswMaxDD');
+    if (maxDdEl) maxDdEl.textContent = `-$${maxDD.toLocaleString()} (-${rDD}R)`;
+    const pfEl = document.getElementById('fswPF');
+    if (pfEl) pfEl.textContent = stats.profit_factor >= 999 ? '∞' : (stats.profit_factor ?? 0);
     const netPnl = stats.total_pnl ?? 0;
     const netEl = document.getElementById('fswNetPnl');
-    netEl.textContent = `${netPnl >= 0 ? '+' : ''}$${netPnl.toLocaleString()}`;
-    netEl.className = netPnl >= 0 ? 'positive' : 'negative';
+    if (netEl) {
+        netEl.textContent = `${netPnl >= 0 ? '+' : ''}$${netPnl.toLocaleString()}`;
+        netEl.className = netPnl >= 0 ? 'positive' : 'negative';
+    }
 }
 
 // =============================================================================
@@ -523,7 +524,8 @@ function updateTradeNavigator() {
     const textEl = document.getElementById('tnavText');
     if (textEl) {
         const entryDt = formatTradeTime(trade.entry_time);
-        textEl.textContent = `Trade #${trade.id} of ${currentTrades.length} · ${entryDt} ($${trade.entry_price.toFixed(2)} → $${(trade.exit_price || 0).toFixed(2)})`;
+        const stratPrefix = currentLoadedStrategyName ? `[${currentLoadedStrategyName.slice(0, 24)}] ` : '';
+        textEl.textContent = `${stratPrefix}Trade #${trade.id} of ${currentTrades.length} · ${entryDt} ($${trade.entry_price.toFixed(2)} → $${(trade.exit_price || 0).toFixed(2)})`;
     }
 
     const pnlEl = document.getElementById('tnavPnl');
@@ -545,13 +547,24 @@ function jumpToTradeIndex(idx) {
     updateTradeNavigator();
 
     const trade = currentTrades[activeTradeIndex];
+    if (!trade) return;
     const ts = trade.entry_time_ts ? trade.entry_time_ts : parseTimestamp(trade.entry_time);
     if (!ts) return;
-    // Center chart with ~100 bars context
-    mainChart.timeScale().setVisibleRange({
-        from: ts - (40 * 300),
-        to: ts + (60 * 300),
-    });
+
+    // Use bar indices via setVisibleLogicalRange - guaranteed to scroll accurately on TradingView Lightweight Charts
+    if (currentOhlc && currentOhlc.length > 0) {
+        let barIdx = currentOhlc.findIndex(b => b.time >= ts);
+        if (barIdx === -1) barIdx = currentOhlc.length - 1;
+        mainChart.timeScale().setVisibleLogicalRange({
+            from: Math.max(0, barIdx - 35),
+            to: Math.min(currentOhlc.length - 1, barIdx + 55),
+        });
+    } else {
+        mainChart.timeScale().setVisibleRange({
+            from: ts - (40 * 300),
+            to: ts + (60 * 300),
+        });
+    }
 
     requestAnimationFrame(drawTradeBoxes);
 }
@@ -641,7 +654,7 @@ async function loadBaselineData() {
             jumpToTradeIndex(currentTrades.length - 1);
         }
 
-        addConsoleLog(`Loaded ${currentOhlc.length} real Dukascopy 5m Gold candles up to today.`, 'success');
+        addConsoleLog(`Loaded ${currentOhlc.length.toLocaleString()} real MetaTrader 5 ECN Gold candles.`, 'success');
         addConsoleLog(`Strategy Engine ready: ${currentTrades.length} trades plotted on chart.`, 'info');
 
     } catch (err) {
@@ -1052,8 +1065,8 @@ function addConsoleLog(message, type = 'info') {
 
 function getAiConfig() {
     let savedModel = localStorage.getItem('tv_ai_model');
-    if (!savedModel || savedModel === 'auto/best-coding' || savedModel === 'auto/best-reasoning' || savedModel.includes('qwen3.6') || savedModel === 'groq/openai/gpt-oss-120b') {
-        savedModel = 'agentrouter/gpt-6-astra';
+    if (!savedModel || savedModel === 'agentrouter/gpt-6-astra' || savedModel === 'auto/best-coding' || savedModel === 'auto/best-reasoning' || savedModel.includes('qwen3.6')) {
+        savedModel = 'mistral/codestral-latest';
         localStorage.setItem('tv_ai_model', savedModel);
     }
     return {
@@ -1191,6 +1204,15 @@ function setupNavigation() {
             switchDockTab('strategyTester');
             const tradesBtn = document.querySelector('.subtab-btn[data-subtab="trades"]');
             if (tradesBtn) tradesBtn.click();
+        });
+    }
+
+    const fitBtn = document.getElementById('tnavFitBtn');
+    if (fitBtn) {
+        fitBtn.addEventListener('click', () => {
+            if (mainChart) mainChart.timeScale().fitContent();
+            requestAnimationFrame(drawTradeBoxes);
+            showToast('Zoomed out to show all trades', 'info');
         });
     }
 
@@ -1640,7 +1662,8 @@ function renderLeaderboardTable(items) {
             const isHigh = mVal >= 10.0;
             const pClass = isHigh ? 'high-yield' : (mVal > 0 ? 'positive' : 'negative');
             const sign = mVal > 0 ? '+' : '';
-            monthlyHtml += `<span class="monthly-pill ${pClass}" title="${mName}: ${sign}${mVal}R">${mName.slice(0, 3)}: ${sign}${mVal}R</span>`;
+            const shortName = mName.split(' ')[0];
+            monthlyHtml += `<span class="monthly-pill ${pClass}" title="${mName}: ${sign}${mVal}R">${shortName}: ${sign}${mVal}R</span>`;
         }
         monthlyHtml += `</div>`;
 
@@ -1650,16 +1673,17 @@ function renderLeaderboardTable(items) {
         const mcVar = item.monte_carlo?.var_95_max_dd_r ? `-${item.monte_carlo.var_95_max_dd_r} R` : '—';
         const mcProb = item.monte_carlo?.probability_of_profit ? `(${item.monte_carlo.probability_of_profit}% prob)` : '';
 
+        const isLoaded = (item.id === currentLoadedStrategyId);
         return `
-            <tr>
+            <tr class="${isLoaded ? 'active-loaded-strategy' : ''}">
                 <td style="text-align: center;">${rankBadge}</td>
                 <td>
-                    <div class="lb-strat-name">${item.name}</div>
+                    <div class="lb-strat-name">${item.name} ${isLoaded ? '<span class="lb-tag" style="background:rgba(41,98,255,0.25);color:#2962ff;font-weight:700;">ACTIVE ON CHART</span>' : ''}</div>
                     <div class="lb-strat-concept">${item.concept || ''}</div>
                     <div class="lb-strat-badges">
-                        <span class="lb-tag" style="background: rgba(33, 150, 243, 0.15); color: #64b5f6; border: 1px solid rgba(33, 150, 243, 0.3);" title="Full 6-Month Dukascopy 5m Backtest">6M Full Backtest</span>
+                        <span class="lb-tag" style="background: rgba(33, 150, 243, 0.15); color: #64b5f6; border: 1px solid rgba(33, 150, 243, 0.3);" title="2026 Year-to-Date Backtest (49,091 MT5 Candles · Jan–Sep 2026)">2026 MT5 Backtest</span>
                         <span class="lb-tag tag-guard">AST Anti-Lookahead</span>
-                        <span class="lb-tag tag-friction">Dukascopy Friction</span>
+                        <span class="lb-tag tag-friction">MT5 Broker Spread</span>
                         ${rank === 1 && totalR > 0 ? `<span class="lb-tag tag-champ">CHAMPION (${totalRSign}${totalR}R)</span>` : ''}
                         ${item.val_r !== undefined ? `<span class="lb-tag" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);" title="Out-of-Sample Validation: ${item.val_r >= 0 ? '+' : ''}${item.val_r}R (${item.val_trades || 0} trades, PF ${item.val_pf || 0})">Val: ${item.val_r >= 0 ? '+' : ''}${item.val_r}R</span>` : ''}
                         ${item.test_r !== undefined ? `<span class="lb-tag" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);" title="Out-of-Sample Test: ${item.test_r >= 0 ? '+' : ''}${item.test_r}R (${item.test_trades || 0} trades, PF ${item.test_pf || 0})">Test: ${item.test_r >= 0 ? '+' : ''}${item.test_r}R</span>` : ''}
@@ -1687,13 +1711,24 @@ function renderLeaderboardTable(items) {
                     <div class="lb-sub-val">${mcProb}</div>
                 </td>
                 <td style="text-align: center;">
-                    <button class="lb-btn-load" onclick="loadLeaderboardStrategy('${item.id}')">
-                        ⚡ Load Strategy
+                    <button class="lb-btn-load" data-strat-id="${item.id}" onclick="loadLeaderboardStrategy('${item.id}')">
+                        ${isLoaded ? '✓ Loaded' : '⚡ Load Strategy'}
                     </button>
                 </td>
             </tr>
         `;
     }).join('');
+}
+
+function highlightActiveLeaderboardRow(stratId) {
+    document.querySelectorAll('#leaderboardTableBody tr').forEach(tr => {
+        tr.classList.remove('active-loaded-strategy');
+    });
+    const btn = document.querySelector(`button[data-strat-id="${stratId}"]`);
+    if (btn) {
+        const row = btn.closest('tr');
+        if (row) row.classList.add('active-loaded-strategy');
+    }
 }
 
 async function loadLeaderboardStrategy(stratId) {
@@ -1709,6 +1744,9 @@ async function loadLeaderboardStrategy(stratId) {
             showToast(`Failed to load strategy: ${data.message}`, 'error');
             return;
         }
+
+        currentLoadedStrategyId = stratId;
+        currentLoadedStrategyName = data.strategy?.name || 'Leaderboard Strategy';
 
         if (monacoEditor && data.code) {
             monacoEditor.setValue(data.code);
@@ -1733,8 +1771,9 @@ async function loadLeaderboardStrategy(stratId) {
             renderFloatingMonthlyStats(currentTrades, currentStats);
             updateTradeNavigator();
 
+            // When loading a strategy, start at Trade #1 so each strategy opens at its distinct entry!
             if (currentTrades && currentTrades.length > 0) {
-                jumpToTradeIndex(currentTrades.length - 1);
+                jumpToTradeIndex(0);
             }
             requestAnimationFrame(drawTradeBoxes);
             runMonteCarloSimulation(currentTrades, true);
@@ -1743,9 +1782,10 @@ async function loadLeaderboardStrategy(stratId) {
             addConsoleLog(`[Leaderboard] Execution error: ${data.exec_result.error}`, 'warning');
         }
 
-        showToast(`Loaded "${data.strategy?.name}" into Chart!`, 'success');
-        addConsoleLog(`[Leaderboard] Loaded strategy: "${data.strategy?.name}". Total Return: +${data.strategy?.total_r}R`, 'success');
+        showToast(`⚡ Loaded "${currentLoadedStrategyName}" (${currentTrades.length} trades) onto Chart!`, 'success');
+        addConsoleLog(`[Leaderboard] Loaded strategy: "${currentLoadedStrategyName}". Total Return: +${data.strategy?.total_r}R | Total Trades: ${currentTrades.length}`, 'success');
 
+        highlightActiveLeaderboardRow(stratId);
         switchDockTab('strategyTester');
 
     } catch (err) {
