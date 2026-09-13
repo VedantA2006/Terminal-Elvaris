@@ -147,7 +147,7 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
                     position['exit_price'] = exit_price
                     position['exit_time'] = bar_time
                     position['exit_time_ts'] = bar_ts
-                    position['exit_reason'] = 'BE' if position.get('be_activated') and abs(pnl) < 150.0 else ('TP1_SL' if position.get('tp_hits') else 'SL')
+                    position['exit_reason'] = 'Trail_SL' if (position.get('tp_hits') and pnl > 0) else ('BE' if position.get('be_activated') and abs(pnl) < 150.0 else ('TP1_SL' if position.get('tp_hits') else 'SL'))
                     position['remaining_size'] = 0.0
                     trades.append(_finalize_trade(position, cumulative_pnl, initial_capital))
                     position = None
@@ -216,7 +216,7 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
                     position['exit_price'] = exit_price
                     position['exit_time'] = bar_time
                     position['exit_time_ts'] = bar_ts
-                    position['exit_reason'] = 'BE' if position.get('be_activated') and abs(pnl) < 150.0 else ('TP1_SL' if position.get('tp_hits') else 'SL')
+                    position['exit_reason'] = 'Trail_SL' if (position.get('tp_hits') and pnl > 0) else ('BE' if position.get('be_activated') and abs(pnl) < 150.0 else ('TP1_SL' if position.get('tp_hits') else 'SL'))
                     position['remaining_size'] = 0.0
                     trades.append(_finalize_trade(position, cumulative_pnl, initial_capital))
                     position = None
@@ -242,6 +242,23 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
                     position['exit_reason'] = 'Signal'
                     trades.append(_finalize_trade(position, cumulative_pnl, initial_capital))
                     position = None
+                    closed = True
+
+            # 4. Asymmetric Dynamic Trailing Stop for Multi-Target Runners
+            # Strictly causal: peak/trough updated at bar close; trails 1.6x risk behind extreme
+            if not closed and position is not None:
+                if position['direction'] == 'long':
+                    position['peak_price'] = max(position.get('peak_price', position['entry_price']), row['high'])
+                    if position.get('tp_hits') or position.get('use_trailing'):
+                        trail_stop = position['peak_price'] - (1.6 * risk_dist)
+                        if position['sl'] is None or trail_stop > position['sl']:
+                            position['sl'] = trail_stop
+                elif position['direction'] == 'short':
+                    position['trough_price'] = min(position.get('trough_price', position['entry_price']), row['low'])
+                    if position.get('tp_hits') or position.get('use_trailing'):
+                        trail_stop = position['trough_price'] + (1.6 * risk_dist)
+                        if position['sl'] is None or trail_stop < position['sl']:
+                            position['sl'] = trail_stop
 
         # ---- CHECK NEW ENTRIES ----
         in_warmup = False
@@ -295,6 +312,7 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
                     'id': len(trades) + 1,
                     'direction': 'long',
                     'entry_price': entry_price,
+                    'peak_price': entry_price,
                     'entry_time': bar_time,
                     'entry_time_ts': bar_ts,
                     'entry_bar_idx': i,
@@ -302,6 +320,7 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
                     'initial_sl': sl,
                     'be_activated': False,
                     'use_breakeven': bool(row.get('use_breakeven', False) or len(tps) > 1 or partial_tp),
+                    'use_trailing': bool(row.get('use_trailing', False)),
                     'tps': tps.copy(),
                     'tps_original': tps.copy(),
                     'initial_size': calc_size,
@@ -353,6 +372,7 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
                     'id': len(trades) + 1,
                     'direction': 'short',
                     'entry_price': entry_price,
+                    'trough_price': entry_price,
                     'entry_time': bar_time,
                     'entry_time_ts': bar_ts,
                     'entry_bar_idx': i,
@@ -360,6 +380,7 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
                     'initial_sl': sl,
                     'be_activated': False,
                     'use_breakeven': bool(row.get('use_breakeven', False) or len(tps) > 1 or partial_tp),
+                    'use_trailing': bool(row.get('use_trailing', False)),
                     'tps': tps.copy(),
                     'tps_original': tps.copy(),
                     'initial_size': calc_size,

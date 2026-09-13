@@ -323,6 +323,29 @@ def htf_ema(series: pd.Series, period: int = 200, timeframe: str = '1h') -> pd.S
     return ema(series, period * ratio)
 
 
+@_memoize_indicator
+def htf_trend_filter(df: pd.DataFrame, timeframe: str = '1h') -> pd.Series:
+    """
+    Computes strictly causal Higher Timeframe (HTF) Trend Regime Filter:
+    +1: Bullish macro regime (Close > HTF Fast EMA and HTF Fast EMA > HTF Slow EMA)
+    -1: Bearish macro regime (Close < HTF Fast EMA and HTF Fast EMA < HTF Slow EMA)
+     0: Neutral / Chop regime (consolidation or transition)
+    Timeframe options: '1h' (default, 12 bars on 5m) or '4h' (48 bars on 5m).
+    """
+    tf = str(timeframe).lower()
+    ratio = 48 if '4h' in tf else 12
+    fast_period = 20 * ratio
+    slow_period = 50 * ratio
+    fast = ema(df['close'], fast_period)
+    slow = ema(df['close'], slow_period)
+    close = df['close']
+
+    bull = (close > fast) & (fast > slow)
+    bear = (close < fast) & (fast < slow)
+    regime = np.where(bull, 1, np.where(bear, -1, 0))
+    return pd.Series(regime, index=df.index)
+
+
 class RuntimeLookaheadTrap:
     """
     Guarantees at runtime that no strategy can sneak past the AST validator
@@ -625,6 +648,7 @@ def execute_strategy(code_str: str, raw_df: pd.DataFrame, initial_capital: float
         'efficiency_ratio': efficiency_ratio,
         'chandelier_exit': chandelier_exit,
         'htf_ema': htf_ema,
+        'htf_trend_filter': htf_trend_filter,
     }
 
     try:

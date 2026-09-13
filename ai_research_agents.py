@@ -559,7 +559,7 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
    - Use strictly causal rolling: `df['high'].rolling(15).max().shift(1)` or call the built-in `find_swings(df)`.
 2. REALISTIC CONFLUENCES (PREVENT ZERO-TRADE OVER-FILTERING):
    - Use 2 to 3 confluences MAXIMUM: [Macro Trend Context] + [Archetype Entry Trigger] + [Session Mask].
-   - Examples of macro context: Intraday VWAP (`df['close'] > vwap(df)`), Daily Pivots (`levels['pp']`), or Higher-Timeframe Trend (`df['close'] > htf_ema(df['close'], 200, '1h')`).
+   - Examples of macro context: Higher-Timeframe Trend (`htf_trend_filter(df, '1h') >= 0` for longs, `<= 0` for shorts), Intraday VWAP (`df['close'] > vwap(df)`), or Daily Pivots (`levels['pp']`).
    - CRITICAL: Do NOT stack 5 or 6 simultaneous indicators with `&`. Over-filtering causes 0 trades to ever trigger!
    - Target 120 to 300 selective institutional trades over the 6-month train period (approx. 1 to 3 high-conviction trades per day). This ensures sufficient sample size and cumulative R-multiple to achieve high-yield alpha (>100R).
 3. ANTI-BLEED / NON-REPEATING TRANSITION SIGNALS (PREVENT OVERTRADING CHURN):
@@ -578,13 +578,13 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
     - Multi-Target Scaling & Breakeven Protection:
       `df['use_breakeven'] = True   # Automatically ratchets stop to entry at +1.2R, eliminating full losses`
       `df['tp1_long'] = df['close'] + (risk_long * 2.0)   # Primary target (2.0R): Banks 50% profit`
-      `df['tp2_long'] = df['close'] + (risk_long * 4.5)   # Multi-target runner (4.5R): Trails to ride mega-trends`
+      `df['tp2_long'] = df['close'] + (risk_long * 5.5)   # Multi-target runner (5.5R): Trails dynamically to ride mega-trends`
       `df['tp1_short'] = df['close'] - (risk_short * 2.0)`
-      `df['tp2_short'] = df['close'] - (risk_short * 4.5)`
+      `df['tp2_short'] = df['close'] - (risk_short * 5.5)`
     - NEVER use buffer_factor < 1.0 for ATR multipliers! Values like 0.20, 0.25, 0.35 are FORBIDDEN.
     - NEVER invert Risk-to-Reward or use micro-stops (< $4.00)!
 5. Mandatory Session Gating: Wrap all entries in `session_mask(df, 'london_ny')`.
-6. Define calculate_signals(df) returning df with 'bull_signal', 'bear_signal', 'sl_long', 'sl_short', 'tp1_long', 'tp1_short'.
+6. Define calculate_signals(df) returning df with 'bull_signal', 'bear_signal', 'sl_long', 'sl_short', 'tp1_long', 'tp1_short', 'tp2_long', 'tp2_short', 'use_breakeven'.
 7. MUST end with `return df`.
 8. Return ONLY executable Python code in ```python ... ``` block.
 """
@@ -651,7 +651,8 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
         sw_len = random.choice([5, 6, 7, 8, 10, 12])
         atr_period = random.choice([10, 14, 20])
         atr_mult = round(random.choice([1.3, 1.5, 1.7, 2.0, 2.2]), 2)
-        rr = round(random.choice([1.6, 1.8, 2.0, 2.2, 2.5]), 2)
+        rr = round(random.choice([1.8, 2.0, 2.2, 2.5]), 2)
+        runner_rr = round(rr * 2.5, 1)
         min_dist = round(random.choice([3.5, 4.0, 4.5, 5.0]), 2)
         ema_fast = random.choice([13, 21])
         ema_slow = random.choice([34, 55])
@@ -669,6 +670,17 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
                 (r'\*\s*2\.[0-5]', f'* {rr}')
             ]:
                 mutated = re.sub(pat, rep, mutated)
+            if 'tp2_long' not in mutated and 'tp1_long' in mutated:
+                mutated = re.sub(
+                    r"(df\['tp1_long'\]\s*=\s*df\['close'\]\s*\+\s*\(?(?:risk_long|risk_l)\s*\*\s*[\d\.]+\)?)",
+                    rf"\g<1>\n    df['tp2_long'] = df['close'] + (risk_long * {runner_rr})\n    df['use_breakeven'] = True",
+                    mutated
+                )
+                mutated = re.sub(
+                    r"(df\['tp1_short'\]\s*=\s*df\['close'\]\s*-\s*\(?(?:risk_short|risk_s)\s*\*\s*[\d\.]+\)?)",
+                    rf"\g<1>\n    df['tp2_short'] = df['close'] - (risk_short * {runner_rr})\n    df['use_breakeven'] = True",
+                    mutated
+                )
             if mutated != champion_code:
                 return mutated
 
@@ -676,6 +688,7 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
         if idx == 0:
             return f'''def calculate_signals(df):
     sess = session_mask(df, 'london_ny')
+    macro = htf_trend_filter(df, '1h')
     sw_highs, sw_lows = find_swings(df, swing_len={sw_len})
     bull_fvg_top, bull_fvg_bot, bear_fvg_top, bear_fvg_bot = find_fvgs(df)
     vwap_line = vwap(df)
@@ -689,8 +702,8 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
     fvg_touch_long = (df['low'] <= bull_fvg_top) & (df['close'] > bull_fvg_bot)
     fvg_touch_short = (df['high'] >= bear_fvg_bot) & (df['close'] < bear_fvg_top)
     
-    raw_bull = armed_long & fvg_touch_long & (df['close'] > vwap_line) & sess
-    raw_bear = armed_short & fvg_touch_short & (df['close'] < vwap_line) & sess
+    raw_bull = armed_long & fvg_touch_long & (df['close'] > vwap_line) & (macro >= 0) & sess
+    raw_bear = armed_short & fvg_touch_short & (df['close'] < vwap_line) & (macro <= 0) & sess
     
     df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))
     df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))
@@ -704,14 +717,18 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
     
     df['sl_long'] = df['close'] - risk_l
     df['sl_short'] = df['close'] + risk_s
+    df['use_breakeven'] = True
     df['tp1_long'] = df['close'] + (risk_l * {rr})
+    df['tp2_long'] = df['close'] + (risk_l * {runner_rr})
     df['tp1_short'] = df['close'] - (risk_s * {rr})
+    df['tp2_short'] = df['close'] - (risk_s * {runner_rr})
     return df
 '''
 
         elif idx == 1:
             return f'''def calculate_signals(df):
     sess = session_mask(df, 'london_ny')
+    macro = htf_trend_filter(df, '1h')
     levels = daily_levels(df)
     vwap_line = vwap(df)
     atr_val = atr(df, {atr_period})
@@ -719,8 +736,8 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
     s1_sweep = (df['low'] < levels['s1']) & (df['close'] > levels['s1'])
     r1_sweep = (df['high'] > levels['r1']) & (df['close'] < levels['r1'])
     
-    raw_bull = s1_sweep & (df['close'] > vwap_line) & sess
-    raw_bear = r1_sweep & (df['close'] < vwap_line) & sess
+    raw_bull = s1_sweep & (df['close'] > vwap_line) & (macro >= 0) & sess
+    raw_bear = r1_sweep & (df['close'] < vwap_line) & (macro <= 0) & sess
     
     df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))
     df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))
@@ -730,14 +747,18 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
     
     df['sl_long'] = df['close'] - risk_l
     df['sl_short'] = df['close'] + risk_s
+    df['use_breakeven'] = True
     df['tp1_long'] = df['close'] + (risk_l * {rr})
+    df['tp2_long'] = df['close'] + (risk_l * {runner_rr})
     df['tp1_short'] = df['close'] - (risk_s * {rr})
+    df['tp2_short'] = df['close'] - (risk_s * {runner_rr})
     return df
 '''
 
         elif idx == 2:
             return f'''def calculate_signals(df):
     sess = session_mask(df, 'london_ny')
+    macro = htf_trend_filter(df, '1h')
     er = efficiency_ratio(df['close'], 20)
     adx_val, _, _ = adx(df, {atr_period})
     st_line, st_dir = supertrend(df, 10, 3.0)
@@ -748,8 +769,8 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
     
     regime_ok = (er > 0.28) & (adx_val > {adx_thresh}) & sess
     
-    raw_bull = st_bull_cross & regime_ok
-    raw_bear = st_bear_cross & regime_ok
+    raw_bull = st_bull_cross & regime_ok & (macro >= 0)
+    raw_bear = st_bear_cross & regime_ok & (macro <= 0)
     
     df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))
     df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))
@@ -761,14 +782,18 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
     
     df['sl_long'] = df['close'] - risk_l
     df['sl_short'] = df['close'] + risk_s
+    df['use_breakeven'] = True
     df['tp1_long'] = df['close'] + (risk_l * {rr})
+    df['tp2_long'] = df['close'] + (risk_l * {runner_rr})
     df['tp1_short'] = df['close'] - (risk_s * {rr})
+    df['tp2_short'] = df['close'] - (risk_s * {runner_rr})
     return df
 '''
 
         else:
             return f'''def calculate_signals(df):
     sess = session_mask(df, 'london_ny')
+    macro = htf_trend_filter(df, '1h')
     sw_highs, sw_lows = find_swings(df, swing_len={sw_len})
     atr_val = atr(df, {atr_period})
     ema_fast = ema(df['close'], {ema_fast})
@@ -777,8 +802,8 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
     
     ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)
     bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)
-    trend_bull = ema_fast > ema_slow
-    trend_bear = ema_fast < ema_slow
+    trend_bull = (ema_fast > ema_slow) & (macro >= 0)
+    trend_bear = (ema_fast < ema_slow) & (macro <= 0)
     
     raw_bull = ssl_sweep & trend_bull & vol_filter & sess
     raw_bear = bsl_sweep & trend_bear & vol_filter & sess
@@ -791,8 +816,11 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
     
     df['sl_long'] = df['close'] - risk_l
     df['sl_short'] = df['close'] + risk_s
+    df['use_breakeven'] = True
     df['tp1_long'] = df['close'] + (risk_l * {rr})
+    df['tp2_long'] = df['close'] + (risk_l * {runner_rr})
     df['tp1_short'] = df['close'] - (risk_s * {rr})
+    df['tp2_short'] = df['close'] - (risk_s * {runner_rr})
     return df
 '''
 
@@ -901,18 +929,31 @@ class RiskOfficerAgent:
         return code + injection + "\n    return df\n"
 
     def _inject_structural_risk(self, code: str) -> str:
-        """Injects institutional ATR SL/TP if missing from calculate_signals."""
+        """Injects institutional ATR SL/TP and multi-target scaling if missing from calculate_signals."""
         injection = """
-    # Risk Officer Injected Institutional ATR Risk Protection (Min $4.00 Stop Distance)
+    # Risk Officer Injected Institutional ATR Risk & Multi-Target Runner Protection (Min $4.00 Stop Distance)
     atr_risk = atr(df, period=14)
     if 'sl_long' not in df.columns:
         df['sl_long'] = np.where(df['bull_signal'], df['low'] - 1.5 * atr_risk, np.nan)
         risk_l = np.maximum(df['close'] - df['sl_long'], 4.00)
-        df['tp1_long'] = np.where(df['bull_signal'], df['close'] + 1.8 * risk_l, np.nan)
+        df['tp1_long'] = np.where(df['bull_signal'], df['close'] + 2.0 * risk_l, np.nan)
+        df['tp2_long'] = np.where(df['bull_signal'], df['close'] + 5.5 * risk_l, np.nan)
+        df['use_breakeven'] = True
+    elif 'tp2_long' not in df.columns and 'tp1_long' in df.columns:
+        risk_l = np.maximum(df['close'] - df['sl_long'], 4.00)
+        df['tp2_long'] = np.where(df['bull_signal'], df['close'] + 5.5 * risk_l, np.nan)
+        df['use_breakeven'] = True
+
     if 'sl_short' not in df.columns:
         df['sl_short'] = np.where(df['bear_signal'], df['high'] + 1.5 * atr_risk, np.nan)
         risk_s = np.maximum(df['sl_short'] - df['close'], 4.00)
-        df['tp1_short'] = np.where(df['bear_signal'], df['close'] - 1.8 * risk_s, np.nan)
+        df['tp1_short'] = np.where(df['bear_signal'], df['close'] - 2.0 * risk_s, np.nan)
+        df['tp2_short'] = np.where(df['bear_signal'], df['close'] - 5.5 * risk_s, np.nan)
+        df['use_breakeven'] = True
+    elif 'tp2_short' not in df.columns and 'tp1_short' in df.columns:
+        risk_s = np.maximum(df['sl_short'] - df['close'], 4.00)
+        df['tp2_short'] = np.where(df['bear_signal'], df['close'] - 5.5 * risk_s, np.nan)
+        df['use_breakeven'] = True
 """
         if 'return df' in code:
             idx = code.rfind('return df')
@@ -1032,7 +1073,7 @@ class ParameterGridSweeper:
         )
 
         # 3. Risk multiplier expressions in Take Profit (maintaining long and short risk independently)
-        runner_rr = round(rr * 1.8, 1)
+        runner_rr = max(4.5, round(rr * 2.5, 1))
         if 'tp2_long' in mutated or 'tp2_short' in mutated:
             mutated = re.sub(
                 r"(df\['tp1_long'\]\s*=\s*df\['close'\]\s*\+\s*\(?risk_\w+\s*\*\s*)[\d\.]+",
@@ -1065,6 +1106,17 @@ class ParameterGridSweeper:
                 rf'{rr} * \g<1>',
                 mutated
             )
+            if 'tp1_long' in mutated and 'tp2_long' not in mutated:
+                mutated = re.sub(
+                    r"(df\['tp1_long'\]\s*=\s*df\['close'\]\s*\+\s*\(?(?:risk_\w+|risk[ls]|sl_dist(?:_\w+)?)\s*\*\s*[\d\.]+\)?)",
+                    rf"\g<1>\n    df['tp2_long'] = df['close'] + (risk_l * {runner_rr})\n    df['use_breakeven'] = True",
+                    mutated
+                )
+                mutated = re.sub(
+                    r"(df\['tp1_short'\]\s*=\s*df\['close'\]\s*-\s*\(?(?:risk_\w+|risk[ls]|sl_dist(?:_\w+)?)\s*\*\s*[\d\.]+\)?)",
+                    rf"\g<1>\n    df['tp2_short'] = df['close'] - (risk_s * {runner_rr})\n    df['use_breakeven'] = True",
+                    mutated
+                )
 
         return mutated
 
