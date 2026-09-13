@@ -86,7 +86,7 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
 
             if position['direction'] == 'long':
                 # Dynamic Breakeven Stop: active for multi-target scaling or when use_breakeven is enabled
-                if position.get('use_breakeven') and not position.get('be_activated') and (row['high'] >= position['entry_price'] + (1.2 * risk_dist)):
+                if position.get('use_breakeven') and not position.get('be_activated') and (row['high'] >= position['entry_price'] + (1.8 * risk_dist)):
                     be_level = position['entry_price'] + cost_per_oz
                     if position['sl'] is None or position['sl'] < be_level:
                         position['sl'] = be_level
@@ -155,7 +155,7 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
 
             elif position['direction'] == 'short':
                 # Dynamic Breakeven Stop: active for multi-target scaling or when use_breakeven is enabled
-                if position.get('use_breakeven') and not position.get('be_activated') and (row['low'] <= position['entry_price'] - (1.2 * risk_dist)):
+                if position.get('use_breakeven') and not position.get('be_activated') and (row['low'] <= position['entry_price'] - (1.8 * risk_dist)):
                     be_level = position['entry_price'] - cost_per_oz
                     if position['sl'] is None or position['sl'] > be_level:
                         position['sl'] = be_level
