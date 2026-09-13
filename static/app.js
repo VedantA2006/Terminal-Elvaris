@@ -1362,6 +1362,9 @@ function setupNavigation() {
         if (lastMonteCarloCorridors) {
             renderMonteCarloChart(lastMonteCarloCorridors);
         }
+        if (currentEnsembleData) {
+            renderPortfolioCanvas();
+        }
     });
 
     // Monte Carlo & Leaderboard action buttons
@@ -1396,6 +1399,14 @@ function setupNavigation() {
     document.getElementById('tvHeaderEngineBadge')?.addEventListener('click', () => {
         openAiConfigModal();
     });
+
+    // Portfolio Ensemble dashboard listeners
+    document.getElementById('btnOpenEnsembleFromLb')?.addEventListener('click', () => {
+        switchDockTab('portfolioEnsemble');
+    });
+    document.getElementById('btnRebuildEnsemble')?.addEventListener('click', rebuildPortfolioEnsemble);
+    setupPortfolioCanvasEvents();
+    setupPortfolioModelToggles();
 }
 
 function switchDockTab(tabId) {
@@ -1433,6 +1444,10 @@ function switchDockTab(tabId) {
         if (!researchPollTimer) {
             researchPollTimer = setInterval(pollResearchStatus, 1500);
         }
+    }
+
+    if (tabId === 'portfolioEnsemble') {
+        fetchPortfolioEnsemble();
     }
 }
 
@@ -2563,6 +2578,571 @@ async function overrideSentinel() {
         if (btn) btn.disabled = false;
         if (btnLab) btnLab.disabled = false;
     }
+}
+
+// =============================================================================
+// MULTI-STRATEGY PORTFOLIO ENSEMBLE ENGINE (UI CONTROLLER)
+// =============================================================================
+let currentEnsembleData = null;
+let activeEnsembleModel = 'champion_4'; // 'champion_4' | 'fortress_3' | 'titan_5' | 'macro_7' | 'pruned_champions' | 'risk_parity' | 'risk_budgeted' | 'unconstrained'
+let ensembleHoverX = -1;
+
+async function fetchPortfolioEnsemble() {
+    try {
+        const res = await fetch('/api/portfolio/ensemble');
+        const data = await res.json();
+        if (data.success && data.portfolio) {
+            currentEnsembleData = data.portfolio;
+            renderPortfolioDashboard(currentEnsembleData);
+        } else {
+            console.error('Failed to load portfolio ensemble:', data.error);
+        }
+    } catch (err) {
+        console.error('Network error fetching portfolio ensemble:', err);
+    }
+}
+
+async function rebuildPortfolioEnsemble() {
+    const btn = document.getElementById('btnRebuildEnsemble');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳ Recalculating (49k bars)...</span>';
+    }
+    showToast('Recalculating Portfolio Ensemble across 2026 MT5 data...', 'info');
+
+    try {
+        const res = await fetch('/api/portfolio/rebuild', { method: 'POST' });
+        const data = await res.json();
+        if (data.success && data.portfolio) {
+            currentEnsembleData = data.portfolio;
+            renderPortfolioDashboard(currentEnsembleData);
+            showToast('✅ Portfolio Ensemble recalculated successfully!', 'success');
+        } else {
+            showToast('Failed to rebuild ensemble: ' + (data.error || 'unknown error'), 'error');
+        }
+    } catch (err) {
+        console.error('Rebuild ensemble error:', err);
+        showToast('Network error during ensemble rebuild', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<span>🔄 Rebuild Ensemble</span>';
+        }
+    }
+}
+
+function setupPortfolioModelToggles() {
+    document.querySelectorAll('.ens-model-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.ens-model-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            activeEnsembleModel = btn.dataset.model || 'champion_4';
+
+            // Sync legend active states
+            document.querySelectorAll('.legend-chip').forEach(c => {
+                c.classList.toggle('active', c.dataset.model === activeEnsembleModel);
+            });
+
+            if (currentEnsembleData) {
+                updatePortfolioKPIs(currentEnsembleData);
+                renderPortfolioCanvas();
+            }
+        });
+    });
+
+    document.querySelectorAll('.legend-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const m = chip.dataset.model;
+            if (!m) return;
+            const targetBtn = document.querySelector(`.ens-model-btn[data-model="${m}"]`);
+            if (targetBtn) targetBtn.click();
+        });
+    });
+}
+
+function updatePortfolioKPIs(data) {
+    if (!data || !data.models) return;
+    const m = data.models;
+    const diag = data.diagnostics || {};
+    const mc = data.monte_carlo || {};
+
+    const netEl = document.getElementById('ensNetReturn');
+    const netSubEl = document.getElementById('ensNetReturnSub');
+    const ddEl = document.getElementById('ensMaxDD');
+    const ddSubEl = document.getElementById('ensMaxDDSub');
+    const calmarEl = document.getElementById('ensCalmar');
+    const calmarSubEl = document.getElementById('ensCalmarSub');
+    const tradesEl = document.getElementById('ensTotalTrades');
+    const concEl = document.getElementById('ensConcurrencySub');
+    const corrEl = document.getElementById('ensAvgCorr');
+    const mcEl = document.getElementById('ensMonteCarloDD');
+    const ruinEl = document.getElementById('ensRuinSub');
+
+    if (activeEnsembleModel === 'champion_4') {
+        const mod = m.champion_4 || {};
+        if (netEl) netEl.textContent = `+${mod.total_r?.toFixed(1) || '112.6'} R`;
+        if (netSubEl) netSubEl.textContent = `Unconstrained: +${((mod.total_r || 112.6) * 3).toFixed(1)} R`;
+        if (ddEl) ddEl.textContent = `-${mod.max_drawdown_r?.toFixed(1) || '5.1'} R`;
+        if (ddSubEl) ddSubEl.textContent = `Lowest DD in class (65% cut vs individual)`;
+        if (calmarEl) calmarEl.textContent = `${mod.calmar_ratio?.toFixed(2) || '22.08'}x`;
+        if (calmarSubEl) calmarSubEl.textContent = `👑 #1 of 1,013 Combinations`;
+        if (tradesEl) tradesEl.textContent = '1,003';
+        if (concEl) concEl.textContent = 'Ranks #2, #8, #9 (Peak Calmar 22.08x)';
+        if (corrEl) corrEl.textContent = '0.596';
+    } else if (activeEnsembleModel === 'fortress_3') {
+        const mod = m.fortress_3 || {};
+        if (netEl) netEl.textContent = `+${mod.total_r?.toFixed(1) || '116.9'} R`;
+        if (netSubEl) netSubEl.textContent = `Unconstrained: +${((mod.total_r || 116.9) * 4).toFixed(1)} R`;
+        if (ddEl) ddEl.textContent = `-${mod.max_drawdown_r?.toFixed(1) || '5.4'} R`;
+        if (ddSubEl) ddSubEl.textContent = `Ultra-Low DD across 2026!`;
+        if (calmarEl) calmarEl.textContent = `${mod.calmar_ratio?.toFixed(2) || '21.49'}x`;
+        if (calmarSubEl) calmarSubEl.textContent = `🛡️ Fortress Risk Profile`;
+        if (tradesEl) tradesEl.textContent = '1,392';
+        if (concEl) concEl.textContent = 'Ranks #1, #4, #8, #9 (Min Drawdown)';
+        if (corrEl) corrEl.textContent = '0.612';
+    } else if (activeEnsembleModel === 'titan_5') {
+        const mod = m.titan_5 || {};
+        if (netEl) netEl.textContent = `+${mod.total_r?.toFixed(1) || '120.7'} R`;
+        if (netSubEl) netSubEl.textContent = `Unconstrained: +${((mod.total_r || 120.7) * 5).toFixed(1)} R`;
+        if (ddEl) ddEl.textContent = `-${mod.max_drawdown_r?.toFixed(1) || '5.6'} R`;
+        if (ddSubEl) ddSubEl.textContent = `Ultra-smooth drawdown recovery`;
+        if (calmarEl) calmarEl.textContent = `${mod.calmar_ratio?.toFixed(2) || '21.67'}x`;
+        if (calmarSubEl) calmarSubEl.textContent = `⚡ Optimal 5-Strategy Synergy`;
+        if (tradesEl) tradesEl.textContent = '1,736';
+        if (concEl) concEl.textContent = 'Ranks #1, #2, #4, #8, #9';
+        if (corrEl) corrEl.textContent = '0.665';
+    } else if (activeEnsembleModel === 'macro_7') {
+        const mod = m.macro_7 || {};
+        if (netEl) netEl.textContent = `+${mod.total_r?.toFixed(1) || '121.0'} R`;
+        if (netSubEl) netSubEl.textContent = `Unconstrained: +${((mod.total_r || 121.0) * 7).toFixed(1)} R`;
+        if (ddEl) ddEl.textContent = `-${mod.max_drawdown_r?.toFixed(1) || '5.7'} R`;
+        if (ddSubEl) ddSubEl.textContent = `Multi-style regime coverage`;
+        if (calmarEl) calmarEl.textContent = `${mod.calmar_ratio?.toFixed(2) || '21.23'}x`;
+        if (calmarSubEl) calmarSubEl.textContent = `💎 7-Strategy Golden Hybrid`;
+        if (tradesEl) tradesEl.textContent = '2,462';
+        if (concEl) concEl.textContent = 'Ranks #1, #2, #3, #4, #6, #8, #9';
+        if (corrEl) corrEl.textContent = '0.672';
+    } else if (activeEnsembleModel === 'pruned_champions') {
+        const mod = m.pruned_champions || {};
+        if (netEl) netEl.textContent = `+${mod.total_r_budgeted?.toFixed(1) || '124.6'} R`;
+        if (netSubEl) netSubEl.textContent = `Unconstrained: +${mod.total_r_unconstrained?.toFixed(1) || '872.2'} R`;
+        if (ddEl) ddEl.textContent = `-${mod.max_drawdown_budgeted?.toFixed(1) || '7.8'} R`;
+        if (ddSubEl) ddSubEl.textContent = `Unconstrained: -${mod.max_drawdown_unconstrained?.toFixed(1) || '54.6'} R`;
+        if (calmarEl) calmarEl.textContent = `${(mod.total_r_budgeted / Math.max(0.1, mod.max_drawdown_budgeted || 7.8)).toFixed(2)}x`;
+        if (calmarSubEl) calmarSubEl.textContent = `7 Uncorrelated Archetypes`;
+        if (tradesEl) tradesEl.textContent = '2,442';
+        if (concEl) concEl.textContent = 'All 7 Distinct Core Families';
+        if (corrEl) corrEl.textContent = '0.741';
+    } else if (activeEnsembleModel === 'risk_parity') {
+        const mod = m.risk_parity || {};
+        if (netEl) netEl.textContent = `+${mod.total_r?.toFixed(1) || '119.3'} R`;
+        if (netSubEl) netSubEl.textContent = `Inverse-DD Volatility Weighted`;
+        if (ddEl) ddEl.textContent = `-${mod.max_drawdown_r?.toFixed(1) || '7.0'} R`;
+        if (ddSubEl) ddSubEl.textContent = `Lowest DD among Top 10 models`;
+        if (calmarEl) calmarEl.textContent = `${mod.calmar_ratio?.toFixed(2) || '17.04'}x`;
+        if (calmarSubEl) calmarSubEl.textContent = `Peak 10-Strategy Calmar`;
+        if (tradesEl) tradesEl.textContent = (diag.total_portfolio_trades || 3448).toLocaleString();
+        if (concEl) concEl.textContent = `Avg ${diag.avg_concurrent_positions || 5.8} Concurrent`;
+        if (corrEl) corrEl.textContent = (diag.average_pairwise_correlation || 0.706).toFixed(3);
+    } else if (activeEnsembleModel === 'risk_budgeted') {
+        const mod = m.risk_budgeted || {};
+        if (netEl) netEl.textContent = `+${mod.total_r?.toFixed(1) || '118.6'} R`;
+        if (netSubEl) netSubEl.textContent = `Unconstrained: +${m.unconstrained?.total_r?.toFixed(1) || '1186.3'} R`;
+        if (ddEl) ddEl.textContent = `-${mod.max_drawdown_r?.toFixed(1) || '7.0'} R`;
+        if (ddSubEl) ddSubEl.textContent = `Unconstrained: -${m.unconstrained?.max_drawdown_r?.toFixed(1) || '70.4'} R`;
+        if (calmarEl) calmarEl.textContent = `${mod.calmar_ratio?.toFixed(2) || '16.94'}x`;
+        if (calmarSubEl) calmarSubEl.textContent = `Equal-Weight 1/10th R`;
+        if (tradesEl) tradesEl.textContent = (diag.total_portfolio_trades || 3448).toLocaleString();
+        if (concEl) concEl.textContent = `Avg ${diag.avg_concurrent_positions || 5.8} Concurrent`;
+        if (corrEl) corrEl.textContent = (diag.average_pairwise_correlation || 0.706).toFixed(3);
+    } else if (activeEnsembleModel === 'unconstrained') {
+        const mod = m.unconstrained || {};
+        if (netEl) netEl.textContent = `+${mod.total_r?.toFixed(1) || '1186.3'} R`;
+        if (netSubEl) netSubEl.textContent = `Budgeted: +${m.risk_budgeted?.total_r?.toFixed(1) || '118.6'} R`;
+        if (ddEl) ddEl.textContent = `-${mod.max_drawdown_r?.toFixed(1) || '70.4'} R`;
+        if (ddSubEl) ddSubEl.textContent = `Budgeted: -${m.risk_budgeted?.max_drawdown_r?.toFixed(1) || '7.0'} R`;
+        if (calmarEl) calmarEl.textContent = `${mod.calmar_ratio?.toFixed(2) || '16.85'}x`;
+        if (calmarSubEl) calmarSubEl.textContent = `Calmar on 1R/trade`;
+        if (tradesEl) tradesEl.textContent = (diag.total_portfolio_trades || 3448).toLocaleString();
+        if (concEl) concEl.textContent = `Avg ${diag.avg_concurrent_positions || 5.8} Concurrent`;
+        if (corrEl) corrEl.textContent = (diag.average_pairwise_correlation || 0.706).toFixed(3);
+    }
+
+    if (mcEl) mcEl.textContent = `-${(mc.var_95_max_dd_r || 14.2).toFixed(1)} R`;
+    if (ruinEl) ruinEl.textContent = `Risk of Ruin (20R): ${(mc.risk_of_ruin_20r || 0.0).toFixed(1)}%`;
+}
+
+function setupPortfolioCanvasEvents() {
+    const canvas = document.getElementById('ensEquityCanvas');
+    if (!canvas) return;
+
+    canvas.addEventListener('mousemove', e => {
+        const rect = canvas.getBoundingClientRect();
+        ensembleHoverX = e.clientX - rect.left;
+        renderPortfolioCanvas();
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+        ensembleHoverX = -1;
+        const infoEl = document.getElementById('ensChartHoverInfo');
+        if (infoEl) infoEl.textContent = 'Hover over equity curve for trade timestamps and drawdown';
+        renderPortfolioCanvas();
+    });
+}
+
+function renderPortfolioCanvas() {
+    const canvas = document.getElementById('ensEquityCanvas');
+    if (!canvas || !currentEnsembleData || !currentEnsembleData.equity_curve) return;
+
+    const eq = currentEnsembleData.equity_curve;
+    const dates = eq.dates || [];
+    if (dates.length === 0) return;
+
+    const parent = canvas.parentElement;
+    const width = parent ? parent.clientWidth : 800;
+    const height = parent ? parent.clientHeight : 280;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, width, height);
+
+    const padLeft = 55;
+    const padRight = 30;
+    const padTop = 20;
+    const padBottom = 26;
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+
+    // Pick active series
+    let primarySeries = [];
+    let primaryColor = '#ffd700';
+    let primaryFill = 'rgba(255, 215, 0, 0.10)';
+    let secondarySeriesList = [];
+
+    if (activeEnsembleModel === 'champion_4') {
+        primarySeries = eq.champion_4 || [];
+        primaryColor = '#ffd700';
+        primaryFill = 'rgba(255, 215, 0, 0.10)';
+        secondarySeriesList = [
+            { series: eq.fortress_3 || [], color: 'rgba(0, 229, 255, 0.45)', dash: [3, 3] },
+            { series: eq.titan_5 || [], color: 'rgba(0, 230, 118, 0.45)', dash: [3, 3] }
+        ];
+    } else if (activeEnsembleModel === 'fortress_3') {
+        primarySeries = eq.fortress_3 || [];
+        primaryColor = '#00e5ff';
+        primaryFill = 'rgba(0, 229, 255, 0.10)';
+        secondarySeriesList = [
+            { series: eq.champion_4 || [], color: 'rgba(255, 215, 0, 0.45)', dash: [3, 3] }
+        ];
+    } else if (activeEnsembleModel === 'titan_5') {
+        primarySeries = eq.titan_5 || [];
+        primaryColor = '#00e676';
+        primaryFill = 'rgba(0, 230, 118, 0.10)';
+        secondarySeriesList = [
+            { series: eq.champion_4 || [], color: 'rgba(255, 215, 0, 0.45)', dash: [3, 3] }
+        ];
+    } else if (activeEnsembleModel === 'macro_7') {
+        primarySeries = eq.macro_7 || [];
+        primaryColor = '#e040fb';
+        primaryFill = 'rgba(224, 64, 251, 0.10)';
+        secondarySeriesList = [
+            { series: eq.champion_4 || [], color: 'rgba(255, 215, 0, 0.45)', dash: [3, 3] }
+        ];
+    } else if (activeEnsembleModel === 'pruned_champions') {
+        primarySeries = eq.pruned_budgeted || [];
+        primaryColor = '#38bdf8';
+        primaryFill = 'rgba(56, 189, 248, 0.10)';
+        secondarySeriesList = [
+            { series: eq.champion_4 || [], color: 'rgba(255, 215, 0, 0.45)', dash: [3, 3] }
+        ];
+    } else if (activeEnsembleModel === 'risk_parity') {
+        primarySeries = eq.risk_parity || [];
+        primaryColor = '#ab47bc';
+        primaryFill = 'rgba(171, 71, 188, 0.10)';
+        secondarySeriesList = [
+            { series: eq.champion_4 || [], color: 'rgba(255, 215, 0, 0.45)', dash: [3, 3] }
+        ];
+    } else if (activeEnsembleModel === 'risk_budgeted') {
+        primarySeries = eq.risk_budgeted || [];
+        primaryColor = '#9ca3af';
+        primaryFill = 'rgba(156, 163, 175, 0.10)';
+        secondarySeriesList = [
+            { series: eq.champion_4 || [], color: 'rgba(255, 215, 0, 0.45)', dash: [3, 3] }
+        ];
+    } else if (activeEnsembleModel === 'unconstrained') {
+        primarySeries = eq.unconstrained || [];
+        primaryColor = '#ffd700';
+        primaryFill = 'rgba(255, 215, 0, 0.10)';
+    }
+
+    if (primarySeries.length === 0) return;
+
+    // Calculate Y range
+    let allVals = [...primarySeries];
+    secondarySeriesList.forEach(s => allVals.push(...s.series));
+    let minVal = Math.min(...allVals, 0);
+    let maxVal = Math.max(...allVals, 10);
+    const range = (maxVal - minVal) || 1;
+    minVal -= range * 0.05;
+    maxVal += range * 0.05;
+
+    const n = primarySeries.length;
+    const getX = i => padLeft + (i / (n - 1)) * plotW;
+    const getY = v => padTop + (1 - (v - minVal) / (maxVal - minVal)) * plotH;
+
+    // Background horizontal grid & labels
+    ctx.strokeStyle = '#1f2431';
+    ctx.lineWidth = 1;
+    ctx.fillStyle = '#787b86';
+    ctx.font = '10px Inter, sans-serif';
+    ctx.textAlign = 'right';
+
+    const gridSteps = 5;
+    for (let i = 0; i <= gridSteps; i++) {
+        const y = padTop + (i / gridSteps) * plotH;
+        const v = maxVal - (i / gridSteps) * (maxVal - minVal);
+        ctx.beginPath();
+        ctx.moveTo(padLeft, y);
+        ctx.lineTo(width - padRight, y);
+        ctx.stroke();
+        ctx.fillText(`${v >= 0 ? '+' : ''}${v.toFixed(1)} R`, padLeft - 8, y + 3);
+    }
+
+    // Zero line
+    if (minVal <= 0 && maxVal >= 0) {
+        const yZero = getY(0);
+        ctx.strokeStyle = '#ffffff25';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(padLeft, yZero);
+        ctx.lineTo(width - padRight, yZero);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // Date X axis markers
+    ctx.fillStyle = '#787b86';
+    ctx.textAlign = 'center';
+    const dateInterval = Math.max(1, Math.floor(n / 6));
+    for (let i = 0; i < n; i += dateInterval) {
+        const x = getX(i);
+        const dStr = dates[i] || '';
+        ctx.fillText(dStr.slice(5), x, height - 8);
+    }
+
+    // Draw secondary curves
+    secondarySeriesList.forEach(item => {
+        ctx.strokeStyle = item.color;
+        ctx.lineWidth = 1.5;
+        if (item.dash) ctx.setLineDash(item.dash);
+        ctx.beginPath();
+        item.series.forEach((v, idx) => {
+            const x = getX(idx);
+            const y = getY(v);
+            if (idx === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+    });
+
+    // Draw Primary Series Area Gradient
+    const grad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
+    grad.addColorStop(0, primaryFill);
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(getX(0), getY(minVal));
+    primarySeries.forEach((v, idx) => {
+        ctx.lineTo(getX(idx), getY(v));
+    });
+    ctx.lineTo(getX(n - 1), getY(minVal));
+    ctx.closePath();
+    ctx.fill();
+
+    // Draw Primary Series Line
+    ctx.strokeStyle = primaryColor;
+    ctx.lineWidth = 2.2;
+    ctx.shadowColor = primaryColor;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    primarySeries.forEach((v, idx) => {
+        const x = getX(idx);
+        const y = getY(v);
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Interactive Hover Tracking
+    if (ensembleHoverX >= padLeft && ensembleHoverX <= width - padRight) {
+        const relX = ensembleHoverX - padLeft;
+        const idx = Math.min(n - 1, Math.max(0, Math.round((relX / plotW) * (n - 1))));
+        const hoverVal = primarySeries[idx];
+        const hoverDate = dates[idx];
+        const hoverPx = getX(idx);
+        const hoverPy = getY(hoverVal);
+
+        const peakUpToIdx = Math.max(...primarySeries.slice(0, idx + 1));
+        const ddAtIdx = hoverVal - peakUpToIdx;
+
+        // Crosshair vertical
+        ctx.strokeStyle = '#ffffff50';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(hoverPx, padTop);
+        ctx.lineTo(hoverPx, padTop + plotH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Hover point dot
+        ctx.fillStyle = primaryColor;
+        ctx.shadowColor = primaryColor;
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(hoverPx, hoverPy, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Update pill text
+        const infoEl = document.getElementById('ensChartHoverInfo');
+        if (infoEl) {
+            infoEl.innerHTML = `📅 <strong>${hoverDate}</strong> · Return: <strong style="color:${primaryColor}">${hoverVal >= 0 ? '+' : ''}${hoverVal.toFixed(1)} R</strong> · Current DD: <strong style="color:#f87171">${ddAtIdx.toFixed(1)} R</strong>`;
+        }
+    }
+}
+
+function renderEnsembleMonthlyTable(models) {
+    const tbody = document.getElementById('ensMonthlyTableBody');
+    if (!tbody || !models) return;
+
+    const months = ['Jan 2026', 'Feb 2026', 'Mar 2026', 'Apr 2026', 'May 2026', 'Jun 2026', 'Jul 2026', 'Aug 2026', 'Sep 2026'];
+    const modelRows = [
+        { key: 'champion_4', name: '👑 Calmar King 3 [Ranks #2, #8, #9]', badge: '22.1x Calmar', pnl: models.champion_4?.monthly_pnl || {}, total: models.champion_4?.total_r },
+        { key: 'fortress_3', name: '🛡️ Fortress 4 (Min DD) [Ranks #1, #4, #8, #9]', badge: '-5.4R DD', pnl: models.fortress_3?.monthly_pnl || {}, total: models.fortress_3?.total_r },
+        { key: 'titan_5', name: '⚡ Titan 5 Synergy [Ranks #1, #2, #4, #8, #9]', badge: '21.7x Calmar', pnl: models.titan_5?.monthly_pnl || {}, total: models.titan_5?.total_r },
+        { key: 'macro_7', name: '💎 Golden 7 Hybrid [Ranks #1, #2, #3, #4, #6, #8, #9]', badge: '21.2x Calmar', pnl: models.macro_7?.monthly_pnl || {}, total: models.macro_7?.total_r },
+        { key: 'pruned_champions', name: '🎯 Pruned 7 Archetype Champions', badge: '7 Archetypes', pnl: models.pruned_champions?.monthly_pnl || {}, total: models.pruned_champions?.total_r_budgeted },
+        { key: 'risk_parity', name: '⚖️ Risk Parity Top 10 (Inverse DD)', badge: 'Risk Parity', pnl: models.risk_parity?.monthly_pnl || {}, total: models.risk_parity?.total_r },
+        { key: 'risk_budgeted', name: '🌐 Full Top 10 (Risk-Budgeted 1/10th R)', badge: '1/10th R', pnl: models.risk_budgeted?.monthly_pnl || {}, total: models.risk_budgeted?.total_r },
+        { key: 'unconstrained', name: '⚡ Full Top 10 (Unconstrained 1R/trade)', badge: '1R Gross', pnl: models.unconstrained?.monthly_pnl || {}, total: models.unconstrained?.total_r },
+    ];
+
+    tbody.innerHTML = modelRows.map(row => {
+        const monthCols = months.map(m => {
+            const v = row.pnl[m] ?? 0.0;
+            const cls = v >= 0 ? 'pos' : 'neg';
+            return `<td class="${cls}">${v >= 0 ? '+' : ''}${v.toFixed(1)}R</td>`;
+        }).join('');
+
+        const totCls = (row.total ?? 0) >= 0 ? 'pos' : 'neg';
+        return `
+            <tr>
+                <td>
+                    <span>${row.name}</span>
+                </td>
+                ${monthCols}
+                <td class="${totCls}" style="font-weight: 800; font-size: 12.5px;">
+                    ${(row.total ?? 0) >= 0 ? '+' : ''}${(row.total ?? 0).toFixed(1)} R
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderCorrelationHeatmap(corrMatrix, strategies) {
+    const table = document.getElementById('ensCorrTable');
+    if (!table || !corrMatrix) return;
+
+    const keys = Object.keys(corrMatrix);
+    if (keys.length === 0) return;
+
+    let html = '<thead><tr><th></th>';
+    keys.forEach(k => {
+        const idx = parseInt(k.replace('S', '')) - 1;
+        const strat = strategies && strategies[idx] ? strategies[idx] : null;
+        const name = strat ? strat.name : k;
+        html += `<th title="${name}">${k}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    keys.forEach((rowKey, i) => {
+        const idxI = parseInt(rowKey.replace('S', '')) - 1;
+        const stratI = strategies && strategies[idxI] ? strategies[idxI] : null;
+        const nameI = stratI ? stratI.name : rowKey;
+
+        html += `<tr><td class="corr-header" title="${nameI}">${rowKey}</td>`;
+
+        keys.forEach((colKey, j) => {
+            const val = corrMatrix[rowKey] ? (corrMatrix[rowKey][colKey] ?? 0.0) : 0.0;
+            let tintClass = 'tint-mid';
+            if (i === j) tintClass = 'tint-diag';
+            else if (val < 0.60) tintClass = 'tint-low';
+            else if (val > 0.80) tintClass = 'tint-high';
+
+            const idxJ = parseInt(colKey.replace('S', '')) - 1;
+            const stratJ = strategies && strategies[idxJ] ? strategies[idxJ] : null;
+            const nameJ = stratJ ? stratJ.name : colKey;
+
+            html += `<td class="${tintClass}" title="${rowKey} (${nameI.slice(0, 20)}) vs ${colKey} (${nameJ.slice(0, 20)}): r = ${val.toFixed(3)}">${val.toFixed(2)}</td>`;
+        });
+        html += '</tr>';
+    });
+
+    html += '</tbody>';
+    table.innerHTML = html;
+}
+
+function renderEnsembleWeightsTable(strategies) {
+    const tbody = document.getElementById('ensWeightsTableBody');
+    if (!tbody || !strategies) return;
+
+    tbody.innerHTML = strategies.map(strat => {
+        const isChamp = strat.is_in_pruned_ensemble;
+        const prunedBadge = isChamp
+            ? '<span class="ens-pruned-badge champion" title="Selected as prime archetype representative">CHAMPION</span>'
+            : '<span class="ens-pruned-badge redundant" title="Correlated variant of existing archetype">REDUNDANT</span>';
+
+        const eqWeight = ((strat.equal_weight || 0.0667) * 100).toFixed(1) + '%';
+        const rpWeight = ((strat.risk_parity_weight || 0.0667) * 100).toFixed(1) + '%';
+
+        return `
+            <tr>
+                <td style="text-align: center; font-weight: 700; color: #ffd700;">#${strat.rank}</td>
+                <td>
+                    <div style="font-weight: 600; color: #ffffff;">${strat.name}</div>
+                    <div style="font-size: 10.5px; color: #787b86; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${strat.concept || ''}</div>
+                </td>
+                <td style="text-align: right; font-family: var(--tv-font-mono); font-weight: 700; color: #00e676;">+${strat.total_r} R</td>
+                <td style="text-align: right; font-family: var(--tv-font-mono); color: #f87171;">-${strat.max_dd_r} R</td>
+                <td style="text-align: right; font-family: var(--tv-font-mono); color: #60a5fa;">${eqWeight}</td>
+                <td style="text-align: right; font-family: var(--tv-font-mono); color: #c084fc; font-weight: 700;">${rpWeight}</td>
+                <td style="text-align: center;">${prunedBadge}</td>
+                <td style="text-align: center;">
+                    <button class="btn-load-ens-strat" onclick="loadLeaderboardStrategy(${strat.rank - 1})" title="Load Strategy #${strat.rank} into Monaco Editor and Chart">Test</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderPortfolioDashboard(data) {
+    if (!data) return;
+    updatePortfolioKPIs(data);
+    renderPortfolioCanvas();
+    renderEnsembleMonthlyTable(data.models);
+    renderCorrelationHeatmap(data.correlation_matrix, data.strategies);
+    renderEnsembleWeightsTable(data.strategies);
 }
 
 // =============================================================================

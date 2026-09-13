@@ -41,6 +41,9 @@ def compute_monthly_r_breakdown(trades: List[Dict[str, Any]], lot_size: float = 
             continue
         try:
             dt = pd.to_datetime(en_time)
+            # Enforce 2026-only trades
+            if dt.year < 2026:
+                continue
             month_key = dt.strftime('%b %Y')
             month_sort = dt.strftime('%Y-%m')
         except Exception:
@@ -235,6 +238,9 @@ def upgrade_leaderboard_to_mt5_data(full_df, train_df=None, val_df=None, test_df
     """
     if full_df is None or len(full_df) < 100:
         return 0
+    # Enforce strictly 2026-only data for leaderboard backtests
+    if isinstance(full_df.index, pd.DatetimeIndex):
+        full_df = full_df[full_df.index >= '2026-01-01'].copy()
     if not LEADERBOARD_FILE.exists():
         return 0
 
@@ -256,7 +262,7 @@ def upgrade_leaderboard_to_mt5_data(full_df, train_df=None, val_df=None, test_df
 
     updated_count = 0
     for entry in items:
-        if not force and entry.get('data_split') in ('mt5_ecn', 'mt5_ecn_2026'):
+        if not force and entry.get('data_split') in ('mt5_ecn', 'mt5_ecn_2026', 'equityedge_mt5_2026'):
             continue
         code = entry.get('code', '')
         if not code or not code.strip():
@@ -343,9 +349,12 @@ upgrade_leaderboard_to_full_6m = upgrade_leaderboard_to_mt5_data
 
 
 def load_leaderboard(full_df=None, train_df=None) -> List[Dict[str, Any]]:
-    """Loads leaderboard list from disk, ensuring seed champions exist and reflect MT5 broker data."""
+    """Loads leaderboard list from disk, ensuring seed champions exist and reflect MT5 broker data from Jan 2026."""
     LEADERBOARD_FILE.parent.mkdir(parents=True, exist_ok=True)
     df_for_calc = full_df if full_df is not None and len(full_df) > 100 else train_df
+    # Strictly enforce 2026-only data
+    if df_for_calc is not None and isinstance(df_for_calc.index, pd.DatetimeIndex):
+        df_for_calc = df_for_calc[df_for_calc.index >= '2026-01-01'].copy()
 
     if not LEADERBOARD_FILE.exists():
         seeds = _get_default_seed_strategies(full_df=df_for_calc)
@@ -356,15 +365,17 @@ def load_leaderboard(full_df=None, train_df=None) -> List[Dict[str, Any]]:
         with open(LEADERBOARD_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
         if isinstance(data, list) and len(data) > 0:
-            # Upgrade any non-mt5_ecn entries if data is provided
+            # Upgrade any non-mt5_ecn_2026 entries if data is provided
             if df_for_calc is not None and len(df_for_calc) > 100:
-                has_old = any(item.get('data_split') not in ('mt5_ecn', 'mt5_ecn_2026') for item in data)
+                has_old = any(item.get('data_split') != 'mt5_ecn_2026' for item in data)
                 if has_old:
                     upgrade_leaderboard_to_mt5_data(df_for_calc)
                     with open(LEADERBOARD_FILE, 'r', encoding='utf-8') as f2:
                         data = json.load(f2)
-            # Sort by rank_score descending
-            data.sort(key=lambda x: x.get('rank_score', 0.0), reverse=True)
+            # Sort strictly by total_r descending
+            data.sort(key=lambda x: x.get('total_r', 0.0), reverse=True)
+            for i, item in enumerate(data):
+                item['rank'] = i + 1
             return data
     except Exception:
         pass

@@ -319,6 +319,12 @@
                         <span>Multi-Agent Quant Lab</span>
                         <span class="tab-badge-active-loop" id="labRunningBadge" style="display:none;">LIVE</span>
                     </button>
+
+                    <button class="tv-tab-btn" data-tab="portfolioEnsemble" id="tabBtnPortfolioEnsemble">
+                        <span class="tab-ensemble">🌐</span>
+                        <span>Portfolio Ensemble</span>
+                        <span class="tab-badge-ensemble" id="ensembleBadge">TOP 10</span>
+                    </button>
                 </div>
 
                 <!-- Dock Action Controls (Right side of bottom bar) -->
@@ -621,6 +627,9 @@
                                 <button class="tv-dock-btn-secondary" id="btnRefreshLeaderboard">
                                     <span>🔄 Refresh Leaderboard</span>
                                 </button>
+                                <button class="tv-dock-btn-secondary" id="btnOpenEnsembleFromLb" style="color: #ffd700; border-color: #ffd70055; font-weight: 600;" title="Open Multi-Strategy Portfolio Ensemble Dashboard">
+                                    <span>🌐 Top 15 Portfolio Ensemble</span>
+                                </button>
                                 <a href="/static/top10_equity_and_drawdown.png" target="_blank" class="tv-dock-btn-secondary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; color: #00E676; border-color: #00E67644;" title="View Top 10 Equity & Underwater Drawdown Curves">
                                     <span>📈 Top 10 Equity Graph</span>
                                 </a>
@@ -825,6 +834,196 @@
                                     <span class="ql-log-time">[Ready]</span>
                                     <span class="ql-log-agent">System:</span>
                                     <span class="ql-log-msg">Multi-Agent Quant Research Lab initialized. Click '⚡ Start Autonomous Loop' to begin discovering strategies.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- -------------------------------------------------------------
+                     TAB 7: MULTI-STRATEGY PORTFOLIO ENSEMBLE (Top 15 Champions)
+                -------------------------------------------------------------- -->
+                <div class="tv-tab-content" id="tabPortfolioEnsemble">
+                    <div class="ens-container">
+                        <!-- Top Header & Model Selector Toolbar -->
+                        <div class="ens-header">
+                            <div class="ens-title-block">
+                                <h3 class="ens-title">
+                                    <span>🌐 Institutional Multi-Strategy Portfolio Ensemble</span>
+                                    <span class="ens-badge-period">2026 MT5 DATA · JAN–SEP 2026</span>
+                                </h3>
+                                <p class="ens-desc">
+                                    Cross-strategy correlation analysis, risk budgeting (1/Nth R), and risk-parity allocation across the Top 10 strategies on the leaderboard (49,315 candles on EquityEdge-Trade MT5 broker data).
+                                </p>
+                            </div>
+
+                            <div class="ens-actions">
+                                <div class="ens-model-toggles" id="ensModelToggles">
+                                    <button type="button" class="ens-model-btn active" data-model="champion_4" title="Global Combinations Winner: Ranks #2, #8, #9 (22.08x Calmar)">
+                                        👑 Calmar King 3 [2,8,9]
+                                    </button>
+                                    <button type="button" class="ens-model-btn" data-model="fortress_3" title="Lowest absolute drawdown: -5.4R (Ranks #1, #4, #8, #9)">
+                                        🛡️ Fortress 4 (DD -5.4R)
+                                    </button>
+                                    <button type="button" class="ens-model-btn" data-model="titan_5" title="Optimal 5-Strategy Synergy: Ranks #1, #2, #4, #8, #9 (21.67x Calmar)">
+                                        ⚡ Titan 5 [1,2,4,8,9]
+                                    </button>
+                                    <button type="button" class="ens-model-btn" data-model="macro_7" title="Golden Hybrid 7: Ranks #1, #2, #3, #4, #6, #8, #9 (21.23x Calmar)">
+                                        💎 Golden 7 [Hybrid]
+                                    </button>
+                                    <button type="button" class="ens-model-btn" data-model="pruned_champions" title="Pruned 7 uncorrelated archetype champions">
+                                        🎯 Pruned 7 Archetypes
+                                    </button>
+                                    <button type="button" class="ens-model-btn" data-model="risk_parity" title="Inverse drawdown volatility weighted on Top 10">
+                                        ⚖️ Risk Parity
+                                    </button>
+                                    <button type="button" class="ens-model-btn" data-model="risk_budgeted" title="Equal-weight risk budgeted (1/10th R across Top 10)">
+                                        🌐 Top 10 (Budgeted)
+                                    </button>
+                                    <button type="button" class="ens-model-btn" data-model="unconstrained" title="Unconstrained full size (1R per trade across all 10)">
+                                        ⚡ Top 10 (1R Gross)
+                                    </button>
+                                </div>
+                                <button type="button" class="tv-dock-btn-secondary" id="btnRebuildEnsemble" title="Recalculate complete ensemble cross-strategy matrix from 2026 MT5 data">
+                                    <span>🔄 Rebuild Ensemble</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- KPI Summary Deck -->
+                        <div class="ens-kpi-grid">
+                            <div class="ens-kpi-card highlight-return">
+                                <div class="ens-kpi-label">PORTFOLIO NET RETURN</div>
+                                <div class="ens-kpi-val positive" id="ensNetReturn">+113.2 R</div>
+                                <div class="ens-kpi-sub" id="ensNetReturnSub">Unconstrained: +452.8 R</div>
+                            </div>
+                            <div class="ens-kpi-card highlight-dd">
+                                <div class="ens-kpi-label">MAXIMUM DRAWDOWN</div>
+                                <div class="ens-kpi-val negative" id="ensMaxDD">-7.6 R</div>
+                                <div class="ens-kpi-sub" id="ensMaxDDSub">Lowest DD in class</div>
+                            </div>
+                            <div class="ens-kpi-card">
+                                <div class="ens-kpi-label">CALMAR RATIO</div>
+                                <div class="ens-kpi-val highlight" id="ensCalmar">14.89x</div>
+                                <div class="ens-kpi-sub" id="ensCalmarSub">Global Optimizer Winner</div>
+                            </div>
+                            <div class="ens-kpi-card">
+                                <div class="ens-kpi-label">PORTFOLIO TRADES</div>
+                                <div class="ens-kpi-val" id="ensTotalTrades">1,489</div>
+                                <div class="ens-kpi-sub" id="ensConcurrencySub">Ultra-low execution friction</div>
+                            </div>
+                            <div class="ens-kpi-card">
+                                <div class="ens-kpi-label">DIVERSIFICATION SCORE</div>
+                                <div class="ens-kpi-val highlight-blue" id="ensAvgCorr">0.657</div>
+                                <div class="ens-kpi-sub">Avg Pairwise Correlation</div>
+                            </div>
+                            <div class="ens-kpi-card">
+                                <div class="ens-kpi-label">MONTE CARLO 95% VAR</div>
+                                <div class="ens-kpi-val" id="ensMonteCarloDD">-14.2 R</div>
+                                <div class="ens-kpi-sub" id="ensRuinSub">Risk of Ruin (20R): 0.0%</div>
+                            </div>
+                        </div>
+
+                        <!-- Interactive Ensemble Equity Curve Chart -->
+                        <div class="ens-chart-section">
+                            <div class="ens-chart-header">
+                                <div class="ens-chart-title">
+                                    <span>📈 Ensemble Cumulative Equity Curve (2026 Chronological Trades)</span>
+                                    <div class="ens-curve-legend" id="ensCurveLegend">
+                                        <span class="legend-chip active" data-model="champion_4"><span class="chip-color" style="background:#ffd700;"></span> 👑 King 4</span>
+                                        <span class="legend-chip" data-model="fortress_3"><span class="chip-color" style="background:#00e5ff;"></span> 🛡️ Fortress 3</span>
+                                        <span class="legend-chip" data-model="titan_5"><span class="chip-color" style="background:#00e676;"></span> ⚡ Titan 5</span>
+                                        <span class="legend-chip" data-model="macro_7"><span class="chip-color" style="background:#e040fb;"></span> 💎 Golden 7</span>
+                                        <span class="legend-chip" data-model="pruned_champions"><span class="chip-color" style="background:#38bdf8;"></span> 🎯 Pruned 9</span>
+                                        <span class="legend-chip" data-model="risk_budgeted"><span class="chip-color" style="background:#9ca3af;"></span> 🌐 Top 15</span>
+                                    </div>
+                                </div>
+                                <div class="ens-chart-stats-pill" id="ensChartHoverInfo">
+                                    Hover over equity curve for trade timestamps and drawdown
+                                </div>
+                            </div>
+                            <div class="ens-canvas-wrapper">
+                                <canvas id="ensEquityCanvas"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Monthly Breakdown Matrix -->
+                        <div class="ens-monthly-section">
+                            <div class="ens-section-title">
+                                <span>📅 Monthly Returns Breakdown & Consistency Matrix (2026 YTD)</span>
+                                <span class="ens-monthly-badge">8 of 9 Profitable Months (88.9% Win Months)</span>
+                            </div>
+                            <div class="ens-monthly-table-wrapper">
+                                <table class="ens-monthly-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Model / Portfolio</th>
+                                            <th>Jan 2026</th>
+                                            <th>Feb 2026</th>
+                                            <th>Mar 2026</th>
+                                            <th>Apr 2026</th>
+                                            <th>May 2026</th>
+                                            <th>Jun 2026</th>
+                                            <th>Jul 2026</th>
+                                            <th>Aug 2026</th>
+                                            <th>Sep 2026</th>
+                                            <th style="font-weight: 700; color: #fff;">Total Net R</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ensMonthlyTableBody">
+                                        <!-- Populated dynamically -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Two-Column Analytics: Correlation Matrix + Strategy Weight Table -->
+                        <div class="ens-split-grid">
+                            <!-- Left: 10x10 Pairwise Correlation Heatmap -->
+                            <div class="ens-grid-panel">
+                                <div class="ens-panel-header">
+                                    <div class="ens-panel-title">
+                                        <span>🧬 10x10 Cross-Strategy Correlation Heatmap</span>
+                                    </div>
+                                    <div class="ens-corr-legend">
+                                        <span class="corr-box low">&lt;0.60 (Uncorrelated)</span>
+                                        <span class="corr-box mid">0.60–0.80 (Moderate)</span>
+                                        <span class="corr-box high">&gt;0.80 (Coupled)</span>
+                                    </div>
+                                </div>
+                                <div class="ens-corr-table-wrap">
+                                    <table class="ens-corr-table" id="ensCorrTable">
+                                        <!-- Populated dynamically -->
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Right: Strategy Constituents & Allocation Table -->
+                            <div class="ens-grid-panel">
+                                <div class="ens-panel-header">
+                                    <div class="ens-panel-title">
+                                        <span>🏆 Top 10 Strategy Weights & Risk Contribution</span>
+                                    </div>
+                                    <span class="ens-panel-sub">Click 'Test' to load into Monaco Editor</span>
+                                </div>
+                                <div class="ens-weights-table-wrap">
+                                    <table class="ens-weights-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 45px; text-align: center;">Rank</th>
+                                                <th>Strategy Name & Archetype</th>
+                                                <th style="text-align: right;">Return (+R)</th>
+                                                <th style="text-align: right;">Max DD</th>
+                                                <th style="text-align: right;">Equal Wt</th>
+                                                <th style="text-align: right;">Risk Parity</th>
+                                                <th style="text-align: center;">Pruned</th>
+                                                <th style="text-align: center;">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="ensWeightsTableBody">
+                                            <!-- Populated dynamically -->
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>

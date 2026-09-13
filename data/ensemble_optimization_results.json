@@ -1,0 +1,630 @@
+{
+  "top_calmar": [
+    {
+      "k": 4,
+      "ranks": [
+        2,
+        3,
+        7,
+        10
+      ],
+      "total_r": 113.2,
+      "max_dd": 7.55,
+      "calmar": 14.99,
+      "sharpe": 4.08,
+      "avg_corr": 0.657,
+      "total_trades": 1351,
+      "unconstrained_r": 452.8,
+      "unconstrained_dd": 30.2
+    },
+    {
+      "k": 4,
+      "ranks": [
+        2,
+        3,
+        6,
+        10
+      ],
+      "total_r": 113.3,
+      "max_dd": 7.57,
+      "calmar": 14.97,
+      "sharpe": 4.1,
+      "avg_corr": 0.647,
+      "total_trades": 1348,
+      "unconstrained_r": 453.2,
+      "unconstrained_dd": 30.3
+    },
+    {
+      "k": 3,
+      "ranks": [
+        2,
+        4,
+        10
+      ],
+      "total_r": 114.64,
+      "max_dd": 7.67,
+      "calmar": 14.95,
+      "sharpe": 4.04,
+      "avg_corr": 0.668,
+      "total_trades": 1072,
+      "unconstrained_r": 343.9,
+      "unconstrained_dd": 23.0
+    },
+    {
+      "k": 4,
+      "ranks": [
+        2,
+        3,
+        10,
+        11
+      ],
+      "total_r": 111.24,
+      "max_dd": 7.52,
+      "calmar": 14.8,
+      "sharpe": 4.04,
+      "avg_corr": 0.663,
+      "total_trades": 1352,
+      "unconstrained_r": 445.0,
+      "unconstrained_dd": 30.1
+    },
+    {
+      "k": 3,
+      "ranks": [
+        1,
+        2,
+        10
+      ],
+      "total_r": 115.9,
+      "max_dd": 7.87,
+      "calmar": 14.72,
+      "sharpe": 4.05,
+      "avg_corr": 0.676,
+      "total_trades": 1057,
+      "unconstrained_r": 347.7,
+      "unconstrained_dd": 23.6
+    },
+    {
+      "k": 4,
+      "ranks": [
+        2,
+        3,
+        10,
+        14
+      ],
+      "total_r": 107.11,
+      "max_dd": 7.28,
+      "calmar": 14.7,
+      "sharpe": 3.99,
+      "avg_corr": 0.626,
+      "total_trades": 1336,
+      "unconstrained_r": 428.4,
+      "unconstrained_dd": 29.1
+    },
+    {
+      "k": 3,
+      "ranks": [
+        2,
+        10,
+        14
+      ],
+      "total_r": 101.41,
+      "max_dd": 6.93,
+      "calmar": 14.63,
+      "sharpe": 3.98,
+      "avg_corr": 0.588,
+      "total_trades": 960,
+      "unconstrained_r": 304.2,
+      "unconstrained_dd": 20.8
+    },
+    {
+      "k": 4,
+      "ranks": [
+        2,
+        3,
+        9,
+        10
+      ],
+      "total_r": 112.98,
+      "max_dd": 7.78,
+      "calmar": 14.52,
+      "sharpe": 3.97,
+      "avg_corr": 0.703,
+      "total_trades": 1387,
+      "unconstrained_r": 451.9,
+      "unconstrained_dd": 31.1
+    },
+    {
+      "k": 4,
+      "ranks": [
+        2,
+        8,
+        10,
+        15
+      ],
+      "total_r": 102.2,
+      "max_dd": 7.09,
+      "calmar": 14.42,
+      "sharpe": 4.0,
+      "avg_corr": 0.621,
+      "total_trades": 1414,
+      "unconstrained_r": 408.8,
+      "unconstrained_dd": 28.4
+    },
+    {
+      "k": 4,
+      "ranks": [
+        2,
+        4,
+        8,
+        10
+      ],
+      "total_r": 112.48,
+      "max_dd": 7.81,
+      "calmar": 14.41,
+      "sharpe": 4.1,
+      "avg_corr": 0.684,
+      "total_trades": 1334,
+      "unconstrained_r": 449.9,
+      "unconstrained_dd": 31.2
+    }
+  ],
+  "top_fortress": [
+    {
+      "k": 3,
+      "ranks": [
+        2,
+        10,
+        14
+      ],
+      "total_r": 101.41,
+      "max_dd": 6.93,
+      "calmar": 14.63,
+      "sharpe": 3.98,
+      "avg_corr": 0.588,
+      "total_trades": 960,
+      "unconstrained_r": 304.2,
+      "unconstrained_dd": 20.8
+    },
+    {
+      "k": 3,
+      "ranks": [
+        2,
+        10,
+        15
+      ],
+      "total_r": 100.94,
+      "max_dd": 7.06,
+      "calmar": 14.29,
+      "sharpe": 3.84,
+      "avg_corr": 0.611,
+      "total_trades": 1152,
+      "unconstrained_r": 302.8,
+      "unconstrained_dd": 21.2
+    },
+    {
+      "k": 4,
+      "ranks": [
+        2,
+        8,
+        10,
+        15
+      ],
+      "total_r": 102.2,
+      "max_dd": 7.09,
+      "calmar": 14.42,
+      "sharpe": 4.0,
+      "avg_corr": 0.621,
+      "total_trades": 1414,
+      "unconstrained_r": 408.8,
+      "unconstrained_dd": 28.4
+    },
+    {
+      "k": 4,
+      "ranks": [
+        2,
+        10,
+        11,
+        15
+      ],
+      "total_r": 100.36,
+      "max_dd": 7.13,
+      "calmar": 14.07,
+      "sharpe": 3.99,
+      "avg_corr": 0.604,
+      "total_trades": 1406,
+      "unconstrained_r": 401.4,
+      "unconstrained_dd": 28.5
+    },
+    {
+      "k": 4,
+      "ranks": [
+        2,
+        7,
+        10,
+        15
+      ],
+      "total_r": 102.32,
+      "max_dd": 7.17,
+      "calmar": 14.27,
+      "sharpe": 4.05,
+      "avg_corr": 0.596,
+      "total_trades": 1405,
+      "unconstrained_r": 409.3,
+      "unconstrained_dd": 28.7
+    },
+    {
+      "k": 5,
+      "ranks": [
+        2,
+        3,
+        10,
+        12,
+        15
+      ],
+      "total_r": 100.08,
+      "max_dd": 7.17,
+      "calmar": 13.95,
+      "sharpe": 3.86,
+      "avg_corr": 0.601,
+      "total_trades": 2019,
+      "unconstrained_r": 500.4,
+      "unconstrained_dd": 35.9
+    },
+    {
+      "k": 4,
+      "ranks": [
+        2,
+        6,
+        10,
+        15
+      ],
+      "total_r": 102.42,
+      "max_dd": 7.19,
+      "calmar": 14.25,
+      "sharpe": 4.07,
+      "avg_corr": 0.583,
+      "total_trades": 1402,
+      "unconstrained_r": 409.7,
+      "unconstrained_dd": 28.8
+    },
+    {
+      "k": 4,
+      "ranks": [
+        2,
+        3,
+        10,
+        14
+      ],
+      "total_r": 107.11,
+      "max_dd": 7.28,
+      "calmar": 14.7,
+      "sharpe": 3.99,
+      "avg_corr": 0.626,
+      "total_trades": 1336,
+      "unconstrained_r": 428.4,
+      "unconstrained_dd": 29.1
+    },
+    {
+      "k": 4,
+      "ranks": [
+        2,
+        9,
+        10,
+        15
+      ],
+      "total_r": 102.09,
+      "max_dd": 7.32,
+      "calmar": 13.94,
+      "sharpe": 3.93,
+      "avg_corr": 0.64,
+      "total_trades": 1441,
+      "unconstrained_r": 408.4,
+      "unconstrained_dd": 29.3
+    },
+    {
+      "k": 4,
+      "ranks": [
+        2,
+        8,
+        10,
+        14
+      ],
+      "total_r": 102.55,
+      "max_dd": 7.37,
+      "calmar": 13.91,
+      "sharpe": 4.09,
+      "avg_corr": 0.617,
+      "total_trades": 1222,
+      "unconstrained_r": 410.2,
+      "unconstrained_dd": 29.5
+    }
+  ],
+  "best_by_size": [
+    {
+      "k": 3,
+      "ranks": [
+        2,
+        4,
+        10
+      ],
+      "total_r": 114.64,
+      "max_dd": 7.67,
+      "calmar": 14.95,
+      "sharpe": 4.04,
+      "avg_corr": 0.668,
+      "total_trades": 1072,
+      "unconstrained_r": 343.9,
+      "unconstrained_dd": 23.0
+    },
+    {
+      "k": 4,
+      "ranks": [
+        2,
+        3,
+        7,
+        10
+      ],
+      "total_r": 113.2,
+      "max_dd": 7.55,
+      "calmar": 14.99,
+      "sharpe": 4.08,
+      "avg_corr": 0.657,
+      "total_trades": 1351,
+      "unconstrained_r": 452.8,
+      "unconstrained_dd": 30.2
+    },
+    {
+      "k": 5,
+      "ranks": [
+        2,
+        3,
+        8,
+        10,
+        14
+      ],
+      "total_r": 106.89,
+      "max_dd": 7.43,
+      "calmar": 14.39,
+      "sharpe": 4.07,
+      "avg_corr": 0.641,
+      "total_trades": 1598,
+      "unconstrained_r": 534.4,
+      "unconstrained_dd": 37.1
+    },
+    {
+      "k": 6,
+      "ranks": [
+        2,
+        3,
+        7,
+        8,
+        10,
+        15
+      ],
+      "total_r": 106.58,
+      "max_dd": 7.79,
+      "calmar": 13.69,
+      "sharpe": 4.05,
+      "avg_corr": 0.658,
+      "total_trades": 2043,
+      "unconstrained_r": 639.5,
+      "unconstrained_dd": 46.7
+    },
+    {
+      "k": 7,
+      "ranks": [
+        2,
+        3,
+        4,
+        5,
+        8,
+        10,
+        15
+      ],
+      "total_r": 110.6,
+      "max_dd": 8.35,
+      "calmar": 13.24,
+      "sharpe": 4.0,
+      "avg_corr": 0.685,
+      "total_trades": 2508,
+      "unconstrained_r": 774.2,
+      "unconstrained_dd": 58.5
+    },
+    {
+      "k": 8,
+      "ranks": [
+        2,
+        3,
+        4,
+        5,
+        8,
+        10,
+        14,
+        15
+      ],
+      "total_r": 107.04,
+      "max_dd": 8.43,
+      "calmar": 12.69,
+      "sharpe": 4.04,
+      "avg_corr": 0.653,
+      "total_trades": 2746,
+      "unconstrained_r": 856.3,
+      "unconstrained_dd": 67.5
+    },
+    {
+      "k": 9,
+      "ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        8,
+        10,
+        14,
+        15
+      ],
+      "total_r": 109.1,
+      "max_dd": 8.94,
+      "calmar": 12.2,
+      "sharpe": 4.03,
+      "avg_corr": 0.677,
+      "total_trades": 3081,
+      "unconstrained_r": 981.9,
+      "unconstrained_dd": 80.5
+    },
+    {
+      "k": 10,
+      "ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        8,
+        9,
+        10,
+        14,
+        15
+      ],
+      "total_r": 108.74,
+      "max_dd": 9.21,
+      "calmar": 11.81,
+      "sharpe": 4.02,
+      "avg_corr": 0.687,
+      "total_trades": 3370,
+      "unconstrained_r": 1087.4,
+      "unconstrained_dd": 92.1
+    },
+    {
+      "k": 11,
+      "ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        7,
+        8,
+        9,
+        10,
+        14,
+        15
+      ],
+      "total_r": 108.54,
+      "max_dd": 9.47,
+      "calmar": 11.47,
+      "sharpe": 4.05,
+      "avg_corr": 0.686,
+      "total_trades": 3623,
+      "unconstrained_r": 1193.9,
+      "unconstrained_dd": 104.1
+    },
+    {
+      "k": 12,
+      "ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        14,
+        15
+      ],
+      "total_r": 108.4,
+      "max_dd": 9.68,
+      "calmar": 11.2,
+      "sharpe": 4.08,
+      "avg_corr": 0.687,
+      "total_trades": 3873,
+      "unconstrained_r": 1300.8,
+      "unconstrained_dd": 116.2
+    },
+    {
+      "k": 13,
+      "ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        12,
+        14,
+        15
+      ],
+      "total_r": 105.7,
+      "max_dd": 9.66,
+      "calmar": 10.95,
+      "sharpe": 4.08,
+      "avg_corr": 0.658,
+      "total_trades": 4364,
+      "unconstrained_r": 1374.2,
+      "unconstrained_dd": 125.5
+    },
+    {
+      "k": 14,
+      "ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        14,
+        15
+      ],
+      "total_r": 105.2,
+      "max_dd": 9.8,
+      "calmar": 10.73,
+      "sharpe": 4.07,
+      "avg_corr": 0.666,
+      "total_trades": 4618,
+      "unconstrained_r": 1472.8,
+      "unconstrained_dd": 137.3
+    },
+    {
+      "k": 15,
+      "ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ],
+      "total_r": 103.82,
+      "max_dd": 9.99,
+      "calmar": 10.39,
+      "sharpe": 4.11,
+      "avg_corr": 0.647,
+      "total_trades": 4808,
+      "unconstrained_r": 1557.2,
+      "unconstrained_dd": 149.8
+    }
+  ]
+}

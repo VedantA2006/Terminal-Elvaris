@@ -33,6 +33,7 @@ from ai_generator import generate_strategy_code, optimize_strategy_step, get_eng
 from default_strategy import DEFAULT_STRATEGY_CODE
 from monte_carlo import run_monte_carlo
 from leaderboard import load_leaderboard, get_strategy_by_id, add_strategy_to_leaderboard, upgrade_leaderboard_to_mt5_data
+from portfolio_engine import get_portfolio_ensemble_data, build_portfolio_ensemble
 
 app = Flask(__name__)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -79,9 +80,9 @@ def _initialise():
     _cache['val_df'] = val_df
     _cache['test_df'] = test_df
 
-    # 5. Upgrade all leaderboard entries to MT5 broker backtest metrics
+    # 5. Upgrade all leaderboard entries to MT5 broker backtest metrics (2026-only)
     try:
-        upgrade_leaderboard_to_mt5_data(raw_df, train_df, val_df, test_df)
+        upgrade_leaderboard_to_mt5_data(df_2026, train_df, val_df, test_df)
     except Exception as e:
         print(f"      [Leaderboard Upgrade Notice]: {e}")
 
@@ -311,9 +312,9 @@ def api_ai_optimize_step():
 
 @app.route('/api/leaderboard', methods=['GET'])
 def api_leaderboard():
-    """Returns ranked strategies list with monthly R and Monte Carlo metrics."""
+    """Returns ranked strategies list with monthly R and Monte Carlo metrics (2026 only)."""
     _initialise()
-    board = load_leaderboard(_cache.get('raw_df'))
+    board = load_leaderboard(_cache.get('df_2026'))
     return jsonify({'success': True, 'leaderboard': board})
 
 
@@ -332,7 +333,7 @@ def api_leaderboard_load():
     if not strat and (idx is not None or strat_id.isdigit()):
         try:
             target_idx = int(idx if idx is not None else strat_id)
-            lb = load_leaderboard(_cache['raw_df'])
+            lb = load_leaderboard(_cache.get('df_2026'))
             if 0 <= target_idx < len(lb):
                 strat = lb[target_idx]
         except Exception:
@@ -567,6 +568,24 @@ def api_engine_status():
         'research_active': research_manager.status == 'running',
         'research_status': research_manager.status
     })
+
+
+@app.route('/api/portfolio/ensemble', methods=['GET'])
+def api_portfolio_ensemble():
+    try:
+        data = get_portfolio_ensemble_data()
+        return jsonify({'success': True, 'portfolio': data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/portfolio/rebuild', methods=['POST'])
+def api_portfolio_rebuild():
+    try:
+        data = build_portfolio_ensemble()
+        return jsonify({'success': True, 'portfolio': data, 'message': 'Portfolio ensemble rebuilt successfully across 2026 MT5 data.'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # ---------------------------------------------------------------------------
