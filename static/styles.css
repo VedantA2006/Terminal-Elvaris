@@ -2970,6 +2970,48 @@ body.tv-theme-dark {
     flex-shrink: 0;
 }
 
+.ql-sentinel-thresh-group {
+    display: flex;
+    align-items: center;
+    background: #181b27;
+    border: 1px solid #282d3c;
+    border-radius: 4px;
+    padding: 2px 4px;
+    gap: 3px;
+}
+
+.ql-thresh-label {
+    font-size: 10px;
+    color: #9ca3af;
+    font-weight: 600;
+    margin-right: 2px;
+    padding-left: 2px;
+}
+
+.btn-thresh-pill {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #9ca3af;
+    border-radius: 3px;
+    padding: 2px 7px;
+    font-size: 10.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-thresh-pill:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.btn-thresh-pill.active {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #3b82f6;
+    box-shadow: 0 0 8px rgba(37, 99, 235, 0.4);
+}
+
 .btn-sentinel-diag {
     background: #1e222d;
     border: 1px solid #363c4e;

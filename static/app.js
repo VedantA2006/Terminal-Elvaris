@@ -2478,12 +2478,17 @@ async function pollResearchStatus() {
             btnSentOverride.style.display = isSaturated ? 'inline-flex' : 'none';
         }
 
+        // Threshold Pills Sync
+        const curThresh = sent.threshold || 25;
+        document.querySelectorAll('.btn-thresh-pill').forEach(p => p.classList.remove('active'));
+        document.getElementById('btnThresh' + curThresh)?.classList.add('active');
+
         // Modal Stats Synchronize
         const modalRoundsDry = document.getElementById('modalRoundsDry');
         const modalTokensSaved = document.getElementById('modalTokensSaved');
         const modalAlertBox = document.getElementById('modalSentinelAlertBox');
         if (modalRoundsDry) {
-            modalRoundsDry.textContent = `${sent.rounds_since_breakthrough || 0} / ${sent.threshold || 15}`;
+            modalRoundsDry.textContent = `${sent.rounds_since_breakthrough || 0} / ${curThresh}`;
         }
         if (modalTokensSaved) {
             modalTokensSaved.textContent = `~${(sent.tokens_saved_estimate || 0).toLocaleString()} Tokens`;
@@ -2511,6 +2516,25 @@ function closeSentinelModal() {
     const modal = document.getElementById('sentinelModal');
     if (modal) {
         modal.style.display = 'none';
+    }
+}
+
+async function setSentinelThreshold(val) {
+    try {
+        const res = await fetch('/api/research/set_sentinel_threshold', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ threshold: val })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.success) {
+            showToast(`⚡ Sentinel threshold set to ${val} rounds`, 'info');
+            document.querySelectorAll('.btn-thresh-pill').forEach(p => p.classList.remove('active'));
+            document.getElementById('btnThresh' + val)?.classList.add('active');
+            pollResearchStatus();
+        }
+    } catch (err) {
+        console.error('Error updating sentinel threshold:', err);
     }
 }
 

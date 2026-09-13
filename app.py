@@ -547,6 +547,18 @@ def api_research_override_sentinel():
     return jsonify(res)
 
 
+@app.route('/api/research/set_sentinel_threshold', methods=['POST'])
+def api_research_set_sentinel_threshold():
+    data = request.get_json(silent=True) or {}
+    threshold = int(data.get('threshold', 25))
+    new_val = research_manager.set_sentinel_threshold(threshold)
+    return jsonify({
+        'success': True,
+        'threshold': new_val,
+        'sentinel': research_manager.get_sentinel_status()
+    })
+
+
 @app.route('/api/engine/status')
 def api_engine_status():
     return jsonify({

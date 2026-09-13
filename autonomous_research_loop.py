@@ -93,10 +93,10 @@ class ResearchLoopManager:
         # Pre-LLM Negative Parameter Cache to eliminate duplicate footprints
         self.recent_param_signatures: Dict[str, List[str]] = {}
 
-        # 15-Round Plateau Detection & Auto-Mutation Shift
+        # 25-Round Plateau Detection & Auto-Mutation Shift (Optimal Archetype Coverage)
         self.rounds_since_top15_beat: int = 0
         self._last_round_added_to_top15: bool = False
-        self.sentinel_threshold: int = 15
+        self.sentinel_threshold: int = 25
         self.override_saturation: bool = False
 
         self._raw_df: Optional[pd.DataFrame] = None
@@ -305,6 +305,14 @@ class ResearchLoopManager:
             self.rounds_since_top15_beat = 0
             self._log("⚡ Alpha Sentinel", "User override activated: Alpha saturation guard bypassed. Exploration authorized.", "info")
             return {"success": True, "message": "Sentinel overridden. Plateau counter reset to 0."}
+
+    def set_sentinel_threshold(self, threshold: int) -> int:
+        """Sets the consecutive dry rounds threshold before alpha saturation auto-pause."""
+        with self._lock:
+            val = max(5, min(int(threshold), 500))
+            self.sentinel_threshold = val
+            self._log("⚡ Alpha Sentinel", f"Sentinel sensitivity threshold updated to {val} rounds.", "info")
+            return self.sentinel_threshold
 
     def get_state(self) -> Dict[str, Any]:
         """Returns snapshot of current research progress and live engine telemetry."""

@@ -736,8 +736,14 @@
                                     </p>
                                 </div>
                                 <div class="ql-sentinel-actions">
+                                    <div class="ql-sentinel-thresh-group" title="Consecutive dry rounds threshold before auto-pause">
+                                        <span class="ql-thresh-label">Threshold:</span>
+                                        <button type="button" class="btn-thresh-pill" id="btnThresh15" onclick="setSentinelThreshold(15)" title="15 Rounds: Fast compute guard">15 (Fast)</button>
+                                        <button type="button" class="btn-thresh-pill active" id="btnThresh25" onclick="setSentinelThreshold(25)" title="25 Rounds (Recommended): Optimal archetype coverage">25 (Best)</button>
+                                        <button type="button" class="btn-thresh-pill" id="btnThresh50" onclick="setSentinelThreshold(50)" title="50 Rounds: Deep overnight search">50 (Deep)</button>
+                                    </div>
                                     <button type="button" class="btn-sentinel-diag" id="btnOpenSentinelModal" onclick="openSentinelModal()">
-                                        📋 View Diagnostics & Upgrades
+                                        📋 Diagnostics
                                     </button>
                                     <button type="button" class="btn-sentinel-override" id="btnSentinelOverride" onclick="overrideSentinel()" style="display:none;" title="Force continue exploration anyway">
                                         ⚡ Override & Force Explore
