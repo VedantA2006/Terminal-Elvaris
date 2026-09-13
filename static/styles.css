@@ -2818,3 +2818,495 @@ body.tv-theme-dark {
     border-color: #2962ff;
     color: #ffffff;
 }
+
+/* ==========================================================================
+   ALPHA SATURATION & CODEBASE UPGRADE SENTINEL STYLES
+   ========================================================================== */
+
+/* 1. Header & Leaderboard Sentinel Pill */
+.tv-sentinel-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid #ef4444;
+    color: #fca5a5;
+    animation: sentinel-pulse 2s infinite ease-in-out;
+    transition: all 0.2s ease;
+}
+
+.tv-sentinel-pill:hover {
+    background: rgba(239, 68, 68, 0.32);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+@keyframes sentinel-pulse {
+    0%, 100% {
+        box-shadow: 0 0 4px rgba(239, 68, 68, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+    }
+}
+
+/* 2. Quant Lab Sentinel Card */
+.ql-sentinel-card {
+    background: #141722;
+    border: 1px solid #232738;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.3s ease, background 0.3s ease;
+}
+
+.ql-sentinel-card.saturated {
+    background: linear-gradient(180deg, rgba(239, 68, 68, 0.08) 0%, #141722 100%);
+    border-color: rgba(239, 68, 68, 0.4);
+    box-shadow: 0 2px 14px rgba(239, 68, 68, 0.12);
+}
+
+.ql-sentinel-card.warning {
+    background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, #141722 100%);
+    border-color: rgba(245, 158, 11, 0.35);
+}
+
+.ql-sentinel-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.ql-sentinel-badge-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.ql-sentinel-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.ql-sentinel-indicator.optimal {
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.ql-sentinel-indicator.warning {
+    background: #f59e0b;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.7);
+}
+
+.ql-sentinel-indicator.saturated {
+    background: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.9);
+    animation: sentinel-dot-blink 1s infinite alternate;
+}
+
+@keyframes sentinel-dot-blink {
+    0% { opacity: 0.4; }
+    100% { opacity: 1; }
+}
+
+.ql-sentinel-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #e5e7eb;
+}
+
+.ql-sentinel-tag {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+}
+
+.ql-sentinel-tag.optimal {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.ql-sentinel-tag.warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.ql-sentinel-tag.saturated {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    animation: sentinel-pulse 2s infinite;
+}
+
+.ql-sentinel-sub {
+    font-size: 11px;
+    color: #9ca3af;
+    line-height: 1.45;
+    margin: 0;
+}
+
+.ql-sentinel-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.btn-sentinel-diag {
+    background: #1e222d;
+    border: 1px solid #363c4e;
+    color: #d1d4dc;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-sentinel-diag:hover {
+    background: #2a2e39;
+    border-color: #2962ff;
+    color: #ffffff;
+}
+
+.btn-sentinel-override {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid #ef4444;
+    color: #fca5a5;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-sentinel-override:hover {
+    background: #ef4444;
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+.ql-sentinel-meter-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ql-sentinel-bar-wrap {
+    width: 100%;
+    height: 6px;
+    background: #1e222d;
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid #282d3c;
+}
+
+.ql-sentinel-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease, background-color 0.4s ease;
+    background: #10b981;
+}
+
+.ql-sentinel-bar.warning {
+    background: #f59e0b;
+}
+
+.ql-sentinel-bar.saturated {
+    background: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
+}
+
+.ql-sentinel-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10.5px;
+    color: #9ca3af;
+    font-family: var(--tv-font-mono);
+}
+
+.ql-tokens-saved {
+    color: #6ee7b7;
+    font-weight: 600;
+}
+
+/* 3. Sentinel Modal Dialog */
+.sentinel-modal-container {
+    max-width: 780px !important;
+    background: #131722 !important;
+    border: 1px solid #2a2e39 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.75) !important;
+}
+
+.sentinel-header {
+    background: #181b27;
+    border-bottom: 1px solid #2a2e39;
+    padding: 14px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sentinel-header-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sentinel-icon-glow {
+    font-size: 20px;
+    filter: drop-shadow(0 0 6px #f59e0b);
+}
+
+.sentinel-header-title h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: #f3f4f6;
+}
+
+.sentinel-badge-sub {
+    font-size: 10px;
+    font-weight: 700;
+    color: #93c5fd;
+    letter-spacing: 0.05em;
+}
+
+.sentinel-modal-body {
+    padding: 20px;
+    max-height: 72vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.sentinel-alert-box {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 6px;
+    padding: 14px 16px;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+}
+
+.sentinel-alert-box.optimal {
+    background: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.35);
+}
+
+.sentinel-alert-box.warning {
+    background: rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, 0.35);
+}
+
+.sentinel-alert-icon {
+    font-size: 24px;
+    line-height: 1;
+}
+
+.sentinel-alert-content strong {
+    display: block;
+    font-size: 13.5px;
+    color: #fca5a5;
+    margin-bottom: 4px;
+}
+
+.sentinel-alert-box.optimal .sentinel-alert-content strong {
+    color: #34d399;
+}
+
+.sentinel-alert-box.warning .sentinel-alert-content strong {
+    color: #fbbf24;
+}
+
+.sentinel-alert-content p {
+    font-size: 11.5px;
+    color: #d1d5db;
+    line-height: 1.45;
+    margin: 0 0 10px 0;
+}
+
+.sentinel-stats-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.sentinel-stat-chip {
+    background: #1e222d;
+    border: 1px solid #363c4e;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 11px;
+    display: flex;
+    gap: 6px;
+}
+
+.chip-label {
+    color: #9ca3af;
+}
+
+.chip-val {
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.chip-val.highlight {
+    color: #34d399;
+}
+
+.sentinel-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f3f4f6;
+    border-left: 3px solid #2962ff;
+    padding-left: 8px;
+}
+
+.sentinel-section-desc {
+    font-size: 11.5px;
+    color: #9ca3af;
+    line-height: 1.45;
+    margin: -8px 0 4px 0;
+}
+
+.sentinel-upgrades-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sentinel-upgrade-card {
+    background: #181b27;
+    border: 1px solid #282d3c;
+    border-radius: 6px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+
+.sentinel-upgrade-card:hover {
+    border-color: #3b82f6;
+    background: #1c2030;
+    transform: translateY(-1px);
+}
+
+.suc-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.suc-title {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #e5e7eb;
+}
+
+.suc-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.suc-badge.high { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+.suc-badge.inst { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); }
+.suc-badge.liq  { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+.suc-badge.risk { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+.suc-badge.alpha { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); }
+
+.suc-desc {
+    font-size: 11.5px;
+    color: #9ca3af;
+    line-height: 1.4;
+    margin: 0;
+}
+
+.suc-target {
+    font-size: 10.5px;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.suc-target code {
+    font-family: var(--tv-font-mono);
+    color: #93c5fd;
+    background: #11141e;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+.sentinel-efficiency-tip {
+    background: rgba(41, 98, 255, 0.08);
+    border: 1px solid rgba(41, 98, 255, 0.25);
+    border-radius: 6px;
+    padding: 10px 14px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    font-size: 11.5px;
+    color: #d1d5db;
+    line-height: 1.4;
+}
+
+.tip-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.sentinel-modal-footer {
+    background: #181b27;
+    border-top: 1px solid #2a2e39;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.modal-btn-warning {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.4);
+}
+
+.modal-btn-warning:hover {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.6);
+    transform: translateY(-1px);
+}

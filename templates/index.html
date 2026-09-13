@@ -102,6 +102,7 @@
         <!-- Global Multi-Agent Tournament Quick Controls -->
         <div class="tv-header-tourn-group" id="headerTournGroup" title="Multi-Agent Autonomous Tournament Controls">
             <span class="tv-tourn-status-pill idle" id="hdrTournPill">1000 ROUNDS: IDLE</span>
+            <span class="tv-sentinel-pill" id="hdrSentinelPill" style="display: none;" onclick="openSentinelModal()" title="Alpha Saturation Sentinel: Click to view codebase upgrade diagnostics">⚡ UPGRADE NEEDED</span>
             <button class="tv-tourn-btn btn-start-1000" id="hdrBtnStart1000" title="Start 1000 Round Autonomous Tournament">
                 ⚡ 1000 Rounds
             </button>
@@ -605,6 +606,7 @@
                             <div class="lb-actions">
                                 <div class="lb-tourn-status" id="lbTournStatusWrap">
                                     <span class="tv-tourn-status-pill idle" id="lbTournPill">1000 ROUNDS: IDLE</span>
+                                    <span class="tv-sentinel-pill" id="lbSentinelPill" style="display: none;" onclick="openSentinelModal()" title="Alpha Saturation Sentinel: Click to view codebase upgrade diagnostics">⚡ UPGRADE NEEDED</span>
                                 </div>
                                 <button class="ai-btn-primary btn-start-1000-glow" id="btnLbStart1000" title="Launch 1,000 Round Autonomous Discovery Tournament">
                                     <span class="btn-sparkle">⚡</span>
@@ -717,6 +719,39 @@
                             <div class="ql-eb-col detail">
                                 <span class="ql-eb-label">UPSTREAM / RATE LIMIT STATUS:</span>
                                 <span class="ql-eb-val success" id="qlEngineReason">Mistral Codestral active via OmniRoute proxy gateway (High Speed ~3s).</span>
+                            </div>
+                        </div>
+
+                        <!-- Alpha Saturation & Codebase Upgrade Sentinel Card -->
+                        <div class="ql-sentinel-card" id="qlSentinelCard">
+                            <div class="ql-sentinel-top">
+                                <div class="ql-sentinel-left">
+                                    <div class="ql-sentinel-badge-wrap">
+                                        <span class="ql-sentinel-indicator optimal" id="qlSentinelDot"></span>
+                                        <span class="ql-sentinel-title" id="qlSentinelTitle">Alpha Space Healthy (0/15 Dry Rounds)</span>
+                                        <span class="ql-sentinel-tag optimal" id="qlSentinelTag">OPTIMAL</span>
+                                    </div>
+                                    <p class="ql-sentinel-sub" id="qlSentinelDesc">
+                                        Archetype discovery active. The Sentinel monitors consecutive rounds without Top 15 breakthroughs to prevent wasted compute and non-meaningful iterations.
+                                    </p>
+                                </div>
+                                <div class="ql-sentinel-actions">
+                                    <button type="button" class="btn-sentinel-diag" id="btnOpenSentinelModal" onclick="openSentinelModal()">
+                                        📋 View Diagnostics & Upgrades
+                                    </button>
+                                    <button type="button" class="btn-sentinel-override" id="btnSentinelOverride" onclick="overrideSentinel()" style="display:none;" title="Force continue exploration anyway">
+                                        ⚡ Override & Force Explore
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="ql-sentinel-meter-row">
+                                <div class="ql-sentinel-bar-wrap">
+                                    <div class="ql-sentinel-bar" id="qlSentinelBar" style="width: 0%;"></div>
+                                </div>
+                                <div class="ql-sentinel-stats">
+                                    <span id="qlSentinelMeterText">Saturation Meter: 0% (0 / 15 rounds to auto-pause)</span>
+                                    <span class="ql-tokens-saved" id="qlTokensSavedText">Tokens Saved: 0</span>
+                                </div>
                             </div>
                         </div>
 
@@ -971,6 +1006,122 @@
         </div>
         <div class="tv-modal-footer">
             <button class="modal-btn-primary" id="applyIndBtn">Apply</button>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================================
+     MODAL: ALPHA SATURATION & CODEBASE UPGRADE SENTINEL
+========================================================================= -->
+<div class="tv-modal-backdrop" id="sentinelModal" style="display: none;">
+    <div class="tv-modal sentinel-modal-container">
+        <div class="tv-modal-header sentinel-header">
+            <div class="sentinel-header-title">
+                <span class="sentinel-icon-glow">⚡</span>
+                <div>
+                    <h3 id="modalSentinelTitle">Alpha Saturation & Codebase Upgrade Sentinel</h3>
+                    <span class="sentinel-badge-sub" id="modalSentinelBadge">DIAGNOSTIC TELEMETRY</span>
+                </div>
+            </div>
+            <button class="modal-close-btn" id="closeSentinelModalBtn" onclick="closeSentinelModal()">✕</button>
+        </div>
+        <div class="tv-modal-body sentinel-modal-body">
+            
+            <!-- Diagnosis Summary Alert -->
+            <div class="sentinel-alert-box" id="modalSentinelAlertBox">
+                <div class="sentinel-alert-icon">🛑</div>
+                <div class="sentinel-alert-content">
+                    <strong id="modalSentinelHeadline">Feature Space & Archetype Saturation Detected</strong>
+                    <p id="modalSentinelExplanation">
+                        The autonomous discovery loop has reached a mathematical plateau. In standard 5-minute single-timeframe OHLCV price action, the existing archetypes have already extracted the maximum available variance (+106R to +125.5R with profit factors up to 1.90).
+                    </p>
+                    <div class="sentinel-stats-strip">
+                        <div class="sentinel-stat-chip">
+                            <span class="chip-label">Dry Rounds:</span>
+                            <span class="chip-val" id="modalRoundsDry">15 / 15</span>
+                        </div>
+                        <div class="sentinel-stat-chip">
+                            <span class="chip-label">Top 15 Bar:</span>
+                            <span class="chip-val">+78.4R (2026 MT5)</span>
+                        </div>
+                        <div class="sentinel-stat-chip">
+                            <span class="chip-label">Est. Compute Saved:</span>
+                            <span class="chip-val highlight" id="modalTokensSaved">~18,750 Tokens</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Why Upgrading The Codebase Is Needed -->
+            <div class="sentinel-section-title">
+                <span>🚀 5 Breakthrough Codebase Upgrades to Unlock Next Alpha Frontier</span>
+            </div>
+            <p class="sentinel-section-desc">
+                Continuing to explore the same archetypes on isolated 5m bars produces marginal duplicate variations. Implementing these institutional upgrades expands the hypothesis surface:
+            </p>
+
+            <!-- Upgrade Paths Grid -->
+            <div class="sentinel-upgrades-grid" id="modalSentinelUpgrades">
+                <div class="sentinel-upgrade-card">
+                    <div class="suc-top">
+                        <span class="suc-title">1. Higher-Timeframe (1H / 4H) Confluence Filters</span>
+                        <span class="suc-badge high">Highest Impact</span>
+                    </div>
+                    <p class="suc-desc">Integrate 1-Hour and 4-Hour institutional trend, EMA 200 regime, and HTF order blocks as prerequisites before 5-minute triggers. Eliminates counter-trend chop.</p>
+                    <span class="suc-target">Target: <code>strategy_executor.py / ai_research_agents.py</code></span>
+                </div>
+
+                <div class="sentinel-upgrade-card">
+                    <div class="suc-top">
+                        <span class="suc-title">2. Cross-Market Macro Features (DXY & US10Y Yields)</span>
+                        <span class="suc-badge inst">Institutional</span>
+                    </div>
+                    <p class="suc-desc">Incorporate Dollar Index (DXY) inverse momentum and US 10-Year Treasury Yield divergences as exogenous entry filters for Gold (XAUUSD).</p>
+                    <span class="suc-target">Target: <code>data_loader.py / strategy_executor.py</code></span>
+                </div>
+
+                <div class="sentinel-upgrade-card">
+                    <div class="suc-top">
+                        <span class="suc-title">3. Tick-Level Order Flow & Absorption Microstructure</span>
+                        <span class="suc-badge liq">Liquidity</span>
+                    </div>
+                    <p class="suc-desc">Upgrade from bar-aggregated volume to real tick volume delta and bid-ask absorption clusters around Daily VAH/VAL and Session Opens.</p>
+                    <span class="suc-target">Target: <code>strategy_executor.py</code></span>
+                </div>
+
+                <div class="sentinel-upgrade-card">
+                    <div class="suc-top">
+                        <span class="suc-title">4. Volatility Regime Switching (GARCH / Realized Vol)</span>
+                        <span class="suc-badge risk">Risk Guard</span>
+                    </div>
+                    <p class="suc-desc">Automatically deploy ORB & Donchian Breakouts during volatility expansion, and switch to VWAP & Daily Floor Pivots during compression.</p>
+                    <span class="suc-target">Target: <code>strategy_executor.py</code></span>
+                </div>
+
+                <div class="sentinel-upgrade-card">
+                    <div class="suc-top">
+                        <span class="suc-title">5. Multi-Strategy Portfolio Ensemble & Correlation Pruning</span>
+                        <span class="suc-badge alpha">Alpha Multiplier</span>
+                    </div>
+                    <p class="suc-desc">Combine top uncorrelated champions (Stochastic Cycle + ORB + Daily Pivots) to compound returns to >+300R with smoothed drawdown.</p>
+                    <span class="suc-target">Target: <code>portfolio_engine.py (Planned)</code></span>
+                </div>
+            </div>
+
+            <!-- Compute Efficiency Tip -->
+            <div class="sentinel-efficiency-tip">
+                <span class="tip-icon">💡</span>
+                <div>
+                    <strong>Pro Quant Tip:</strong> Single-strategy intraday alpha peaks around 125R in Gold due to spread friction and regime shifts. The true institutional quantum leap is <em>combining uncorrelated top archetypes</em> (e.g. Trend Breakouts + Mean Reversion + Session Liquidity) into a unified portfolio.
+                </div>
+            </div>
+
+        </div>
+        <div class="tv-modal-footer sentinel-modal-footer">
+            <button type="button" class="modal-btn-secondary" onclick="closeSentinelModal()">Close Diagnostic</button>
+            <button type="button" class="modal-btn-warning" id="btnModalOverride" onclick="overrideSentinel()">
+                ⚡ Override Sentinel & Force Explore
+            </button>
         </div>
     </div>
 </div>

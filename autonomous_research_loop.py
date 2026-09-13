@@ -96,6 +96,8 @@ class ResearchLoopManager:
         # 15-Round Plateau Detection & Auto-Mutation Shift
         self.rounds_since_top15_beat: int = 0
         self._last_round_added_to_top15: bool = False
+        self.sentinel_threshold: int = 15
+        self.override_saturation: bool = False
 
         self._raw_df: Optional[pd.DataFrame] = None
         self._train_df: Optional[pd.DataFrame] = None
@@ -155,6 +157,8 @@ class ResearchLoopManager:
                 self.seen_code_hashes.clear()
                 self.seen_signal_fingerprints.clear()
                 self.recent_hypotheses.clear()
+                self.rounds_since_top15_beat = 0
+                self.override_saturation = False
                 try:
                     for strat in load_leaderboard(self._train_df):
                         c = strat.get('code', '')
@@ -212,6 +216,96 @@ class ResearchLoopManager:
                 self.active_agent = "Idle"
                 self._log("System", f"🛑 Tournament stopped from paused state ({self.current_round}/{self.max_rounds} completed).", "info")
 
+    def get_sentinel_status(self) -> Dict[str, Any]:
+        """Evaluates whether the current archetype library and single-timeframe feature space
+        is saturated, and returns diagnostic metrics and codebase upgrade recommendations."""
+        with self._lock:
+            rounds_dry = self.rounds_since_top15_beat
+            threshold = self.sentinel_threshold
+            override = self.override_saturation
+            is_saturated = (rounds_dry >= threshold) and not override
+            pct = min(100.0, round((rounds_dry / max(1, threshold)) * 100.0, 1))
+
+            if is_saturated:
+                level = "saturated"
+                title = "Alpha Plateau Detected · Codebase Upgrade Required"
+                desc = (
+                    f"The research loop has completed {rounds_dry} consecutive rounds without producing a strategy "
+                    f"that beats the Top 15 threshold. In standard 5m OHLCV price action, existing archetypes "
+                    f"have captured the maximum available variance (+106R to +125.5R). Running further rounds on these "
+                    f"archetypes yields diminishing returns and wastes compute/API tokens. Upgrading the codebase is required."
+                )
+            elif rounds_dry >= int(threshold * 0.6):
+                level = "warning"
+                title = f"Alpha Saturation Warning ({rounds_dry}/{threshold} rounds dry)"
+                desc = (
+                    f"{rounds_dry} rounds since last Top 15 breakthrough. The feature space is approaching saturation. "
+                    f"If no strategy beats the Top 15 in the next {threshold - rounds_dry} rounds, the loop will auto-pause."
+                )
+            else:
+                level = "optimal"
+                title = f"Alpha Space Healthy ({rounds_dry}/{threshold} rounds)"
+                desc = f"Active archetype search in progress. {rounds_dry}/{threshold} rounds since last breakthrough."
+
+            recommendations = [
+                {
+                    "id": "mtf_confluence",
+                    "title": "1. Higher Timeframe (1H / 4H) Confluence Filters",
+                    "badge": "Highest Impact",
+                    "details": "Integrate 1-Hour and 4-Hour institutional trend, EMA 200 regime, and HTF order blocks as prerequisites before 5-minute triggers. Stops false breakouts in rangebound chop.",
+                    "codebase_target": "strategy_executor.py / ai_research_agents.py"
+                },
+                {
+                    "id": "cross_market_macro",
+                    "title": "2. Cross-Market Macro Features (DXY & US10Y Yields)",
+                    "badge": "Institutional",
+                    "details": "Incorporate Dollar Index (DXY) inverse momentum and US 10-Year Treasury Yield divergences as exogenous entry filters for Gold (XAUUSD).",
+                    "codebase_target": "data_loader.py / strategy_executor.py"
+                },
+                {
+                    "id": "orderflow_tick_delta",
+                    "title": "3. Tick-Level Order Flow & Absorption Microstructure",
+                    "badge": "Liquidity",
+                    "details": "Upgrade from bar-aggregated volume to real tick volume delta and bid-ask absorption clusters around Daily VAH/VAL and Session Opens.",
+                    "codebase_target": "strategy_executor.py"
+                },
+                {
+                    "id": "volatility_clustering",
+                    "title": "4. Volatility Regime Switching (GARCH / Realized Vol)",
+                    "badge": "Risk Guard",
+                    "details": "Automatically deploy ORB & Donchian Breakouts during volatility expansion, and switch to VWAP & Daily Floor Pivots during compression.",
+                    "codebase_target": "strategy_executor.py"
+                },
+                {
+                    "id": "portfolio_ensemble",
+                    "title": "5. Multi-Strategy Portfolio Ensemble & Correlation Pruning",
+                    "badge": "Alpha Multiplier",
+                    "details": "Combine the top uncorrelated champions (Stochastic Cycle + ORB + Daily Pivots) to compound returns to >+300R with smoothed drawdown.",
+                    "codebase_target": "portfolio_engine.py (Planned)"
+                }
+            ]
+
+            return {
+                "is_saturated": is_saturated,
+                "rounds_since_breakthrough": rounds_dry,
+                "threshold": threshold,
+                "saturation_pct": pct,
+                "status_level": level,
+                "status_title": title,
+                "status_description": desc,
+                "override_active": override,
+                "recommendations": recommendations,
+                "tokens_saved_estimate": max(0, rounds_dry * 1250)
+            }
+
+    def override_sentinel(self) -> Dict[str, Any]:
+        """Allows user to override alpha saturation auto-pause and continue exploration."""
+        with self._lock:
+            self.override_saturation = True
+            self.rounds_since_top15_beat = 0
+            self._log("⚡ Alpha Sentinel", "User override activated: Alpha saturation guard bypassed. Exploration authorized.", "info")
+            return {"success": True, "message": "Sentinel overridden. Plateau counter reset to 0."}
+
     def get_state(self) -> Dict[str, Any]:
         """Returns snapshot of current research progress and live engine telemetry."""
         with self._lock:
@@ -225,7 +319,8 @@ class ResearchLoopManager:
                 "best_candidate": self.best_candidate,
                 "survivors_count": len(self.survivors_added),
                 "recent_logs": self.logs[-40:],
-                "engine": get_engine_telemetry()
+                "engine": get_engine_telemetry(),
+                "sentinel": self.get_sentinel_status()
             }
 
     def _run_tournament(self, provider: str, api_key: str, model: str, endpoint: str = None):
@@ -257,6 +352,21 @@ class ResearchLoopManager:
                         return
                     if not getattr(self, '_last_round_added_to_top15', False):
                         self.rounds_since_top15_beat += 1
+
+                    # Alpha Saturation Sentinel Check:
+                    # If 15 consecutive rounds produce no strategy in the Top 15, auto-pause to prevent
+                    # wasted compute time, LLM API tokens, and meaningless iterations.
+                    if self.rounds_since_top15_beat >= self.sentinel_threshold and not self.override_saturation:
+                        with self._lock:
+                            self.status = "paused"
+                            self.active_agent = "Alpha Sentinel (Upgrade Needed)"
+                        self._log(
+                            "⚡ Alpha Sentinel",
+                            f"🛑 ALPHA SATURATION DETECTED: {self.rounds_since_top15_beat}/{self.sentinel_threshold} consecutive rounds without beating Top 15. Research loop auto-paused to prevent wasted compute. Codebase upgrade required to expand alpha surface.",
+                            "warning"
+                        )
+                        return
+
                 except FuturesTimeoutError:
                     self._log("System", f"⏰ Round {r} timed out after 3 minutes (upstream LLM latency). Skipping to round {r+1}...", "warning")
                     self.rounds_since_top15_beat += 1

@@ -2413,8 +2413,131 @@ async function pollResearchStatus() {
             stream.scrollTop = stream.scrollHeight;
         }
 
+        // 5. Alpha Saturation & Codebase Upgrade Sentinel Telemetry
+        const sent = data.sentinel || {};
+        const isSaturated = Boolean(sent.is_saturated);
+        const sentLevel = sent.status_level || 'optimal';
+
+        // Header and Leaderboard Pills
+        const hdrSentPill = document.getElementById('hdrSentinelPill');
+        const lbSentPill = document.getElementById('lbSentinelPill');
+        [hdrSentPill, lbSentPill].forEach(pillEl => {
+            if (pillEl) {
+                if (isSaturated) {
+                    pillEl.style.display = 'inline-flex';
+                    pillEl.textContent = '⚡ UPGRADE NEEDED';
+                    pillEl.title = `Alpha Saturation reached (${sent.rounds_since_breakthrough}/${sent.threshold} dry rounds). Click to view required codebase upgrades.`;
+                } else if (sent.rounds_since_breakthrough >= 10) {
+                    pillEl.style.display = 'inline-flex';
+                    pillEl.textContent = `⚡ PLATEAU RISK (${sent.rounds_since_breakthrough}/${sent.threshold})`;
+                    pillEl.title = `${sent.rounds_since_breakthrough} rounds without Top 15 breakthrough. Auto-pause imminent. Click to inspect.`;
+                } else {
+                    pillEl.style.display = 'none';
+                }
+            }
+        });
+
+        // Quant Lab Sentinel Card
+        const qlSentCard = document.getElementById('qlSentinelCard');
+        const qlSentDot = document.getElementById('qlSentinelDot');
+        const qlSentTitle = document.getElementById('qlSentinelTitle');
+        const qlSentTag = document.getElementById('qlSentinelTag');
+        const qlSentDesc = document.getElementById('qlSentinelDesc');
+        const qlSentBar = document.getElementById('qlSentinelBar');
+        const qlSentMeterText = document.getElementById('qlSentinelMeterText');
+        const qlTokensSavedText = document.getElementById('qlTokensSavedText');
+        const btnSentOverride = document.getElementById('btnSentinelOverride');
+
+        if (qlSentCard) {
+            qlSentCard.className = `ql-sentinel-card ${sentLevel}`;
+        }
+        if (qlSentDot) {
+            qlSentDot.className = `ql-sentinel-indicator ${sentLevel}`;
+        }
+        if (qlSentTitle) {
+            qlSentTitle.textContent = sent.status_title || 'Alpha Space Healthy';
+        }
+        if (qlSentTag) {
+            qlSentTag.className = `ql-sentinel-tag ${sentLevel}`;
+            qlSentTag.textContent = (sentLevel || 'optimal').toUpperCase();
+        }
+        if (qlSentDesc) {
+            qlSentDesc.textContent = sent.status_description || 'Archetype discovery active.';
+        }
+        if (qlSentBar) {
+            qlSentBar.style.width = `${sent.saturation_pct || 0}%`;
+            qlSentBar.className = `ql-sentinel-bar ${sentLevel}`;
+        }
+        if (qlSentMeterText) {
+            qlSentMeterText.textContent = `Saturation Meter: ${sent.saturation_pct || 0}% (${sent.rounds_since_breakthrough || 0} / ${sent.threshold || 15} rounds to auto-pause)`;
+        }
+        if (qlTokensSavedText) {
+            qlTokensSavedText.textContent = `Est. Tokens Protected: ~${(sent.tokens_saved_estimate || 0).toLocaleString()}`;
+        }
+        if (btnSentOverride) {
+            btnSentOverride.style.display = isSaturated ? 'inline-flex' : 'none';
+        }
+
+        // Modal Stats Synchronize
+        const modalRoundsDry = document.getElementById('modalRoundsDry');
+        const modalTokensSaved = document.getElementById('modalTokensSaved');
+        const modalAlertBox = document.getElementById('modalSentinelAlertBox');
+        if (modalRoundsDry) {
+            modalRoundsDry.textContent = `${sent.rounds_since_breakthrough || 0} / ${sent.threshold || 15}`;
+        }
+        if (modalTokensSaved) {
+            modalTokensSaved.textContent = `~${(sent.tokens_saved_estimate || 0).toLocaleString()} Tokens`;
+        }
+        if (modalAlertBox) {
+            modalAlertBox.className = `sentinel-alert-box ${sentLevel}`;
+        }
+
     } catch (err) {
         console.error('Error polling research status:', err);
+    }
+}
+
+// =============================================================================
+// ALPHA SATURATION SENTINEL MODAL & OVERRIDE HANDLERS
+// =============================================================================
+function openSentinelModal() {
+    const modal = document.getElementById('sentinelModal');
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+
+function closeSentinelModal() {
+    const modal = document.getElementById('sentinelModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+async function overrideSentinel() {
+    try {
+        const btn = document.getElementById('btnModalOverride');
+        const btnLab = document.getElementById('btnSentinelOverride');
+        if (btn) btn.disabled = true;
+        if (btnLab) btnLab.disabled = true;
+
+        const res = await fetch('/api/research/override_sentinel', { method: 'POST' });
+        const data = await res.json().catch(() => ({}));
+        if (data.success) {
+            showToast('⚡ Alpha Sentinel overridden: Research exploration resumed!', 'success');
+            closeSentinelModal();
+            pollResearchStatus();
+        } else {
+            showToast(data.message || 'Failed to override sentinel', 'error');
+        }
+    } catch (err) {
+        console.error('Error overriding sentinel:', err);
+        showToast('Network error overriding sentinel', 'error');
+    } finally {
+        const btn = document.getElementById('btnModalOverride');
+        const btnLab = document.getElementById('btnSentinelOverride');
+        if (btn) btn.disabled = false;
+        if (btnLab) btnLab.disabled = false;
     }
 }
 
@@ -2427,5 +2550,13 @@ document.addEventListener('DOMContentLoaded', () => {
     try { setupNavigation(); } catch (e) { console.error('Navigation boot error:', e); }
     try { loadBaselineData(); } catch (e) { console.error('Data boot error:', e); }
     try { pollResearchStatus(); } catch (e) { console.error('QuantLab poll error:', e); }
+    try {
+        const sentModal = document.getElementById('sentinelModal');
+        if (sentModal) {
+            sentModal.addEventListener('click', (e) => {
+                if (e.target === sentModal) closeSentinelModal();
+            });
+        }
+    } catch (e) { }
 });
 

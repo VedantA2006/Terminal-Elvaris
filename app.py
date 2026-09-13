@@ -530,6 +530,23 @@ def api_research_status():
     return jsonify(research_manager.get_state())
 
 
+@app.route('/api/research/sentinel')
+def api_research_sentinel():
+    return jsonify({
+        'success': True,
+        'sentinel': research_manager.get_sentinel_status()
+    })
+
+
+@app.route('/api/research/override_sentinel', methods=['POST'])
+def api_research_override_sentinel():
+    res = research_manager.override_sentinel()
+    # If the manager was paused due to saturation, attempt auto-resume
+    if research_manager.status == 'paused':
+        research_manager.resume_loop()
+    return jsonify(res)
+
+
 @app.route('/api/engine/status')
 def api_engine_status():
     return jsonify({
