@@ -81,7 +81,7 @@ def compute_rank_score(total_r: float, months_ge_10r: int, max_dd_r: float, prof
     Applies a confidence penalty for strategies with < 30 trades (statistically unreliable).
     """
     pf = min(profit_factor, 5.0)
-    score = (total_r * 1.0) + (months_ge_10r * 8.0) - (max_dd_r * 2.0) + (pf * 15.0) + (win_rate * 0.2)
+    score = (total_r * 2.5) + (months_ge_10r * 10.0) - (max_dd_r * 2.0) + (pf * 8.0) + (win_rate * 0.2)
     # Confidence penalty: strategies with < 30 trades get proportionally reduced scores
     if total_trades < 30:
         confidence = max(0.1, total_trades / 30.0)

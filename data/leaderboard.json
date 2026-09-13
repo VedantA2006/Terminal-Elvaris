@@ -1,5 +1,65 @@
 [
   {
+    "id": "strat_1789280901",
+    "name": "Daily Floor Pivots + Intraday VWAP Macro (RR = 4.0)",
+    "concept": "Daily Floor Pivots (S1/R1) + Intraday VWAP + Swing Sweeps with 4.0R Trend Expansion Target",
+    "author": "Autonomous Quantitative Architect",
+    "created_at": "2026-09-13 11:58:21",
+    "code": "def calculate_signals(df):\n    sess = session_mask(df, 'london_ny')\n    sw_highs, sw_lows = find_swings(df, swing_len=12)\n    levels = daily_levels(df)\n    vwap_line = vwap(df)\n\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    armed_long = ssl_sweep.rolling(10, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(10, min_periods=1).max() == 1\n\n    raw_bull = (armed_long & (df['close'] > vwap_line) & (df['close'] > levels['s1']) & sess)\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n\n    raw_bear = (armed_short & (df['close'] < vwap_line) & (df['close'] < levels['r1']) & sess)\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    atr_val = atr(df, 14)\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (2.0 * atr_val)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (2.0 * atr_val)\n\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    df['tp1_long'] = df['close'] + (risk_long * 4.0)\n    df['tp1_short'] = df['close'] - (risk_short * 4.0)\n\n    return df",
+    "total_r": 115.3,
+    "total_trades": 517,
+    "winning_trades": 133,
+    "losing_trades": 384,
+    "win_rate": 25.7,
+    "profit_factor": 1.44,
+    "total_pnl": 115398.25,
+    "max_drawdown_r": 20.5,
+    "max_drawdown_pct": 14.0,
+    "sharpe_ratio": 2.25,
+    "monthly_r": {
+      "Apr 2025": -1.9,
+      "May 2025": -0.7,
+      "Jun 2025": 7.5,
+      "Jul 2025": -5.4,
+      "Aug 2025": 13.9,
+      "Sep 2025": 5.8,
+      "Oct 2025": 13.1,
+      "Nov 2025": 11.0,
+      "Dec 2025": -15.3,
+      "Jan 2026": 19.6,
+      "Feb 2026": 3.0,
+      "Mar 2026": 1.3,
+      "Apr 2026": 8.6,
+      "May 2026": 3.7,
+      "Jun 2026": 21.0,
+      "Jul 2026": 15.6,
+      "Aug 2026": 11.8,
+      "Sep 2026": 2.7
+    },
+    "months_ge_10r": 7,
+    "monte_carlo": {
+      "expected_max_dd_r": 19.98,
+      "var_95_max_dd_r": 32.48,
+      "risk_of_ruin_10r": 99.4,
+      "risk_of_ruin_20r": 41.5,
+      "probability_of_profit": 99.8,
+      "median_final_r": 115.34
+    },
+    "rank_score": 333.9,
+    "data_split": "mt5_ecn",
+    "train_r": 88.3,
+    "train_pf": 1.77,
+    "train_trades": 236,
+    "train_win_rate": 0.0,
+    "val_r": 18.5,
+    "val_pf": 1.65,
+    "val_trades": 0,
+    "test_r": 15.2,
+    "test_pf": 1.55,
+    "test_trades": 0,
+    "rank": 1
+  },
+  {
     "id": "strat_1789219790",
     "name": "Stochastic Dynamic Cycle + MACD Acceleration (Round #85)",
     "concept": "Synchronizes multi-indicator momentum: enters when 14-period Stochastic cro...",
@@ -48,7 +108,7 @@
     "test_r": 14.0,
     "test_pf": 1.58,
     "test_trades": 51,
-    "rank": 1
+    "rank": 2
   },
   {
     "id": "strat_1789216264",
@@ -99,7 +159,7 @@
     "test_r": 12.9,
     "test_pf": 1.5,
     "test_trades": 57,
-    "rank": 2
+    "rank": 3
   },
   {
     "id": "strat_1789183095",
@@ -150,7 +210,7 @@
     "test_r": 15.0,
     "test_pf": 2.07,
     "test_trades": 33,
-    "rank": 3
+    "rank": 4
   },
   {
     "id": "strat_1789268177",
@@ -201,7 +261,7 @@
     "test_r": 5.2,
     "test_pf": 2.02,
     "test_trades": 14,
-    "rank": 4
+    "rank": 5
   },
   {
     "id": "strat_1789155698",
@@ -252,7 +312,7 @@
     "test_r": 12.4,
     "test_pf": 1.88,
     "test_trades": 30,
-    "rank": 5
+    "rank": 6
   },
   {
     "id": "strat_1789217441",
@@ -303,7 +363,7 @@
     "test_r": 7.9,
     "test_pf": 1.32,
     "test_trades": 49,
-    "rank": 6
+    "rank": 7
   },
   {
     "id": "strat_1789269387",
@@ -354,7 +414,7 @@
     "test_r": 9.9,
     "test_pf": 2.3,
     "test_trades": 23,
-    "rank": 7
+    "rank": 8
   },
   {
     "id": "strat_1789221230",
@@ -405,7 +465,7 @@
     "test_r": 11.9,
     "test_pf": 1.44,
     "test_trades": 56,
-    "rank": 8
+    "rank": 9
   },
   {
     "id": "strat_1789208538",
@@ -456,7 +516,7 @@
     "test_r": 8.7,
     "test_pf": 1.51,
     "test_trades": 36,
-    "rank": 9
+    "rank": 10
   },
   {
     "id": "strat_1789141952",
@@ -507,7 +567,7 @@
     "test_pf": 2.75,
     "test_trades": 38,
     "train_win_rate": 33.9,
-    "rank": 10
+    "rank": 11
   },
   {
     "id": "strat_1789187482",
@@ -558,7 +618,7 @@
     "test_r": 11.8,
     "test_pf": 1.46,
     "test_trades": 55,
-    "rank": 11
+    "rank": 12
   },
   {
     "id": "strat_1789269546",
@@ -609,7 +669,7 @@
     "test_r": 3.7,
     "test_pf": 1.22,
     "test_trades": 52,
-    "rank": 12
+    "rank": 13
   },
   {
     "id": "strat_1789188241",
@@ -660,7 +720,7 @@
     "test_r": 7.9,
     "test_pf": 1.16,
     "test_trades": 92,
-    "rank": 13
+    "rank": 14
   },
   {
     "id": "strat_1789271088",
@@ -711,7 +771,7 @@
     "test_r": 4.9,
     "test_pf": 1.29,
     "test_trades": 48,
-    "rank": 14
+    "rank": 15
   },
   {
     "id": "strat_1789189260",
@@ -762,7 +822,7 @@
     "test_r": 12.1,
     "test_pf": 1.48,
     "test_trades": 53,
-    "rank": 15
+    "rank": 16
   },
   {
     "id": "strat_1789272611",
@@ -813,7 +873,7 @@
     "test_r": 5.1,
     "test_pf": 1.22,
     "test_trades": 44,
-    "rank": 16
+    "rank": 17
   },
   {
     "id": "strat_1789204400",
@@ -864,7 +924,7 @@
     "test_r": 11.0,
     "test_pf": 1.64,
     "test_trades": 37,
-    "rank": 17
+    "rank": 18
   },
   {
     "id": "strat_1789186733",
@@ -915,7 +975,7 @@
     "test_r": 18.1,
     "test_pf": 2.81,
     "test_trades": 29,
-    "rank": 18
+    "rank": 19
   },
   {
     "id": "strat_1789220670",
@@ -966,7 +1026,7 @@
     "test_r": 11.5,
     "test_pf": 2.19,
     "test_trades": 20,
-    "rank": 19
+    "rank": 20
   },
   {
     "id": "strat_1789178528",
@@ -1017,7 +1077,7 @@
     "test_r": 14.4,
     "test_pf": 1.96,
     "test_trades": 32,
-    "rank": 20
+    "rank": 21
   },
   {
     "id": "strat_1789153564",
@@ -1077,7 +1137,7 @@
     "test_r": 12.0,
     "test_pf": 1.44,
     "test_trades": 53,
-    "rank": 21
+    "rank": 22
   },
   {
     "id": "strat_1789203298",
@@ -1128,7 +1188,7 @@
     "test_r": 7.7,
     "test_pf": 1.28,
     "test_trades": 60,
-    "rank": 22
+    "rank": 23
   },
   {
     "id": "strat_1789199134",
@@ -1179,7 +1239,7 @@
     "test_r": 12.4,
     "test_pf": 1.46,
     "test_trades": 54,
-    "rank": 23
+    "rank": 24
   },
   {
     "id": "strat_1789193869",
@@ -1230,7 +1290,7 @@
     "test_r": 8.3,
     "test_pf": 1.4,
     "test_trades": 44,
-    "rank": 24
+    "rank": 25
   },
   {
     "id": "strat_1789149404",
@@ -1281,7 +1341,58 @@
     "test_pf": 1.26,
     "test_trades": 57,
     "train_win_rate": 30.0,
-    "rank": 25
+    "rank": 26
+  },
+  {
+    "id": "strat_1789275491",
+    "name": "Equal Highs/Lows (EQH/EQL) Liquidity Hunt (Round #18)",
+    "concept": "Hunts double tops/bottoms (equal highs/lows) where retail stops accumulate,...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:28:11",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows\n    sw_highs, sw_lows = find_swings(df, swing_len=10)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Armed conditions\n    armed_long = ssl_sweep.rolling(12, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(12, min_periods=1).max() == 1\n\n    # MACD\n    macd_line, macd_sig, macd_hist = macd(df['close'], 12, 26, 9)\n\n    # Equal highs and lows\n    eqh = (sw_highs.diff() <= 0.0005) & (sw_highs.diff() != 0)\n    eql = (sw_lows.diff() <= 0.0005) & (sw_lows.diff() != 0)\n\n    # Bullish signal: SSL sweep, expanding MACD, above VWAP, and armed\n    raw_bull = (armed_long & (macd_hist > macd_hist.shift(1)) & (df['close'] > vwap_line) & (df['close'] > levels['s1']) & sess)\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n\n    # Bearish signal: BSL sweep, contracting MACD, below VWAP, and armed\n    raw_bear = (armed_short & (macd_hist < macd_hist.shift(1)) & (df['close'] < vwap_line) & (df['close'] < levels['r1']) & sess)\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Calculate stop losses\n    atr_val = atr(df, 14)\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.4 * atr_val)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.4 * atr_val)\n\n    # Calculate risk\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    # Calculate take profits\n    df['tp1_long'] = df['close'] + (risk_long * 2.4)\n    df['tp1_short'] = df['close'] - (risk_short * 2.4)\n    df['tp2_long'] = df['close'] + (risk_long * 6.0)\n    df['tp2_short'] = df['close'] - (risk_short * 6.0)\n    df['use_breakeven'] = True\n\n    return df",
+    "total_r": 59.3,
+    "total_trades": 315,
+    "winning_trades": 82,
+    "losing_trades": 233,
+    "win_rate": 26.0,
+    "profit_factor": 1.47,
+    "total_pnl": 59385.44,
+    "max_drawdown_r": 12.5,
+    "max_drawdown_pct": 10.46,
+    "sharpe_ratio": 3.22,
+    "monthly_r": {
+      "Jan 2026": 12.8,
+      "Feb 2026": 2.7,
+      "Mar 2026": -2.0,
+      "Apr 2026": 3.9,
+      "May 2026": 9.4,
+      "Jun 2026": 13.8,
+      "Jul 2026": 11.1,
+      "Aug 2026": 9.5,
+      "Sep 2026": -1.9
+    },
+    "months_ge_10r": 3,
+    "monte_carlo": {
+      "expected_max_dd_r": 13.16,
+      "var_95_max_dd_r": 21.57,
+      "risk_of_ruin_10r": 75.9,
+      "risk_of_ruin_20r": 8.0,
+      "probability_of_profit": 99.8,
+      "median_final_r": 60.21
+    },
+    "rank_score": 85.5,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 40.6,
+    "train_pf": 1.44,
+    "train_trades": 227,
+    "train_win_rate": 0.0,
+    "val_r": 13.7,
+    "val_pf": 1.8,
+    "val_trades": 41,
+    "test_r": 5.1,
+    "test_pf": 1.3,
+    "test_trades": 47,
+    "rank": 27
   },
   {
     "id": "strat_1789270445",
@@ -1332,7 +1443,58 @@
     "test_r": 14.3,
     "test_pf": 2.48,
     "test_trades": 31,
-    "rank": 26
+    "rank": 28
+  },
+  {
+    "id": "strat_1789275931",
+    "name": "Equal Highs/Lows (EQH/EQL) Liquidity Hunt (Round #25)",
+    "concept": "Hunts double tops/bottoms (equal highs/lows) where retail stops accumulate,...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:35:31",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows with novel lookback\n    sw_highs, sw_lows = find_swings(df, swing_len=14)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # Equal Highs and Lows detection\n    eqh = (sw_highs == sw_highs.shift(1)) & (abs(sw_highs - sw_highs.shift(1)) <= 0.05)\n    eql = (sw_lows == sw_lows.shift(1)) & (abs(sw_lows - sw_lows.shift(1)) <= 0.05)\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Volume filter\n    vol_filter = rvol(df, 20) > 1.2\n\n    # Armed conditions with novel rolling window\n    armed_long = ssl_sweep.rolling(15, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(15, min_periods=1).max() == 1\n\n    # Raw signals\n    raw_bull = (eqh & armed_long & (df['close'] > vwap_line) & vol_filter) & sess\n    raw_bear = (eql & armed_short & (df['close'] < vwap_line) & vol_filter) & sess\n\n    # Anti-bleed signals\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Risk management\n    atr_value = atr(df, 14)\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.4 * atr_value)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.4 * atr_value)\n\n    # Risk distance\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    # Multi-target scaling\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_long * 2.8)\n    df['tp2_long'] = df['close'] + (risk_long * 7.0)\n    df['tp1_short'] = df['close'] - (risk_short * 2.8)\n    df['tp2_short'] = df['close'] - (risk_short * 7.0)\n\n    return df",
+    "total_r": 50.3,
+    "total_trades": 197,
+    "winning_trades": 51,
+    "losing_trades": 146,
+    "win_rate": 25.9,
+    "profit_factor": 1.61,
+    "total_pnl": 50479.8,
+    "max_drawdown_r": 9.4,
+    "max_drawdown_pct": 7.5,
+    "sharpe_ratio": 2.86,
+    "monthly_r": {
+      "Jan 2026": 11.4,
+      "Feb 2026": 10.4,
+      "Mar 2026": -0.9,
+      "Apr 2026": 1.7,
+      "May 2026": 4.8,
+      "Jun 2026": 5.8,
+      "Jul 2026": 3.1,
+      "Aug 2026": 13.1,
+      "Sep 2026": 0.9
+    },
+    "months_ge_10r": 3,
+    "monte_carlo": {
+      "expected_max_dd_r": 11.2,
+      "var_95_max_dd_r": 18.46,
+      "risk_of_ruin_10r": 54.7,
+      "risk_of_ruin_20r": 3.4,
+      "probability_of_profit": 99.3,
+      "median_final_r": 51.64
+    },
+    "rank_score": 84.8,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 33.2,
+    "train_pf": 1.52,
+    "train_trades": 142,
+    "train_win_rate": 0.0,
+    "val_r": 3.0,
+    "val_pf": 1.26,
+    "val_trades": 27,
+    "test_r": 14.2,
+    "test_pf": 2.9,
+    "test_trades": 28,
+    "rank": 29
   },
   {
     "id": "strat_1789185197",
@@ -1383,7 +1545,7 @@
     "test_r": 20.0,
     "test_pf": 1.91,
     "test_trades": 43,
-    "rank": 27
+    "rank": 30
   },
   {
     "id": "strat_1789193649",
@@ -1434,7 +1596,7 @@
     "test_r": 23.3,
     "test_pf": 2.02,
     "test_trades": 46,
-    "rank": 28
+    "rank": 31
   },
   {
     "id": "strat_1789272946",
@@ -1485,7 +1647,7 @@
     "test_r": 7.9,
     "test_pf": 2.11,
     "test_trades": 22,
-    "rank": 29
+    "rank": 32
   },
   {
     "id": "strat_1789184009",
@@ -1536,7 +1698,58 @@
     "test_r": 12.7,
     "test_pf": 2.06,
     "test_trades": 27,
-    "rank": 30
+    "rank": 33
+  },
+  {
+    "id": "strat_1789276325",
+    "name": "NY Midnight (00:00 UTC) True Day Open Sweep + VWAP Confluence (Round #32)",
+    "concept": "Exploits institutional discount/premium sweeps around the 00:00 UTC True Da...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:42:05",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows\n    sw_highs, sw_lows = find_swings(df, swing_len=12)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # Relative Volume\n    rvol_series = rvol(df, 25)\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Armed conditions\n    armed_long = ssl_sweep.rolling(15, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(15, min_periods=1).max() == 1\n\n    # Volume filter\n    vol_filter = rvol_series > 1.3\n\n    # VWAP filter\n    vwap_filter_long = df['close'] > vwap_line\n    vwap_filter_short = df['close'] < vwap_line\n\n    # Raw signals\n    raw_bull = (armed_long & vol_filter & vwap_filter_long & sess)\n    raw_bear = (armed_short & vol_filter & vwap_filter_short & sess)\n\n    # Anti-bleed signals\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # ATR for stop calculation\n    atr_series = atr(df, 20)\n\n    # Stop losses\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.8 * atr_series)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.8 * atr_series)\n\n    # Risk calculation\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    # Take profits\n    df['tp1_long'] = df['close'] + (risk_long * 2.8)\n    df['tp1_short'] = df['close'] - (risk_short * 2.8)\n    df['tp2_long'] = df['close'] + (risk_long * 7.0)\n    df['tp2_short'] = df['close'] - (risk_short * 7.0)\n\n    # Breakeven\n    df['use_breakeven'] = True\n\n    return df",
+    "total_r": 53.1,
+    "total_trades": 208,
+    "winning_trades": 51,
+    "losing_trades": 157,
+    "win_rate": 24.5,
+    "profit_factor": 1.65,
+    "total_pnl": 53225.7,
+    "max_drawdown_r": 8.2,
+    "max_drawdown_pct": 7.51,
+    "sharpe_ratio": 2.93,
+    "monthly_r": {
+      "Jan 2026": 14.7,
+      "Feb 2026": 6.1,
+      "Mar 2026": 8.6,
+      "Apr 2026": 4.9,
+      "May 2026": 0.6,
+      "Jun 2026": 9.5,
+      "Jul 2026": 1.8,
+      "Aug 2026": 10.6,
+      "Sep 2026": -3.7
+    },
+    "months_ge_10r": 2,
+    "monte_carlo": {
+      "expected_max_dd_r": 11.01,
+      "var_95_max_dd_r": 18.14,
+      "risk_of_ruin_10r": 54.7,
+      "risk_of_ruin_20r": 2.8,
+      "probability_of_profit": 99.6,
+      "median_final_r": 52.8
+    },
+    "rank_score": 82.3,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 42.3,
+    "train_pf": 1.68,
+    "train_trades": 151,
+    "train_win_rate": 0.0,
+    "val_r": 4.8,
+    "val_pf": 1.41,
+    "val_trades": 29,
+    "test_r": 6.0,
+    "test_pf": 1.77,
+    "test_trades": 28,
+    "rank": 34
   },
   {
     "id": "strat_1789179201",
@@ -1587,7 +1800,7 @@
     "test_r": 9.0,
     "test_pf": 1.47,
     "test_trades": 36,
-    "rank": 31
+    "rank": 35
   },
   {
     "id": "strat_1789212121",
@@ -1638,7 +1851,58 @@
     "test_r": 8.5,
     "test_pf": 1.3,
     "test_trades": 62,
-    "rank": 32
+    "rank": 36
+  },
+  {
+    "id": "strat_1789278633",
+    "name": "NY Midnight (00:00 UTC) True Day Open Sweep + VWAP Confluence (Round #71)",
+    "concept": "Exploits institutional discount/premium sweeps around the 00:00 UTC True Da...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 11:20:33",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows\n    sw_highs, sw_lows = find_swings(df, swing_len=14)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # Relative Volume\n    rvol_series = rvol(df, 20)\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Armed conditions\n    armed_long = ssl_sweep.rolling(12, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(12, min_periods=1).max() == 1\n\n    # Entry conditions\n    bull_entry = (armed_long & (df['close'] > vwap_line) & (rvol_series > 1.2))\n    bear_entry = (armed_short & (df['close'] < vwap_line) & (rvol_series > 1.2))\n\n    # Anti-bleed: fire only on the first reclaim bar\n    df['bull_signal'] = (bull_entry & sess) & (~bull_entry.shift(1).fillna(False))\n    df['bear_signal'] = (bear_entry & sess) & (~bear_entry.shift(1).fillna(False))\n\n    # Risk management\n    atr_series = atr(df, 20)\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.8 * atr_series)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.8 * atr_series)\n\n    # Risk distance from entry\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    # Multi-target scaling and breakeven protection\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_long * 2.8)\n    df['tp2_long'] = df['close'] + (risk_long * 7.0)\n    df['tp1_short'] = df['close'] - (risk_short * 2.8)\n    df['tp2_short'] = df['close'] - (risk_short * 7.0)\n\n    return df",
+    "total_r": 50.1,
+    "total_trades": 178,
+    "winning_trades": 49,
+    "losing_trades": 129,
+    "win_rate": 27.5,
+    "profit_factor": 1.68,
+    "total_pnl": 50155.03,
+    "max_drawdown_r": 8.3,
+    "max_drawdown_pct": 6.33,
+    "sharpe_ratio": 2.99,
+    "monthly_r": {
+      "Jan 2026": 11.3,
+      "Feb 2026": 7.2,
+      "Mar 2026": 0.4,
+      "Apr 2026": 4.0,
+      "May 2026": 3.9,
+      "Jun 2026": 9.5,
+      "Jul 2026": 0.1,
+      "Aug 2026": 13.0,
+      "Sep 2026": 0.7
+    },
+    "months_ge_10r": 2,
+    "monte_carlo": {
+      "expected_max_dd_r": 10.09,
+      "var_95_max_dd_r": 16.64,
+      "risk_of_ruin_10r": 42.4,
+      "risk_of_ruin_20r": 1.4,
+      "probability_of_profit": 99.8,
+      "median_final_r": 49.04
+    },
+    "rank_score": 80.2,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 34.2,
+    "train_pf": 1.63,
+    "train_trades": 128,
+    "train_win_rate": 0.0,
+    "val_r": 2.2,
+    "val_pf": 1.19,
+    "val_trades": 25,
+    "test_r": 13.7,
+    "test_pf": 2.89,
+    "test_trades": 25,
+    "rank": 37
   },
   {
     "id": "strat_1789219086",
@@ -1689,7 +1953,7 @@
     "test_r": -0.3,
     "test_pf": 0.99,
     "test_trades": 39,
-    "rank": 33
+    "rank": 38
   },
   {
     "id": "strat_1789182671",
@@ -1740,7 +2004,7 @@
     "test_r": 8.7,
     "test_pf": 1.5,
     "test_trades": 32,
-    "rank": 34
+    "rank": 39
   },
   {
     "id": "strat_1789195847",
@@ -1791,7 +2055,7 @@
     "test_r": 6.1,
     "test_pf": 1.24,
     "test_trades": 50,
-    "rank": 35
+    "rank": 40
   },
   {
     "id": "strat_1789218479",
@@ -1842,7 +2106,7 @@
     "test_r": 17.4,
     "test_pf": 3.86,
     "test_trades": 31,
-    "rank": 36
+    "rank": 41
   },
   {
     "id": "strat_1789183549",
@@ -1893,7 +2157,7 @@
     "test_r": 11.8,
     "test_pf": 1.57,
     "test_trades": 48,
-    "rank": 37
+    "rank": 42
   },
   {
     "id": "strat_1789217125",
@@ -1944,7 +2208,7 @@
     "test_r": 9.0,
     "test_pf": 1.38,
     "test_trades": 52,
-    "rank": 38
+    "rank": 43
   },
   {
     "id": "strat_1789200551",
@@ -1995,7 +2259,7 @@
     "test_r": 4.6,
     "test_pf": 1.21,
     "test_trades": 55,
-    "rank": 39
+    "rank": 44
   },
   {
     "id": "strat_1789147358",
@@ -2046,7 +2310,7 @@
     "test_pf": 1.9,
     "test_trades": 28,
     "train_win_rate": 36.8,
-    "rank": 40
+    "rank": 45
   },
   {
     "id": "strat_1789272868",
@@ -2097,7 +2361,7 @@
     "test_r": 1.2,
     "test_pf": 1.12,
     "test_trades": 33,
-    "rank": 41
+    "rank": 46
   },
   {
     "id": "strat_1789269122",
@@ -2148,7 +2412,7 @@
     "test_r": 5.8,
     "test_pf": 2.14,
     "test_trades": 15,
-    "rank": 42
+    "rank": 47
   },
   {
     "id": "strat_1789215331",
@@ -2199,7 +2463,7 @@
     "test_r": 21.7,
     "test_pf": 2.37,
     "test_trades": 38,
-    "rank": 43
+    "rank": 48
   },
   {
     "id": "strat_1789156904",
@@ -2250,7 +2514,58 @@
     "test_r": 12.2,
     "test_pf": 1.73,
     "test_trades": 38,
-    "rank": 44
+    "rank": 49
+  },
+  {
+    "id": "strat_1789278706",
+    "name": "Equal Highs/Lows (EQH/EQL) Liquidity Hunt (Round #72)",
+    "concept": "Hunts double tops/bottoms (equal highs/lows) where retail stops accumulate,...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 11:21:46",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows\n    sw_highs, sw_lows = find_swings(df, swing_len=10)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # Equal Highs/Lows detection\n    eql = (sw_lows.rolling(5, min_periods=1).max() - sw_lows.rolling(5, min_periods=1).min()) <= 0.05\n    eqh = (sw_highs.rolling(5, min_periods=1).max() - sw_highs.rolling(5, min_periods=1).min()) <= 0.05\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Armed conditions\n    armed_long = ssl_sweep.rolling(14, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(14, min_periods=1).max() == 1\n\n    # Bullish setup: SSL sweep, price above VWAP, and armed\n    raw_bull = (armed_long & (df['close'] > vwap_line) & (df['close'] > levels['s1']) & eql & sess)\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n\n    # Bearish setup: BSL sweep, price below VWAP, and armed\n    raw_bear = (armed_short & (df['close'] < vwap_line) & (df['close'] < levels['r1']) & eqh & sess)\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Calculate stop loss and take profit\n    atr_value = atr(df, 14)\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.4 * atr_value)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.4 * atr_value)\n\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_long * 2.8)\n    df['tp2_long'] = df['close'] + (risk_long * 7.0)\n    df['tp1_short'] = df['close'] - (risk_short * 2.8)\n    df['tp2_short'] = df['close'] - (risk_short * 7.0)\n\n    return df",
+    "total_r": 50.2,
+    "total_trades": 316,
+    "winning_trades": 69,
+    "losing_trades": 247,
+    "win_rate": 21.8,
+    "profit_factor": 1.38,
+    "total_pnl": 50229.74,
+    "max_drawdown_r": 14.1,
+    "max_drawdown_pct": 11.84,
+    "sharpe_ratio": 2.59,
+    "monthly_r": {
+      "Jan 2026": 14.0,
+      "Feb 2026": -1.6,
+      "Mar 2026": -0.5,
+      "Apr 2026": -2.9,
+      "May 2026": 8.6,
+      "Jun 2026": 9.8,
+      "Jul 2026": 14.8,
+      "Aug 2026": 11.4,
+      "Sep 2026": -3.4
+    },
+    "months_ge_10r": 3,
+    "monte_carlo": {
+      "expected_max_dd_r": 15.63,
+      "var_95_max_dd_r": 27.14,
+      "risk_of_ruin_10r": 88.5,
+      "risk_of_ruin_20r": 18.0,
+      "probability_of_profit": 97.7,
+      "median_final_r": 49.86
+    },
+    "rank_score": 71.1,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 28.4,
+    "train_pf": 1.3,
+    "train_trades": 227,
+    "train_win_rate": 0.0,
+    "val_r": 17.9,
+    "val_pf": 2.07,
+    "val_trades": 43,
+    "test_r": 3.9,
+    "test_pf": 1.21,
+    "test_trades": 46,
+    "rank": 50
   },
   {
     "id": "strat_1789272989",
@@ -2301,7 +2616,7 @@
     "test_r": 6.9,
     "test_pf": 1.61,
     "test_trades": 29,
-    "rank": 45
+    "rank": 51
   },
   {
     "id": "strat_1789157240",
@@ -2352,7 +2667,7 @@
     "test_r": 18.2,
     "test_pf": 2.11,
     "test_trades": 38,
-    "rank": 46
+    "rank": 52
   },
   {
     "id": "strat_1789181636",
@@ -2403,7 +2718,58 @@
     "test_r": 5.5,
     "test_pf": 1.3,
     "test_trades": 36,
-    "rank": 47
+    "rank": 53
+  },
+  {
+    "id": "strat_1789276838",
+    "name": "Equal Highs/Lows (EQH/EQL) Liquidity Hunt (Round #42)",
+    "concept": "Hunts double tops/bottoms (equal highs/lows) where retail stops accumulate,...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:50:38",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows\n    sw_highs, sw_lows = find_swings(df, swing_len=10)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Relative volume\n    rvol_val = rvol(df, 20)\n\n    # ATR and volatility\n    atr_val = atr(df, 14)\n\n    # Equal highs and lows detection\n    eqh = (sw_highs.rolling(5).max() - sw_highs.rolling(5).min()) <= (0.05 * df['close'])\n    eql = (sw_lows.rolling(5).min() - sw_lows.rolling(5).max()) <= (0.05 * df['close'])\n\n    # Armed conditions\n    armed_long = ssl_sweep.rolling(12, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(12, min_periods=1).max() == 1\n\n    # Bullish setup: SSL sweep, price above VWAP, EQL confirmation, and armed\n    raw_bull = (armed_long & (df['close'] > vwap_line) & (df['close'] > levels['s1']) & eql & (rvol_val > 1.2) & sess)\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n\n    # Bearish setup: BSL sweep, price below VWAP, EQH confirmation, and armed\n    raw_bear = (armed_short & (df['close'] < vwap_line) & (df['close'] < levels['r1']) & eqh & (rvol_val > 1.2) & sess)\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Calculate stop loss and take profit\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.8 * atr_val)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.8 * atr_val)\n\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    df['tp1_long'] = df['close'] + (risk_long * 2.4)\n    df['tp2_long'] = df['close'] + (risk_long * 6.0)\n    df['tp1_short'] = df['close'] - (risk_short * 2.4)\n    df['tp2_short'] = df['close'] - (risk_short * 6.0)\n\n    df['use_breakeven'] = True\n\n    return df",
+    "total_r": 50.5,
+    "total_trades": 235,
+    "winning_trades": 63,
+    "losing_trades": 172,
+    "win_rate": 26.8,
+    "profit_factor": 1.5,
+    "total_pnl": 50393.34,
+    "max_drawdown_r": 12.9,
+    "max_drawdown_pct": 10.42,
+    "sharpe_ratio": 3.01,
+    "monthly_r": {
+      "Jan 2026": 17.6,
+      "Feb 2026": 1.6,
+      "Mar 2026": -3.2,
+      "Apr 2026": 8.1,
+      "May 2026": 5.2,
+      "Jun 2026": 3.9,
+      "Jul 2026": 6.0,
+      "Aug 2026": 11.9,
+      "Sep 2026": -0.6
+    },
+    "months_ge_10r": 2,
+    "monte_carlo": {
+      "expected_max_dd_r": 12.18,
+      "var_95_max_dd_r": 20.58,
+      "risk_of_ruin_10r": 64.4,
+      "risk_of_ruin_20r": 5.9,
+      "probability_of_profit": 99.4,
+      "median_final_r": 50.98
+    },
+    "rank_score": 68.6,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 31.3,
+    "train_pf": 1.41,
+    "train_trades": 168,
+    "train_win_rate": 0.0,
+    "val_r": 8.6,
+    "val_pf": 1.58,
+    "val_trades": 35,
+    "test_r": 10.5,
+    "test_pf": 2.1,
+    "test_trades": 32,
+    "rank": 54
   },
   {
     "id": "strat_1789270755",
@@ -2454,7 +2820,7 @@
     "test_r": 7.1,
     "test_pf": 1.3,
     "test_trades": 47,
-    "rank": 48
+    "rank": 55
   },
   {
     "id": "strat_1789211129",
@@ -2505,7 +2871,7 @@
     "test_r": 10.7,
     "test_pf": 1.48,
     "test_trades": 44,
-    "rank": 49
+    "rank": 56
   },
   {
     "id": "strat_1789184336",
@@ -2556,7 +2922,7 @@
     "test_r": 9.9,
     "test_pf": 1.66,
     "test_trades": 31,
-    "rank": 50
+    "rank": 57
   },
   {
     "id": "strat_1789269857",
@@ -2607,7 +2973,58 @@
     "test_r": 3.1,
     "test_pf": 1.19,
     "test_trades": 49,
-    "rank": 51
+    "rank": 58
+  },
+  {
+    "id": "strat_1789277031",
+    "name": "NY Midnight (00:00 UTC) True Day Open Sweep + VWAP Confluence (Round #45)",
+    "concept": "Exploits institutional discount/premium sweeps around the 00:00 UTC True Da...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:53:51",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows\n    sw_highs, sw_lows = find_swings(df, swing_len=10)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Armed conditions\n    armed_long = ssl_sweep.rolling(12, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(12, min_periods=1).max() == 1\n\n    # Relative Volume\n    rvol_val = rvol(df, 20)\n\n    # Bullish signal: SSL sweep with price above VWAP and high relative volume\n    raw_bull = (armed_long & (df['close'] > vwap_line) & (rvol_val > 1.2) & sess)\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n\n    # Bearish signal: BSL sweep with price below VWAP and high relative volume\n    raw_bear = (armed_short & (df['close'] < vwap_line) & (rvol_val > 1.2) & sess)\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Calculate stop losses\n    atr_val = atr(df, 14)\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.8 * atr_val)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.8 * atr_val)\n\n    # Calculate risk\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    # Calculate take profits and breakeven\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_long * 2.4)\n    df['tp2_long'] = df['close'] + (risk_long * 6.0)\n    df['tp1_short'] = df['close'] - (risk_short * 2.4)\n    df['tp2_short'] = df['close'] - (risk_short * 6.0)\n\n    return df",
+    "total_r": 47.3,
+    "total_trades": 248,
+    "winning_trades": 63,
+    "losing_trades": 185,
+    "win_rate": 25.4,
+    "profit_factor": 1.45,
+    "total_pnl": 47157.37,
+    "max_drawdown_r": 11.5,
+    "max_drawdown_pct": 9.24,
+    "sharpe_ratio": 2.67,
+    "monthly_r": {
+      "Jan 2026": 18.6,
+      "Feb 2026": 0.6,
+      "Mar 2026": -1.0,
+      "Apr 2026": 8.1,
+      "May 2026": 4.8,
+      "Jun 2026": 0.7,
+      "Jul 2026": 4.2,
+      "Aug 2026": 11.9,
+      "Sep 2026": -0.6
+    },
+    "months_ge_10r": 2,
+    "monte_carlo": {
+      "expected_max_dd_r": 13.11,
+      "var_95_max_dd_r": 21.73,
+      "risk_of_ruin_10r": 73.1,
+      "risk_of_ruin_20r": 8.4,
+      "probability_of_profit": 99.2,
+      "median_final_r": 47.02
+    },
+    "rank_score": 67.1,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 29.9,
+    "train_pf": 1.38,
+    "train_trades": 178,
+    "train_win_rate": 0.0,
+    "val_r": 6.8,
+    "val_pf": 1.41,
+    "val_trades": 38,
+    "test_r": 10.5,
+    "test_pf": 2.1,
+    "test_trades": 32,
+    "rank": 59
   },
   {
     "id": "strat_1789116488",
@@ -2658,7 +3075,7 @@
     "train_pf": 1.24,
     "train_trades": 206,
     "train_win_rate": 40.8,
-    "rank": 52
+    "rank": 60
   },
   {
     "id": "strat_1789214546",
@@ -2709,7 +3126,7 @@
     "test_r": 13.3,
     "test_pf": 1.32,
     "test_trades": 74,
-    "rank": 53
+    "rank": 61
   },
   {
     "id": "strat_1789154786",
@@ -2760,7 +3177,7 @@
     "test_r": 5.4,
     "test_pf": 1.21,
     "test_trades": 45,
-    "rank": 54
+    "rank": 62
   },
   {
     "id": "strat_1789213349",
@@ -2811,7 +3228,7 @@
     "test_r": 19.6,
     "test_pf": 2.09,
     "test_trades": 41,
-    "rank": 55
+    "rank": 63
   },
   {
     "id": "strat_1789184901",
@@ -2862,7 +3279,7 @@
     "test_r": 15.3,
     "test_pf": 1.87,
     "test_trades": 38,
-    "rank": 56
+    "rank": 64
   },
   {
     "id": "strat_1789192343",
@@ -2913,7 +3330,58 @@
     "test_r": 19.6,
     "test_pf": 2.0,
     "test_trades": 42,
-    "rank": 57
+    "rank": 65
+  },
+  {
+    "id": "strat_1789275202",
+    "name": "NY Midnight (00:00 UTC) True Day Open Sweep + VWAP Confluence (Round #12)",
+    "concept": "Exploits institutional discount/premium sweeps around the 00:00 UTC True Da...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:23:22",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows\n    sw_highs, sw_lows = find_swings(df, swing_len=10)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Armed conditions\n    armed_long = ssl_sweep.rolling(15, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(15, min_periods=1).max() == 1\n\n    # MACD\n    macd_line, macd_sig, macd_hist = macd(df['close'], 12, 26, 9)\n\n    # Calculate ATR\n    atr_val = atr(df, 14)\n\n    # Midnight Open calculation\n    is_midnight = (df.index.hour == 0) & (df.index.minute == 0)\n    midnight_open = df['open'].where(is_midnight).ffill()\n\n    # Bullish signal: SSL sweep with expanding MACD histogram, price above VWAP, and volume confirmation\n    raw_bull = (armed_long & (macd_hist > macd_hist.shift(1)) & (df['close'] > vwap_line) &\n                (df['close'] > levels['s1']) & (rvol(df, 20) > 1.2) & sess)\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n\n    # Bearish signal: BSL sweep with contracting MACD histogram, price below VWAP, and volume confirmation\n    raw_bear = (armed_short & (macd_hist < macd_hist.shift(1)) & (df['close'] < vwap_line) &\n                (df['close'] < levels['r1']) & (rvol(df, 20) > 1.2) & sess)\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Calculate stop losses\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.4 * atr_val)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.4 * atr_val)\n\n    # Calculate risk\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    # Calculate take profits\n    df['tp1_long'] = df['close'] + (risk_long * 2.4)\n    df['tp2_long'] = df['close'] + (risk_long * 6.0)\n    df['tp1_short'] = df['close'] - (risk_short * 2.4)\n    df['tp2_short'] = df['close'] - (risk_short * 6.0)\n\n    # Use breakeven\n    df['use_breakeven'] = True\n\n    return df",
+    "total_r": 45.2,
+    "total_trades": 228,
+    "winning_trades": 64,
+    "losing_trades": 164,
+    "win_rate": 28.1,
+    "profit_factor": 1.46,
+    "total_pnl": 45216.64,
+    "max_drawdown_r": 8.4,
+    "max_drawdown_pct": 6.84,
+    "sharpe_ratio": 2.89,
+    "monthly_r": {
+      "Jan 2026": 10.8,
+      "Feb 2026": 7.1,
+      "Mar 2026": 2.4,
+      "Apr 2026": 4.4,
+      "May 2026": 7.0,
+      "Jun 2026": 6.7,
+      "Jul 2026": 4.9,
+      "Aug 2026": 3.0,
+      "Sep 2026": -1.1
+    },
+    "months_ge_10r": 1,
+    "monte_carlo": {
+      "expected_max_dd_r": 12.21,
+      "var_95_max_dd_r": 21.06,
+      "risk_of_ruin_10r": 64.2,
+      "risk_of_ruin_20r": 6.4,
+      "probability_of_profit": 98.2,
+      "median_final_r": 44.1
+    },
+    "rank_score": 63.9,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 38.4,
+    "train_pf": 1.53,
+    "train_trades": 165,
+    "train_win_rate": 0.0,
+    "val_r": 4.0,
+    "val_pf": 1.31,
+    "val_trades": 29,
+    "test_r": 2.8,
+    "test_pf": 1.22,
+    "test_trades": 34,
+    "rank": 66
   },
   {
     "id": "strat_1789119770",
@@ -2964,7 +3432,7 @@
     "train_pf": 1.21,
     "train_trades": 235,
     "train_win_rate": 39.6,
-    "rank": 58
+    "rank": 67
   },
   {
     "id": "strat_1789269490",
@@ -3015,7 +3483,7 @@
     "test_r": 8.7,
     "test_pf": 1.79,
     "test_trades": 35,
-    "rank": 59
+    "rank": 68
   },
   {
     "id": "strat_1789223229",
@@ -3066,7 +3534,7 @@
     "test_r": 13.3,
     "test_pf": 2.39,
     "test_trades": 33,
-    "rank": 60
+    "rank": 69
   },
   {
     "id": "strat_1789179503",
@@ -3117,7 +3585,58 @@
     "test_r": 11.8,
     "test_pf": 1.98,
     "test_trades": 24,
-    "rank": 61
+    "rank": 70
+  },
+  {
+    "id": "strat_1789274715",
+    "name": "Volume Spread Analysis + Institutional Displacement (Round #3)",
+    "concept": "Filters for high institutional volume spikes (RVOL > 1.8) accompanied by la...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:15:15",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows\n    sw_highs, sw_lows = find_swings(df, swing_len=7)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # Relative volume\n    rvol_val = rvol(df, 20)\n\n    # Displacement candle\n    c_range = df['high'] - df['low']\n    c_body = (df['close'] - df['open']).abs()\n    is_displacement = (c_body / c_range > 0.65) & (c_range > 1.2 * atr(df, 14))\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Armed conditions\n    armed_long = ssl_sweep.rolling(10, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(10, min_periods=1).max() == 1\n\n    # Bullish signal: Displacement candle with SSL sweep, price above VWAP, and armed\n    raw_bull = (armed_long & is_displacement & (df['close'] > df['open']) & (rvol_val > 1.4) & (df['close'] > vwap_line) & (df['close'] > levels['s1']) & sess)\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n\n    # Bearish signal: Displacement candle with BSL sweep, price below VWAP, and armed\n    raw_bear = (armed_short & is_displacement & (df['close'] < df['open']) & (rvol_val > 1.4) & (df['close'] < vwap_line) & (df['close'] < levels['r1']) & sess)\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Calculate stop losses\n    atr_val = atr(df, 14)\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.8 * atr_val)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.8 * atr_val)\n\n    # Calculate risk\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    # Calculate take profits\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_long * 2.8)\n    df['tp2_long'] = df['close'] + (risk_long * 7.0)\n    df['tp1_short'] = df['close'] - (risk_short * 2.8)\n    df['tp2_short'] = df['close'] - (risk_short * 7.0)\n\n    return df",
+    "total_r": 35.1,
+    "total_trades": 101,
+    "winning_trades": 28,
+    "losing_trades": 73,
+    "win_rate": 27.7,
+    "profit_factor": 1.72,
+    "total_pnl": 35182.24,
+    "max_drawdown_r": 6.2,
+    "max_drawdown_pct": 6.02,
+    "sharpe_ratio": 2.77,
+    "monthly_r": {
+      "Jan 2026": 15.0,
+      "Feb 2026": 4.4,
+      "Mar 2026": 2.6,
+      "Apr 2026": -0.6,
+      "May 2026": 5.3,
+      "Jun 2026": 7.3,
+      "Jul 2026": -0.2,
+      "Aug 2026": 4.3,
+      "Sep 2026": -3.0
+    },
+    "months_ge_10r": 1,
+    "monte_carlo": {
+      "expected_max_dd_r": 9.29,
+      "var_95_max_dd_r": 15.51,
+      "risk_of_ruin_10r": 34.7,
+      "risk_of_ruin_20r": 1.0,
+      "probability_of_profit": 98.2,
+      "median_final_r": 36.38
+    },
+    "rank_score": 62.0,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 32.0,
+    "train_pf": 1.96,
+    "train_trades": 70,
+    "train_win_rate": 0.0,
+    "val_r": 5.3,
+    "val_pf": 1.84,
+    "val_trades": 15,
+    "test_r": -2.2,
+    "test_pf": 0.76,
+    "test_trades": 16,
+    "rank": 71
   },
   {
     "id": "strat_1789218097",
@@ -3168,7 +3687,7 @@
     "test_r": 6.4,
     "test_pf": 1.29,
     "test_trades": 44,
-    "rank": 62
+    "rank": 72
   },
   {
     "id": "strat_1789200880",
@@ -3219,7 +3738,7 @@
     "test_r": 9.6,
     "test_pf": 1.36,
     "test_trades": 58,
-    "rank": 63
+    "rank": 73
   },
   {
     "id": "strat_1789138181",
@@ -3270,7 +3789,7 @@
     "test_pf": 1.73,
     "test_trades": 27,
     "train_win_rate": 38.1,
-    "rank": 64
+    "rank": 74
   },
   {
     "id": "strat_1789216019",
@@ -3321,7 +3840,7 @@
     "test_r": -6.8,
     "test_pf": 0.58,
     "test_trades": 22,
-    "rank": 65
+    "rank": 75
   },
   {
     "id": "strat_1789202592",
@@ -3372,7 +3891,7 @@
     "test_r": 11.1,
     "test_pf": 1.48,
     "test_trades": 53,
-    "rank": 66
+    "rank": 76
   },
   {
     "id": "strat_1789268590",
@@ -3423,7 +3942,159 @@
     "test_r": 5.2,
     "test_pf": 1.38,
     "test_trades": 37,
-    "rank": 67
+    "rank": 77
+  },
+  {
+    "id": "strat_1789274841",
+    "name": "Donchian 20-Bar Turtle Breakout + Chandelier Stop (Round #5)",
+    "concept": "Adaptive Turtle breakout system adapted for 5-minute Gold: enters on 20-bar...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:17:21",
+    "code": "def calculate_signals(df):\n    # Calculate indicators\n    d_up, d_dn, d_mid = donchian_channels(df, period=20)\n    ema_55 = ema(df['close'], 55)\n    ema_200 = ema(df['close'], 200)\n    er = efficiency_ratio(df['close'], 20)\n    chan_long, chan_short = chandelier_exit(df, period=22, mult=2.5)\n    sess = session_mask(df, 'london_ny')\n\n    # Trend filter\n    bull_trend = (ema_55 > ema_200) & (er > 0.25)\n    bear_trend = (ema_55 < ema_200) & (er > 0.25)\n\n    # Entry signals\n    raw_bull = (df['close'] > d_up.shift(1)) & (df['close'] > ema_55) & bull_trend & sess\n    raw_bear = (df['close'] < d_dn.shift(1)) & (df['close'] < ema_55) & bear_trend & sess\n\n    # Anti-bleed: fire only on initial breakout bar\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Risk management\n    atr_14 = atr(df, 14)\n    df['sl_long'] = np.minimum(df['low'], d_dn) - (1.5 * atr_14)\n    df['sl_short'] = np.maximum(df['high'], d_up) + (1.5 * atr_14)\n\n    # Ensure minimum stop distance\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    # Multi-target scaling\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_long * 3.2)\n    df['tp2_long'] = df['close'] + (risk_long * 8.0)\n    df['tp1_short'] = df['close'] - (risk_short * 3.2)\n    df['tp2_short'] = df['close'] - (risk_short * 8.0)\n\n    return df",
+    "total_r": 38.7,
+    "total_trades": 181,
+    "winning_trades": 48,
+    "losing_trades": 133,
+    "win_rate": 26.5,
+    "profit_factor": 1.43,
+    "total_pnl": 38524.13,
+    "max_drawdown_r": 14.8,
+    "max_drawdown_pct": 11.53,
+    "sharpe_ratio": 2.21,
+    "monthly_r": {
+      "Jan 2026": 4.6,
+      "Feb 2026": 10.8,
+      "Mar 2026": 11.1,
+      "Apr 2026": -6.0,
+      "May 2026": 2.7,
+      "Jun 2026": 5.0,
+      "Jul 2026": 0.7,
+      "Aug 2026": 12.9,
+      "Sep 2026": -3.1
+    },
+    "months_ge_10r": 3,
+    "monte_carlo": {
+      "expected_max_dd_r": 13.89,
+      "var_95_max_dd_r": 24.12,
+      "risk_of_ruin_10r": 78.4,
+      "risk_of_ruin_20r": 12.7,
+      "probability_of_profit": 95.5,
+      "median_final_r": 39.02
+    },
+    "rank_score": 59.8,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 28.6,
+    "train_pf": 1.42,
+    "train_trades": 126,
+    "train_win_rate": 0.0,
+    "val_r": 5.8,
+    "val_pf": 1.52,
+    "val_trades": 29,
+    "test_r": 4.0,
+    "test_pf": 1.34,
+    "test_trades": 27,
+    "rank": 78
+  },
+  {
+    "id": "strat_1789276112",
+    "name": "Donchian 20-Bar Turtle Breakout + Chandelier Stop (Round #28)",
+    "concept": "Adaptive Turtle breakout system adapted for 5-minute Gold: enters on 20-bar...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:38:32",
+    "code": "def calculate_signals(df):\n    # Donchian Channels\n    d_up, d_dn, d_mid = donchian_channels(df, period=25)\n\n    # Trend Filter\n    ema_55 = ema(df['close'], 55)\n    ema_200 = ema(df['close'], 200)\n    er = efficiency_ratio(df['close'], 20)\n\n    # Chandelier Trailing Exit\n    chan_long, chan_short = chandelier_exit(df, period=25, mult=2.5)\n\n    # Entry Conditions\n    raw_bull = (df['close'] > d_up.shift(1)) & (df['close'] > ema_55) & (er > 0.28) & session_mask(df, 'london_ny')\n    bull_signal = raw_bull & (~raw_bull.shift(1).fillna(False))\n\n    raw_bear = (df['close'] < d_dn.shift(1)) & (df['close'] < ema_55) & (er < -0.28) & session_mask(df, 'london_ny')\n    bear_signal = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Risk Management\n    atr_14 = atr(df, 14)\n    sl_long = np.minimum(df['low'], d_dn) - (1.8 * atr_14)\n    sl_short = np.maximum(df['high'], d_up) + (1.8 * atr_14)\n\n    risk_long = np.maximum(df['close'] - sl_long, 4.00)\n    risk_short = np.maximum(sl_short - df['close'], 4.00)\n\n    # Multi-Target Scaling\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_long * 2.4)\n    df['tp2_long'] = df['close'] + (risk_long * 6.0)\n    df['tp1_short'] = df['close'] - (risk_short * 2.4)\n    df['tp2_short'] = df['close'] - (risk_short * 6.0)\n\n    # Assign signals\n    df['bull_signal'] = bull_signal\n    df['bear_signal'] = bear_signal\n    df['sl_long'] = sl_long\n    df['sl_short'] = sl_short\n\n    return df",
+    "total_r": 24.1,
+    "total_trades": 63,
+    "winning_trades": 20,
+    "losing_trades": 43,
+    "win_rate": 31.7,
+    "profit_factor": 1.79,
+    "total_pnl": 24154.75,
+    "max_drawdown_r": 7.0,
+    "max_drawdown_pct": 6.11,
+    "sharpe_ratio": 2.25,
+    "monthly_r": {
+      "Jan 2026": 11.2,
+      "Feb 2026": 1.7,
+      "Mar 2026": -1.0,
+      "May 2026": 1.4,
+      "Jun 2026": -1.9,
+      "Jul 2026": 2.6,
+      "Aug 2026": 10.2,
+      "Sep 2026": -0.1
+    },
+    "months_ge_10r": 2,
+    "monte_carlo": {
+      "expected_max_dd_r": 7.34,
+      "var_95_max_dd_r": 13.27,
+      "risk_of_ruin_10r": 16.1,
+      "risk_of_ruin_20r": 0.6,
+      "probability_of_profit": 97.2,
+      "median_final_r": 24.39
+    },
+    "rank_score": 59.3,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 9.7,
+    "train_pf": 1.57,
+    "train_trades": 33,
+    "train_win_rate": 0.0,
+    "val_r": 8.5,
+    "val_pf": 2.2,
+    "val_trades": 17,
+    "test_r": 6.7,
+    "test_pf": 1.8,
+    "test_trades": 18,
+    "rank": 79
+  },
+  {
+    "id": "strat_1789279860",
+    "name": "Bollinger-Keltner Volatility Squeeze Expansion (Round #93)",
+    "concept": "Detects institutional compression when Bollinger Bands contract inside Kelt...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 11:41:00",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows\n    sw_highs, sw_lows = find_swings(df, swing_len=10)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # Bollinger Bands and Keltner Channels\n    bb_upper, bb_lower, bb_mid = bollinger_bands(df['close'], 25, 2.0)\n    kc_upper, kc_lower, kc_mid = keltner_channels(df, ema_period=25, atr_period=12, mult=1.8)\n\n    # Volatility squeeze detection\n    squeeze = (bb_lower > kc_lower) & (bb_upper < kc_upper)\n    squeeze_fire = squeeze.shift(1) & ~squeeze\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Armed conditions\n    armed_long = ssl_sweep.rolling(12, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(12, min_periods=1).max() == 1\n\n    # Bullish setup: Squeeze fire, armed, and price above VWAP\n    raw_bull = (squeeze_fire & armed_long & (df['close'] > vwap_line) & (df['close'] > levels['s1']) & sess)\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n\n    # Bearish setup: Squeeze fire, armed, and price below VWAP\n    raw_bear = (squeeze_fire & armed_short & (df['close'] < vwap_line) & (df['close'] < levels['r1']) & sess)\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Calculate stop loss and take profit\n    atr_value = atr(df, 14)\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.4 * atr_value)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.4 * atr_value)\n\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_long * 3.2)\n    df['tp1_short'] = df['close'] - (risk_short * 3.2)\n    df['tp2_long'] = df['close'] + (risk_long * 8.0)\n    df['tp2_short'] = df['close'] - (risk_short * 8.0)\n\n    return df",
+    "total_r": 32.0,
+    "total_trades": 89,
+    "winning_trades": 25,
+    "losing_trades": 64,
+    "win_rate": 28.1,
+    "profit_factor": 1.81,
+    "total_pnl": 32135.7,
+    "max_drawdown_r": 6.8,
+    "max_drawdown_pct": 5.61,
+    "sharpe_ratio": 2.56,
+    "monthly_r": {
+      "Jan 2026": 14.7,
+      "Feb 2026": 2.9,
+      "Mar 2026": -2.0,
+      "Apr 2026": 3.2,
+      "May 2026": 1.0,
+      "Jun 2026": 6.1,
+      "Jul 2026": 4.0,
+      "Aug 2026": 3.7,
+      "Sep 2026": -1.6
+    },
+    "months_ge_10r": 1,
+    "monte_carlo": {
+      "expected_max_dd_r": 8.37,
+      "var_95_max_dd_r": 14.62,
+      "risk_of_ruin_10r": 23.0,
+      "risk_of_ruin_20r": 0.7,
+      "probability_of_profit": 97.4,
+      "median_final_r": 31.21
+    },
+    "rank_score": 59.2,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 25.9,
+    "train_pf": 1.9,
+    "train_trades": 62,
+    "train_win_rate": 0.0,
+    "val_r": 3.0,
+    "val_pf": 1.48,
+    "val_trades": 11,
+    "test_r": 3.1,
+    "test_pf": 1.69,
+    "test_trades": 16,
+    "rank": 80
   },
   {
     "id": "strat_1789225746",
@@ -3474,7 +4145,58 @@
     "test_r": 2.8,
     "test_pf": 1.46,
     "test_trades": 22,
-    "rank": 68
+    "rank": 81
+  },
+  {
+    "id": "strat_1789275430",
+    "name": "Vectorized Linear Regression Velocity Drift (Round #17)",
+    "concept": "Measures continuous institutional directional price drift via 20-bar Linear...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:27:10",
+    "code": "def calculate_signals(df):\n    # Calculate indicators\n    slope = linear_regression_slope(df['close'], 25)\n    fast_ema = ema(df['close'], 34)\n    slow_ema = ema(df['close'], 89)\n    swing_highs, swing_lows = find_swings(df, swing_len=14)\n\n    # Define raw signals\n    raw_bull = (slope > 0.20) & (fast_ema > slow_ema) & (df['low'] <= fast_ema) & (df['close'] > fast_ema)\n    raw_bear = (slope < -0.20) & (fast_ema < slow_ema) & (df['high'] >= fast_ema) & (df['close'] < fast_ema)\n\n    # Apply session mask and anti-bleed\n    sess = session_mask(df, 'london_ny')\n    df['bull_signal'] = (raw_bull & sess) & (~raw_bull.shift(1).fillna(False))\n    df['bear_signal'] = (raw_bear & sess) & (~raw_bear.shift(1).fillna(False))\n\n    # Calculate risk management\n    atr_value = atr(df, 14)\n    df['sl_long'] = np.minimum(df['low'], swing_lows) - (1.4 * atr_value)\n    df['sl_short'] = np.maximum(df['high'], swing_highs) + (1.4 * atr_value)\n\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    # Set risk management columns\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_long * 3.2)\n    df['tp2_long'] = df['close'] + (risk_long * 8.0)\n    df['tp1_short'] = df['close'] - (risk_short * 3.2)\n    df['tp2_short'] = df['close'] - (risk_short * 8.0)\n\n    return df",
+    "total_r": 45.6,
+    "total_trades": 222,
+    "winning_trades": 59,
+    "losing_trades": 163,
+    "win_rate": 26.6,
+    "profit_factor": 1.49,
+    "total_pnl": 45563.75,
+    "max_drawdown_r": 15.2,
+    "max_drawdown_pct": 10.55,
+    "sharpe_ratio": 2.81,
+    "monthly_r": {
+      "Jan 2026": 24.2,
+      "Feb 2026": 0.0,
+      "Mar 2026": 6.0,
+      "Apr 2026": -0.5,
+      "May 2026": 13.0,
+      "Jun 2026": -8.7,
+      "Jul 2026": 1.1,
+      "Aug 2026": 9.1,
+      "Sep 2026": 1.4
+    },
+    "months_ge_10r": 2,
+    "monte_carlo": {
+      "expected_max_dd_r": 13.13,
+      "var_95_max_dd_r": 22.32,
+      "risk_of_ruin_10r": 72.2,
+      "risk_of_ruin_20r": 8.4,
+      "probability_of_profit": 96.8,
+      "median_final_r": 44.59
+    },
+    "rank_score": 58.9,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 34.5,
+    "train_pf": 1.5,
+    "train_trades": 157,
+    "train_win_rate": 0.0,
+    "val_r": 3.0,
+    "val_pf": 1.24,
+    "val_trades": 30,
+    "test_r": 8.5,
+    "test_pf": 1.77,
+    "test_trades": 35,
+    "rank": 82
   },
   {
     "id": "strat_1789148942",
@@ -3525,7 +4247,7 @@
     "test_pf": 1.43,
     "test_trades": 36,
     "train_win_rate": 29.6,
-    "rank": 69
+    "rank": 83
   },
   {
     "id": "strat_1789115216",
@@ -3576,7 +4298,7 @@
     "train_pf": 1.13,
     "train_trades": 240,
     "train_win_rate": 30.4,
-    "rank": 70
+    "rank": 84
   },
   {
     "id": "strat_1789187203",
@@ -3627,7 +4349,7 @@
     "test_r": 11.4,
     "test_pf": 1.67,
     "test_trades": 37,
-    "rank": 71
+    "rank": 85
   },
   {
     "id": "strat_1789219875",
@@ -3678,7 +4400,7 @@
     "test_r": 5.1,
     "test_pf": 1.3,
     "test_trades": 54,
-    "rank": 72
+    "rank": 86
   },
   {
     "id": "strat_1789271230",
@@ -3729,7 +4451,7 @@
     "test_r": 0.5,
     "test_pf": 1.15,
     "test_trades": 11,
-    "rank": 73
+    "rank": 87
   },
   {
     "id": "strat_1789207492",
@@ -3780,7 +4502,58 @@
     "test_r": 9.1,
     "test_pf": 1.37,
     "test_trades": 55,
-    "rank": 74
+    "rank": 88
+  },
+  {
+    "id": "strat_1789277375",
+    "name": "Equal Highs/Lows (EQH/EQL) Liquidity Hunt (Round #51)",
+    "concept": "Hunts double tops/bottoms (equal highs/lows) where retail stops accumulate,...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:59:35",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows\n    sw_highs, sw_lows = find_swings(df, swing_len=10)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Armed conditions\n    armed_long = ssl_sweep.rolling(10, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(10, min_periods=1).max() == 1\n\n    # Relative Volume\n    rvol_value = rvol(df, 20)\n\n    # ATR value\n    atr_value = atr(df, 14)\n\n    # Equal Highs/Lows detection\n    eqh = (sw_highs.diff(1) <= 0.05 * atr_value) & (sw_highs.diff(2) <= 0.05 * atr_value)\n    eql = (sw_lows.diff(1) <= 0.05 * atr_value) & (sw_lows.diff(2) <= 0.05 * atr_value)\n\n    # Bullish setup: SSL sweep, price above VWAP, armed, and EQH confirmation\n    raw_bull = (armed_long & (df['close'] > vwap_line) & (df['close'] > levels['s1']) & eqh & (rvol_value > 1.2) & sess)\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n\n    # Bearish setup: BSL sweep, price below VWAP, armed, and EQL confirmation\n    raw_bear = (armed_short & (df['close'] < vwap_line) & (df['close'] < levels['r1']) & eql & (rvol_value > 1.2) & sess)\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Calculate stop loss and take profit\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.8 * atr_value)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.8 * atr_value)\n\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    df['tp1_long'] = df['close'] + (risk_long * 2.5)\n    df['tp1_short'] = df['close'] - (risk_short * 2.5)\n    df['tp2_long'] = df['close'] + (risk_long * 4.5)\n    df['tp2_short'] = df['close'] - (risk_short * 4.5)\n\n    df['use_breakeven'] = True\n\n    return df",
+    "total_r": 45.3,
+    "total_trades": 218,
+    "winning_trades": 56,
+    "losing_trades": 162,
+    "win_rate": 25.7,
+    "profit_factor": 1.49,
+    "total_pnl": 45261.29,
+    "max_drawdown_r": 12.3,
+    "max_drawdown_pct": 10.28,
+    "sharpe_ratio": 2.86,
+    "monthly_r": {
+      "Jan 2026": 16.4,
+      "Feb 2026": -3.1,
+      "Mar 2026": -0.5,
+      "Apr 2026": 7.5,
+      "May 2026": 5.8,
+      "Jun 2026": 6.0,
+      "Jul 2026": 6.5,
+      "Aug 2026": 9.4,
+      "Sep 2026": -2.7
+    },
+    "months_ge_10r": 1,
+    "monte_carlo": {
+      "expected_max_dd_r": 12.0,
+      "var_95_max_dd_r": 19.8,
+      "risk_of_ruin_10r": 63.8,
+      "risk_of_ruin_20r": 4.8,
+      "probability_of_profit": 98.9,
+      "median_final_r": 45.54
+    },
+    "rank_score": 56.2,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 30.2,
+    "train_pf": 1.44,
+    "train_trades": 155,
+    "train_win_rate": 0.0,
+    "val_r": 9.2,
+    "val_pf": 1.69,
+    "val_trades": 33,
+    "test_r": 5.9,
+    "test_pf": 1.61,
+    "test_trades": 30,
+    "rank": 89
   },
   {
     "id": "strat_1789219361",
@@ -3831,7 +4604,7 @@
     "test_r": 1.6,
     "test_pf": 1.17,
     "test_trades": 16,
-    "rank": 75
+    "rank": 90
   },
   {
     "id": "strat_1789216114",
@@ -3882,7 +4655,7 @@
     "test_r": 11.6,
     "test_pf": 2.63,
     "test_trades": 27,
-    "rank": 76
+    "rank": 91
   },
   {
     "id": "strat_1789224714",
@@ -3933,7 +4706,7 @@
     "test_r": 9.3,
     "test_pf": 2.07,
     "test_trades": 27,
-    "rank": 77
+    "rank": 92
   },
   {
     "id": "strat_1789267172",
@@ -3984,7 +4757,7 @@
     "test_r": 7.8,
     "test_pf": 1.88,
     "test_trades": 26,
-    "rank": 78
+    "rank": 93
   },
   {
     "id": "strat_1789217251",
@@ -4035,7 +4808,7 @@
     "test_r": 10.7,
     "test_pf": 1.61,
     "test_trades": 34,
-    "rank": 79
+    "rank": 94
   },
   {
     "id": "strat_1789218910",
@@ -4086,7 +4859,7 @@
     "test_r": 2.3,
     "test_pf": 1.1,
     "test_trades": 42,
-    "rank": 80
+    "rank": 95
   },
   {
     "id": "strat_1789218276",
@@ -4137,7 +4910,7 @@
     "test_r": -1.0,
     "test_pf": 0.87,
     "test_trades": 14,
-    "rank": 81
+    "rank": 96
   },
   {
     "id": "strat_1789216751",
@@ -4188,7 +4961,109 @@
     "test_r": 3.6,
     "test_pf": 1.21,
     "test_trades": 57,
-    "rank": 82
+    "rank": 97
+  },
+  {
+    "id": "strat_1789280206",
+    "name": "NY Midnight (00:00 UTC) True Day Open Sweep + VWAP Confluence (Round #99)",
+    "concept": "Exploits institutional discount/premium sweeps around the 00:00 UTC True Da...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 11:46:46",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows\n    sw_highs, sw_lows = find_swings(df, swing_len=10)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Armed conditions\n    armed_long = ssl_sweep.rolling(14, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(14, min_periods=1).max() == 1\n\n    # Relative volume\n    rvol_val = rvol(df, 20)\n\n    # MACD\n    macd_line, macd_sig, macd_hist = macd(df['close'], 12, 26, 9)\n\n    # Bullish signal: SSL sweep with expanding MACD histogram, above VWAP, and high volume\n    raw_bull = (armed_long & (macd_hist > macd_hist.shift(1)) & (df['close'] > vwap_line) & (rvol_val > 1.2) & sess)\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n\n    # Bearish signal: BSL sweep with contracting MACD histogram, below VWAP, and high volume\n    raw_bear = (armed_short & (macd_hist < macd_hist.shift(1)) & (df['close'] < vwap_line) & (rvol_val > 1.2) & sess)\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Calculate stop losses\n    atr_val = atr(df, 14)\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.8 * atr_val)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.8 * atr_val)\n\n    # Calculate risk\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    # Calculate take profits\n    df['tp1_long'] = df['close'] + (risk_long * 2.4)\n    df['tp1_short'] = df['close'] - (risk_short * 2.4)\n    df['tp2_long'] = df['close'] + (risk_long * 6.0)\n    df['tp2_short'] = df['close'] - (risk_short * 6.0)\n\n    # Use breakeven\n    df['use_breakeven'] = True\n\n    return df",
+    "total_r": 42.6,
+    "total_trades": 226,
+    "winning_trades": 61,
+    "losing_trades": 165,
+    "win_rate": 27.0,
+    "profit_factor": 1.43,
+    "total_pnl": 42614.34,
+    "max_drawdown_r": 12.3,
+    "max_drawdown_pct": 9.59,
+    "sharpe_ratio": 2.52,
+    "monthly_r": {
+      "Jan 2026": 18.2,
+      "Feb 2026": 4.8,
+      "Mar 2026": -2.4,
+      "Apr 2026": 5.6,
+      "May 2026": 1.8,
+      "Jun 2026": 4.1,
+      "Jul 2026": 4.6,
+      "Aug 2026": 6.1,
+      "Sep 2026": -0.2
+    },
+    "months_ge_10r": 1,
+    "monte_carlo": {
+      "expected_max_dd_r": 13.17,
+      "var_95_max_dd_r": 22.1,
+      "risk_of_ruin_10r": 71.7,
+      "risk_of_ruin_20r": 8.6,
+      "probability_of_profit": 97.7,
+      "median_final_r": 42.9
+    },
+    "rank_score": 52.9,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 30.2,
+    "train_pf": 1.41,
+    "train_trades": 166,
+    "train_win_rate": 0.0,
+    "val_r": 7.2,
+    "val_pf": 1.56,
+    "val_trades": 29,
+    "test_r": 5.1,
+    "test_pf": 1.41,
+    "test_trades": 31,
+    "rank": 98
+  },
+  {
+    "id": "strat_1789279166",
+    "name": "NY Midnight (00:00 UTC) True Day Open Sweep + VWAP Confluence (Round #81)",
+    "concept": "Exploits institutional discount/premium sweeps around the 00:00 UTC True Da...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 11:29:26",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows\n    sw_highs, sw_lows = find_swings(df, swing_len = 10)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Armed conditions\n    armed_long = ssl_sweep.rolling(12, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(12, min_periods=1).max() == 1\n\n    # Bullish setup: SSL sweep, price above VWAP, and armed\n    raw_bull = (armed_long & (df['close'] > vwap_line) & (df['close'] > levels['s1']) & sess)\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n\n    # Bearish setup: BSL sweep, price below VWAP, and armed\n    raw_bear = (armed_short & (df['close'] < vwap_line) & (df['close'] < levels['r1']) & sess)\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Calculate stop loss and take profit\n    atr_value = atr(df, 14)\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.8 * atr_value)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.8 * atr_value)\n\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    df['tp1_long'] = df['close'] + (risk_long * 2.6)\n    df['tp2_long'] = df['close'] + (risk_long * 4.5)\n    df['use_breakeven'] = True\n    df['tp1_short'] = df['close'] - (risk_short * 2.6)\n    df['tp2_short'] = df['close'] - (risk_short * 4.5)\n    df['use_breakeven'] = True\n\n    return df",
+    "total_r": 40.1,
+    "total_trades": 314,
+    "winning_trades": 70,
+    "losing_trades": 244,
+    "win_rate": 22.3,
+    "profit_factor": 1.32,
+    "total_pnl": 39935.68,
+    "max_drawdown_r": 18.2,
+    "max_drawdown_pct": 14.96,
+    "sharpe_ratio": 2.3,
+    "monthly_r": {
+      "Jan 2026": 17.8,
+      "Feb 2026": -4.9,
+      "Mar 2026": -1.5,
+      "Apr 2026": -1.0,
+      "May 2026": 3.8,
+      "Jun 2026": 10.1,
+      "Jul 2026": 8.3,
+      "Aug 2026": 10.7,
+      "Sep 2026": -3.2
+    },
+    "months_ge_10r": 3,
+    "monte_carlo": {
+      "expected_max_dd_r": 15.11,
+      "var_95_max_dd_r": 25.61,
+      "risk_of_ruin_10r": 85.1,
+      "risk_of_ruin_20r": 15.1,
+      "probability_of_profit": 96.9,
+      "median_final_r": 39.56
+    },
+    "rank_score": 52.0,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 24.3,
+    "train_pf": 1.27,
+    "train_trades": 221,
+    "train_win_rate": 0.0,
+    "val_r": 13.0,
+    "val_pf": 1.75,
+    "val_trades": 45,
+    "test_r": 2.8,
+    "test_pf": 1.17,
+    "test_trades": 48,
+    "rank": 99
   },
   {
     "id": "strat_1789192963",
@@ -4239,7 +5114,7 @@
     "test_r": 24.2,
     "test_pf": 2.96,
     "test_trades": 32,
-    "rank": 83
+    "rank": 100
   },
   {
     "id": "strat_1789132610",
@@ -4290,7 +5165,7 @@
     "train_pf": 1.2,
     "train_trades": 184,
     "train_win_rate": 35.9,
-    "rank": 84
+    "rank": 101
   },
   {
     "id": "strat_1789215654",
@@ -4341,7 +5216,7 @@
     "test_r": -3.4,
     "test_pf": 0.72,
     "test_trades": 17,
-    "rank": 85
+    "rank": 102
   },
   {
     "id": "strat_1789215902",
@@ -4392,7 +5267,7 @@
     "test_r": 13.4,
     "test_pf": 1.81,
     "test_trades": 33,
-    "rank": 86
+    "rank": 103
   },
   {
     "id": "strat_1789204541",
@@ -4443,7 +5318,58 @@
     "test_r": 5.2,
     "test_pf": 1.23,
     "test_trades": 45,
-    "rank": 87
+    "rank": 104
+  },
+  {
+    "id": "strat_1789275107",
+    "name": "NY Midnight (00:00 UTC) True Day Open Sweep + VWAP Confluence (Round #10)",
+    "concept": "Exploits institutional discount/premium sweeps around the 00:00 UTC True Da...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:21:47",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows\n    sw_highs, sw_lows = find_swings(df, swing_len=10)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # Relative Volume\n    rvol_series = rvol(df, 20)\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Armed conditions\n    armed_long = ssl_sweep.rolling(12, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(12, min_periods=1).max() == 1\n\n    # Bullish signal: SSL sweep with high volume and VWAP confirmation\n    raw_bull = (armed_long & (df['close'] > vwap_line) & (rvol_series > 1.3) & sess)\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n\n    # Bearish signal: BSL sweep with high volume and VWAP confirmation\n    raw_bear = (armed_short & (df['close'] < vwap_line) & (rvol_series > 1.3) & sess)\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Risk management\n    atr_14 = atr(df, 14)\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.8 * atr_14)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.8 * atr_14)\n\n    # Calculate risk distance\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    # Multi-target scaling\n    df['tp1_long'] = df['close'] + (risk_long * 2.0)\n    df['tp2_long'] = df['close'] + (risk_long * 5.5)\n    df['tp1_short'] = df['close'] - (risk_short * 2.0)\n    df['tp2_short'] = df['close'] - (risk_short * 5.5)\n\n    # Breakeven protection\n    df['use_breakeven'] = True\n\n    return df",
+    "total_r": 33.3,
+    "total_trades": 210,
+    "winning_trades": 64,
+    "losing_trades": 146,
+    "win_rate": 30.5,
+    "profit_factor": 1.37,
+    "total_pnl": 33183.23,
+    "max_drawdown_r": 9.8,
+    "max_drawdown_pct": 7.9,
+    "sharpe_ratio": 2.31,
+    "monthly_r": {
+      "Jan 2026": 16.5,
+      "Feb 2026": 5.5,
+      "Mar 2026": -2.1,
+      "Apr 2026": 2.3,
+      "May 2026": 0.5,
+      "Jun 2026": 5.7,
+      "Jul 2026": 2.4,
+      "Aug 2026": 6.1,
+      "Sep 2026": -3.6
+    },
+    "months_ge_10r": 1,
+    "monte_carlo": {
+      "expected_max_dd_r": 12.24,
+      "var_95_max_dd_r": 20.91,
+      "risk_of_ruin_10r": 65.2,
+      "risk_of_ruin_20r": 6.3,
+      "probability_of_profit": 97.2,
+      "median_final_r": 32.71
+    },
+    "rank_score": 48.4,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 26.8,
+    "train_pf": 1.39,
+    "train_trades": 152,
+    "train_win_rate": 0.0,
+    "val_r": 3.8,
+    "val_pf": 1.31,
+    "val_trades": 31,
+    "test_r": 2.7,
+    "test_pf": 1.33,
+    "test_trades": 27,
+    "rank": 105
   },
   {
     "id": "strat_1789220738",
@@ -4494,7 +5420,7 @@
     "test_r": 7.0,
     "test_pf": 1.43,
     "test_trades": 31,
-    "rank": 88
+    "rank": 106
   },
   {
     "id": "strat_1789225917",
@@ -4545,7 +5471,7 @@
     "test_r": 2.0,
     "test_pf": 1.41,
     "test_trades": 12,
-    "rank": 89
+    "rank": 107
   },
   {
     "id": "strat_1789208840",
@@ -4596,7 +5522,7 @@
     "test_r": 13.1,
     "test_pf": 1.7,
     "test_trades": 39,
-    "rank": 90
+    "rank": 108
   },
   {
     "id": "strat_1789271173",
@@ -4647,7 +5573,7 @@
     "test_r": -0.8,
     "test_pf": 0.96,
     "test_trades": 24,
-    "rank": 91
+    "rank": 109
   },
   {
     "id": "strat_1789224558",
@@ -4698,7 +5624,7 @@
     "test_r": 4.8,
     "test_pf": 1.35,
     "test_trades": 46,
-    "rank": 92
+    "rank": 110
   },
   {
     "id": "strat_1789199247",
@@ -4749,7 +5675,7 @@
     "test_r": 9.9,
     "test_pf": 1.22,
     "test_trades": 87,
-    "rank": 93
+    "rank": 111
   },
   {
     "id": "strat_1789221280",
@@ -4800,7 +5726,7 @@
     "test_r": -0.8,
     "test_pf": 0.92,
     "test_trades": 14,
-    "rank": 94
+    "rank": 112
   },
   {
     "id": "strat_1789269280",
@@ -4851,7 +5777,7 @@
     "test_r": -1.8,
     "test_pf": 0.8,
     "test_trades": 15,
-    "rank": 95
+    "rank": 113
   },
   {
     "id": "strat_1789216663",
@@ -4902,7 +5828,7 @@
     "test_r": 9.5,
     "test_pf": 1.85,
     "test_trades": 33,
-    "rank": 96
+    "rank": 114
   },
   {
     "id": "strat_1789222797",
@@ -4953,7 +5879,7 @@
     "test_r": 0.7,
     "test_pf": 1.08,
     "test_trades": 28,
-    "rank": 97
+    "rank": 115
   },
   {
     "id": "strat_1789149794",
@@ -5004,7 +5930,7 @@
     "test_pf": 1.49,
     "test_trades": 29,
     "train_win_rate": 31.9,
-    "rank": 98
+    "rank": 116
   },
   {
     "id": "strat_1789224441",
@@ -5055,7 +5981,58 @@
     "test_r": 3.2,
     "test_pf": 1.2,
     "test_trades": 48,
-    "rank": 99
+    "rank": 117
+  },
+  {
+    "id": "strat_1789280100",
+    "name": "Equal Highs/Lows (EQH/EQL) Liquidity Hunt (Round #97)",
+    "concept": "Hunts double tops/bottoms (equal highs/lows) where retail stops accumulate,...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 11:45:00",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows with different lookback periods\n    sw_highs, sw_lows = find_swings(df, swing_len=14)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # Supertrend for trend confirmation\n    st_line, st_dir = supertrend(df, period=14, mult=2.5)\n\n    # Equal highs and lows detection\n    eqh = (sw_highs == sw_highs.shift(1)) & (sw_highs != sw_highs.shift(2))\n    eql = (sw_lows == sw_lows.shift(1)) & (sw_lows != sw_lows.shift(2))\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Volume filter\n    vol_filter = rvol(df, 20) > 1.5\n\n    # Armed conditions with volume confirmation\n    armed_long = (ssl_sweep & vol_filter).rolling(10, min_periods=1).max() == 1\n    armed_short = (bsl_sweep & vol_filter).rolling(10, min_periods=1).max() == 1\n\n    # Entry conditions with trend confirmation\n    raw_bull = (armed_long & (df['close'] > vwap_line) & (st_dir == 1) & sess)\n    raw_bear = (armed_short & (df['close'] < vwap_line) & (st_dir == -1) & sess)\n\n    # Anti-bleed signals\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Risk management\n    atr_val = atr(df, 14)\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.8 * atr_val)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.8 * atr_val)\n\n    # Risk distance from entry\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    # Multi-target scaling\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_long * 3.2)\n    df['tp2_long'] = df['close'] + (risk_long * 8.0)\n    df['tp1_short'] = df['close'] - (risk_short * 3.2)\n    df['tp2_short'] = df['close'] - (risk_short * 8.0)\n\n    return df",
+    "total_r": 22.9,
+    "total_trades": 56,
+    "winning_trades": 18,
+    "losing_trades": 38,
+    "win_rate": 32.1,
+    "profit_factor": 1.87,
+    "total_pnl": 23005.02,
+    "max_drawdown_r": 6.1,
+    "max_drawdown_pct": 5.66,
+    "sharpe_ratio": 2.33,
+    "monthly_r": {
+      "Jan 2026": 5.2,
+      "Feb 2026": 0.8,
+      "Mar 2026": 1.2,
+      "Apr 2026": -2.0,
+      "May 2026": 4.2,
+      "Jun 2026": 4.5,
+      "Jul 2026": 4.9,
+      "Aug 2026": 6.1,
+      "Sep 2026": -2.0
+    },
+    "months_ge_10r": 0,
+    "monte_carlo": {
+      "expected_max_dd_r": 7.04,
+      "var_95_max_dd_r": 12.92,
+      "risk_of_ruin_10r": 13.9,
+      "risk_of_ruin_20r": 0.5,
+      "probability_of_profit": 96.6,
+      "median_final_r": 22.69
+    },
+    "rank_score": 45.2,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 13.9,
+    "train_pf": 1.76,
+    "train_trades": 36,
+    "train_win_rate": 0.0,
+    "val_r": 6.6,
+    "val_pf": 3.19,
+    "val_trades": 8,
+    "test_r": 2.4,
+    "test_pf": 1.48,
+    "test_trades": 12,
+    "rank": 118
   },
   {
     "id": "strat_1789181016",
@@ -5106,7 +6083,7 @@
     "test_r": 5.0,
     "test_pf": 1.27,
     "test_trades": 40,
-    "rank": 100
+    "rank": 119
   },
   {
     "id": "strat_1789213643",
@@ -5157,7 +6134,7 @@
     "test_r": 9.7,
     "test_pf": 1.36,
     "test_trades": 54,
-    "rank": 101
+    "rank": 120
   },
   {
     "id": "strat_1789221459",
@@ -5208,7 +6185,7 @@
     "test_r": -0.8,
     "test_pf": 0.92,
     "test_trades": 14,
-    "rank": 102
+    "rank": 121
   },
   {
     "id": "strat_1789217870",
@@ -5259,7 +6236,7 @@
     "test_r": 9.5,
     "test_pf": 3.44,
     "test_trades": 13,
-    "rank": 103
+    "rank": 122
   },
   {
     "id": "strat_1789269665",
@@ -5310,7 +6287,7 @@
     "test_r": 2.0,
     "test_pf": 1.41,
     "test_trades": 12,
-    "rank": 104
+    "rank": 123
   },
   {
     "id": "strat_1789193219",
@@ -5361,7 +6338,7 @@
     "test_r": 11.7,
     "test_pf": 1.44,
     "test_trades": 52,
-    "rank": 105
+    "rank": 124
   },
   {
     "id": "strat_1789124534",
@@ -5410,7 +6387,7 @@
     "train_pf": 2.48,
     "train_trades": 12,
     "train_win_rate": 58.3,
-    "rank": 106
+    "rank": 125
   },
   {
     "id": "strat_1789269773",
@@ -5461,7 +6438,58 @@
     "test_r": -1.8,
     "test_pf": 0.75,
     "test_trades": 16,
-    "rank": 107
+    "rank": 126
+  },
+  {
+    "id": "strat_1789275873",
+    "name": "Volume Spread Analysis + Institutional Displacement (Round #24)",
+    "concept": "Filters for high institutional volume spikes (RVOL > 1.8) accompanied by la...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:34:33",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows\n    sw_highs, sw_lows = find_swings(df, swing_len=10)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # Relative Volume\n    rvol_val = rvol(df, 20)\n\n    # Displacement candle calculation\n    c_range = df['high'] - df['low']\n    c_body = (df['close'] - df['open']).abs()\n    is_displacement = (c_body / c_range > 0.65) & (c_range > 1.2 * atr(df, 14))\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Armed conditions\n    armed_long = ssl_sweep.rolling(12, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(12, min_periods=1).max() == 1\n\n    # Bullish setup: SSL sweep, price above VWAP, and armed\n    raw_bull = (armed_long & (df['close'] > vwap_line) & (df['close'] > levels['s1']) &\n                (rvol_val > 1.4) & is_displacement & sess)\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n\n    # Bearish setup: BSL sweep, price below VWAP, and armed\n    raw_bear = (armed_short & (df['close'] < vwap_line) & (df['close'] < levels['r1']) &\n                (rvol_val > 1.4) & is_displacement & sess)\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Calculate stop loss and take profit\n    atr_value = atr(df, 14)\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.8 * atr_value)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.8 * atr_value)\n\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_long * 2.4)\n    df['tp2_long'] = df['close'] + (risk_long * 6.0)\n    df['tp1_short'] = df['close'] - (risk_short * 2.4)\n    df['tp2_short'] = df['close'] - (risk_short * 6.0)\n\n    return df",
+    "total_r": 22.3,
+    "total_trades": 94,
+    "winning_trades": 29,
+    "losing_trades": 65,
+    "win_rate": 30.9,
+    "profit_factor": 1.48,
+    "total_pnl": 22212.2,
+    "max_drawdown_r": 8.3,
+    "max_drawdown_pct": 7.23,
+    "sharpe_ratio": 1.96,
+    "monthly_r": {
+      "Jan 2026": 12.0,
+      "Feb 2026": 0.2,
+      "Mar 2026": -1.8,
+      "Apr 2026": 3.5,
+      "May 2026": -1.2,
+      "Jun 2026": 3.5,
+      "Jul 2026": 2.7,
+      "Aug 2026": 5.4,
+      "Sep 2026": -2.0
+    },
+    "months_ge_10r": 1,
+    "monte_carlo": {
+      "expected_max_dd_r": 9.93,
+      "var_95_max_dd_r": 17.65,
+      "risk_of_ruin_10r": 40.1,
+      "risk_of_ruin_20r": 2.4,
+      "probability_of_profit": 92.1,
+      "median_final_r": 22.09
+    },
+    "rank_score": 42.1,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 14.3,
+    "train_pf": 1.4,
+    "train_trades": 69,
+    "train_win_rate": 0.0,
+    "val_r": 5.8,
+    "val_pf": 2.12,
+    "val_trades": 13,
+    "test_r": 2.1,
+    "test_pf": 1.44,
+    "test_trades": 12,
+    "rank": 127
   },
   {
     "id": "strat_1789119190",
@@ -5512,7 +6540,7 @@
     "train_pf": 1.26,
     "train_trades": 160,
     "train_win_rate": 30.0,
-    "rank": 108
+    "rank": 128
   },
   {
     "id": "strat_1789117154",
@@ -5563,7 +6591,7 @@
     "train_pf": 1.15,
     "train_trades": 236,
     "train_win_rate": 38.6,
-    "rank": 109
+    "rank": 129
   },
   {
     "id": "strat_1789202103",
@@ -5614,7 +6642,7 @@
     "test_r": 7.5,
     "test_pf": 1.32,
     "test_trades": 53,
-    "rank": 110
+    "rank": 130
   },
   {
     "id": "strat_1789138468",
@@ -5665,7 +6693,7 @@
     "test_pf": 2.76,
     "test_trades": 18,
     "train_win_rate": 32.4,
-    "rank": 111
+    "rank": 131
   },
   {
     "id": "strat_1789207224",
@@ -5716,7 +6744,7 @@
     "test_r": -2.6,
     "test_pf": 0.74,
     "test_trades": 14,
-    "rank": 112
+    "rank": 132
   },
   {
     "id": "strat_1789137974",
@@ -5767,7 +6795,7 @@
     "test_pf": 3.7,
     "test_trades": 7,
     "train_win_rate": 51.5,
-    "rank": 113
+    "rank": 133
   },
   {
     "id": "strat_1789215553",
@@ -5818,7 +6846,7 @@
     "test_r": 9.3,
     "test_pf": 1.54,
     "test_trades": 31,
-    "rank": 114
+    "rank": 134
   },
   {
     "id": "strat_1789148796",
@@ -5869,7 +6897,7 @@
     "test_pf": 2.96,
     "test_trades": 9,
     "train_win_rate": 47.2,
-    "rank": 115
+    "rank": 135
   },
   {
     "id": "strat_1789218578",
@@ -5920,7 +6948,7 @@
     "test_r": -5.1,
     "test_pf": 0.79,
     "test_trades": 33,
-    "rank": 116
+    "rank": 136
   },
   {
     "id": "strat_1789213114",
@@ -5971,7 +6999,7 @@
     "test_r": 3.6,
     "test_pf": 1.46,
     "test_trades": 19,
-    "rank": 117
+    "rank": 137
   },
   {
     "id": "strat_1789214133",
@@ -6022,7 +7050,7 @@
     "test_r": -1.5,
     "test_pf": 0.85,
     "test_trades": 17,
-    "rank": 118
+    "rank": 138
   },
   {
     "id": "strat_1789216822",
@@ -6073,7 +7101,7 @@
     "test_r": 7.1,
     "test_pf": 2.19,
     "test_trades": 14,
-    "rank": 119
+    "rank": 139
   },
   {
     "id": "strat_1789268319",
@@ -6124,7 +7152,7 @@
     "test_r": -4.0,
     "test_pf": 0.85,
     "test_trades": 51,
-    "rank": 120
+    "rank": 140
   },
   {
     "id": "strat_1789268542",
@@ -6175,7 +7203,7 @@
     "test_r": 10.4,
     "test_pf": 2.47,
     "test_trades": 19,
-    "rank": 121
+    "rank": 141
   },
   {
     "id": "strat_1789156499",
@@ -6226,7 +7254,7 @@
     "test_r": 1.4,
     "test_pf": 1.07,
     "test_trades": 32,
-    "rank": 122
+    "rank": 142
   },
   {
     "id": "strat_1789178143",
@@ -6277,7 +7305,7 @@
     "test_r": -0.7,
     "test_pf": 0.81,
     "test_trades": 6,
-    "rank": 123
+    "rank": 143
   },
   {
     "id": "strat_1789217317",
@@ -6328,7 +7356,7 @@
     "test_r": -4.9,
     "test_pf": 0.5,
     "test_trades": 13,
-    "rank": 124
+    "rank": 144
   },
   {
     "id": "strat_1789140741",
@@ -6379,7 +7407,58 @@
     "test_pf": 2.88,
     "test_trades": 19,
     "train_win_rate": 36.4,
-    "rank": 125
+    "rank": 145
+  },
+  {
+    "id": "strat_1789274627",
+    "name": "Sequential SMC Sweep + Multi-Bar FVG Mitigation (Round #1)",
+    "concept": "Temporal state machine: SSL/BSL sweep arms setup for up to 10 bars, trigger...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:13:47",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows\n    sw_highs, sw_lows = find_swings(df, swing_len=8)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # SSL and BSL sweeps\n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n\n    # Armed conditions\n    armed_long = ssl_sweep.rolling(10, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(10, min_periods=1).max() == 1\n\n    # FVG mitigation\n    bull_fvg_top, bull_fvg_bot, bear_fvg_top, bear_fvg_bot = find_fvgs(df)\n\n    # FVG touch conditions\n    fvg_touch_long = (df['low'] <= bull_fvg_top) & (df['low'].shift(1) > bull_fvg_top) & (df['close'] > bull_fvg_bot)\n    fvg_touch_short = (df['high'] >= bear_fvg_bot) & (df['high'].shift(1) < bear_fvg_bot) & (df['close'] < bear_fvg_top)\n\n    # Raw signals\n    raw_bull = armed_long & sess & fvg_touch_long & (df['close'] > vwap_line)\n    raw_bear = armed_short & sess & fvg_touch_short & (df['close'] < vwap_line)\n\n    # Transition signals\n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Risk management\n    atr_14 = atr(df, 14)\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.5 * atr_14)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.5 * atr_14)\n\n    # Risk distance\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    # Multi-target scaling\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_long * 3.2)\n    df['tp2_long'] = df['close'] + (risk_long * 8.0)\n    df['tp1_short'] = df['close'] - (risk_short * 3.2)\n    df['tp2_short'] = df['close'] - (risk_short * 8.0)\n\n    return df",
+    "total_r": 16.7,
+    "total_trades": 60,
+    "winning_trades": 16,
+    "losing_trades": 44,
+    "win_rate": 26.7,
+    "profit_factor": 1.66,
+    "total_pnl": 16517.54,
+    "max_drawdown_r": 6.4,
+    "max_drawdown_pct": 6.01,
+    "sharpe_ratio": 1.5,
+    "monthly_r": {
+      "Jan 2026": 1.5,
+      "Feb 2026": 4.6,
+      "Mar 2026": -4.3,
+      "Apr 2026": 0.9,
+      "May 2026": 2.5,
+      "Jun 2026": 8.5,
+      "Jul 2026": 4.5,
+      "Aug 2026": -3.0,
+      "Sep 2026": 1.5
+    },
+    "months_ge_10r": 0,
+    "monte_carlo": {
+      "expected_max_dd_r": 7.22,
+      "var_95_max_dd_r": 12.63,
+      "risk_of_ruin_10r": 17.8,
+      "risk_of_ruin_20r": 0.1,
+      "probability_of_profit": 92.9,
+      "median_final_r": 16.86
+    },
+    "rank_score": 34.1,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 13.7,
+    "train_pf": 1.71,
+    "train_trades": 46,
+    "train_win_rate": 0.0,
+    "val_r": 3.5,
+    "val_pf": 2.14,
+    "val_trades": 6,
+    "test_r": -0.5,
+    "test_pf": 0.82,
+    "test_trades": 8,
+    "rank": 146
   },
   {
     "id": "strat_1789177037",
@@ -6430,7 +7509,7 @@
     "test_r": -0.8,
     "test_pf": 0.95,
     "test_trades": 28,
-    "rank": 126
+    "rank": 147
   },
   {
     "id": "strat_1789208932",
@@ -6481,7 +7560,7 @@
     "test_r": -2.6,
     "test_pf": 0.74,
     "test_trades": 14,
-    "rank": 127
+    "rank": 148
   },
   {
     "id": "strat_1789217722",
@@ -6532,7 +7611,7 @@
     "test_r": -4.6,
     "test_pf": 0.8,
     "test_trades": 32,
-    "rank": 128
+    "rank": 149
   },
   {
     "id": "strat_1789130935",
@@ -6583,7 +7662,7 @@
     "train_pf": 1.41,
     "train_trades": 66,
     "train_win_rate": 43.9,
-    "rank": 129
+    "rank": 150
   },
   {
     "id": "strat_1789095974",
@@ -6634,7 +7713,7 @@
     "test_r": 2.3,
     "test_pf": 1.44,
     "test_trades": 10,
-    "rank": 130
+    "rank": 151
   },
   {
     "id": "strat_1789155191",
@@ -6685,7 +7764,7 @@
     "test_r": 11.2,
     "test_pf": 1.52,
     "test_trades": 48,
-    "rank": 131
+    "rank": 152
   },
   {
     "id": "strat_1789183330",
@@ -6736,7 +7815,7 @@
     "test_r": -0.4,
     "test_pf": 0.93,
     "test_trades": 13,
-    "rank": 132
+    "rank": 153
   },
   {
     "id": "strat_1789188437",
@@ -6787,7 +7866,58 @@
     "test_r": 6.1,
     "test_pf": 1.52,
     "test_trades": 24,
-    "rank": 133
+    "rank": 154
+  },
+  {
+    "id": "strat_1789275371",
+    "name": "Donchian 20-Bar Turtle Breakout + Chandelier Stop (Round #16)",
+    "concept": "Adaptive Turtle breakout system adapted for 5-minute Gold: enters on 20-bar...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:26:11",
+    "code": "def calculate_signals(df):\n    # Calculate Donchian Channels\n    d_up, d_dn, d_mid = donchian_channels(df, period=25)\n\n    # Calculate EMA 55 and 200\n    ema_55 = ema(df['close'], 55)\n    ema_200 = ema(df['close'], 200)\n\n    # Calculate Kaufman Efficiency Ratio\n    er = efficiency_ratio(df['close'], 25)\n\n    # Calculate Chandelier Exit\n    chan_long, chan_short = chandelier_exit(df, period=25, mult=2.8)\n\n    # Calculate ATR for stop loss\n    atr_value = atr(df, 14)\n\n    # Bullish Entry Conditions\n    raw_bull = (\n        (df['close'] > d_up.shift(1)) &\n        (df['close'] > ema_55) &\n        (er > 0.28) &\n        (ema_55 > ema_200) &\n        session_mask(df, 'london_ny')\n    )\n    bull_signal = raw_bull & (~raw_bull.shift(1).fillna(False))\n\n    # Bearish Entry Conditions\n    raw_bear = (\n        (df['close'] < d_dn.shift(1)) &\n        (df['close'] < ema_55) &\n        (er < -0.28) &\n        (ema_55 < ema_200) &\n        session_mask(df, 'london_ny')\n    )\n    bear_signal = raw_bear & (~raw_bear.shift(1).fillna(False))\n\n    # Set signals\n    df['bull_signal'] = bull_signal\n    df['bear_signal'] = bear_signal\n\n    # Calculate stop loss and risk\n    df['sl_long'] = np.minimum(df['low'], d_dn) - (1.4 * atr_value)\n    df['sl_short'] = np.maximum(df['high'], d_up) + (1.4 * atr_value)\n\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    # Calculate take profit levels\n    df['tp1_long'] = df['close'] + (risk_long * 2.4)\n    df['tp2_long'] = df['close'] + (risk_long * 6.0)\n    df['tp1_short'] = df['close'] - (risk_short * 2.4)\n    df['tp2_short'] = df['close'] - (risk_short * 6.0)\n\n    # Set breakeven flag\n    df['use_breakeven'] = True\n\n    return df",
+    "total_r": 17.6,
+    "total_trades": 70,
+    "winning_trades": 20,
+    "losing_trades": 50,
+    "win_rate": 28.6,
+    "profit_factor": 1.51,
+    "total_pnl": 17492.92,
+    "max_drawdown_r": 15.3,
+    "max_drawdown_pct": 12.95,
+    "sharpe_ratio": 1.62,
+    "monthly_r": {
+      "Jan 2026": 12.2,
+      "Feb 2026": 4.4,
+      "Mar 2026": -2.8,
+      "Apr 2026": -7.0,
+      "May 2026": 0.7,
+      "Jun 2026": -0.5,
+      "Jul 2026": -1.1,
+      "Aug 2026": 11.3,
+      "Sep 2026": 0.4
+    },
+    "months_ge_10r": 2,
+    "monte_carlo": {
+      "expected_max_dd_r": 8.7,
+      "var_95_max_dd_r": 15.92,
+      "risk_of_ruin_10r": 30.0,
+      "risk_of_ruin_20r": 0.7,
+      "probability_of_profit": 90.0,
+      "median_final_r": 17.98
+    },
+    "rank_score": 31.4,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 8.0,
+    "train_pf": 1.32,
+    "train_trades": 48,
+    "train_win_rate": 0.0,
+    "val_r": 3.1,
+    "val_pf": 1.5,
+    "val_trades": 13,
+    "test_r": 7.4,
+    "test_pf": 2.38,
+    "test_trades": 14,
+    "rank": 155
   },
   {
     "id": "strat_1789207924",
@@ -6838,7 +7968,7 @@
     "test_r": 10.1,
     "test_pf": 1.56,
     "test_trades": 34,
-    "rank": 134
+    "rank": 156
   },
   {
     "id": "strat_1789211636",
@@ -6889,7 +8019,7 @@
     "test_r": -6.4,
     "test_pf": 0.29,
     "test_trades": 12,
-    "rank": 135
+    "rank": 157
   },
   {
     "id": "strat_1789135544",
@@ -6940,7 +8070,7 @@
     "test_pf": 1.64,
     "test_trades": 23,
     "train_win_rate": 30.6,
-    "rank": 136
+    "rank": 158
   },
   {
     "id": "strat_1789117588",
@@ -6991,7 +8121,7 @@
     "train_pf": 1.24,
     "train_trades": 104,
     "train_win_rate": 35.6,
-    "rank": 137
+    "rank": 159
   },
   {
     "id": "strat_1789117866",
@@ -7042,7 +8172,7 @@
     "train_pf": 1.17,
     "train_trades": 172,
     "train_win_rate": 29.7,
-    "rank": 138
+    "rank": 160
   },
   {
     "id": "strat_1789135334",
@@ -7091,7 +8221,7 @@
     "test_pf": 2.0,
     "test_trades": 6,
     "train_win_rate": 47.1,
-    "rank": 139
+    "rank": 161
   },
   {
     "id": "strat_1789142996",
@@ -7142,7 +8272,7 @@
     "test_pf": 1.94,
     "test_trades": 21,
     "train_win_rate": 30.1,
-    "rank": 140
+    "rank": 162
   },
   {
     "id": "strat_1789145430",
@@ -7193,7 +8323,7 @@
     "test_pf": 2.25,
     "test_trades": 25,
     "train_win_rate": 30.5,
-    "rank": 141
+    "rank": 163
   },
   {
     "id": "strat_1789194108",
@@ -7244,7 +8374,7 @@
     "test_r": 11.4,
     "test_pf": 1.61,
     "test_trades": 39,
-    "rank": 142
+    "rank": 164
   },
   {
     "id": "strat_1789123069",
@@ -7295,7 +8425,7 @@
     "train_pf": 1.24,
     "train_trades": 77,
     "train_win_rate": 42.9,
-    "rank": 143
+    "rank": 165
   },
   {
     "id": "strat_1789136981",
@@ -7346,7 +8476,7 @@
     "test_pf": 1.45,
     "test_trades": 56,
     "train_win_rate": 34.4,
-    "rank": 144
+    "rank": 166
   },
   {
     "id": "strat_1789149178",
@@ -7395,7 +8525,7 @@
     "test_pf": 1.99,
     "test_trades": 6,
     "train_win_rate": 41.2,
-    "rank": 145
+    "rank": 167
   },
   {
     "id": "strat_1789096036",
@@ -7446,7 +8576,7 @@
     "test_r": 3.8,
     "test_pf": 1.74,
     "test_trades": 12,
-    "rank": 146
+    "rank": 168
   },
   {
     "id": "strat_1789192091",
@@ -7497,7 +8627,7 @@
     "test_r": 13.3,
     "test_pf": 1.69,
     "test_trades": 39,
-    "rank": 147
+    "rank": 169
   },
   {
     "id": "strat_1789146371",
@@ -7548,7 +8678,7 @@
     "test_pf": 1.28,
     "test_trades": 31,
     "train_win_rate": 37.1,
-    "rank": 148
+    "rank": 170
   },
   {
     "id": "strat_1789201086",
@@ -7599,7 +8729,7 @@
     "test_r": -0.3,
     "test_pf": 0.96,
     "test_trades": 16,
-    "rank": 149
+    "rank": 171
   },
   {
     "id": "strat_1789271381",
@@ -7650,7 +8780,7 @@
     "test_r": 2.1,
     "test_pf": 1.15,
     "test_trades": 21,
-    "rank": 150
+    "rank": 172
   },
   {
     "id": "strat_1789178821",
@@ -7701,7 +8831,7 @@
     "test_r": -4.0,
     "test_pf": 0.68,
     "test_trades": 22,
-    "rank": 151
+    "rank": 173
   },
   {
     "id": "strat_1789143301",
@@ -7752,7 +8882,7 @@
     "test_pf": 2.94,
     "test_trades": 12,
     "train_win_rate": 44.2,
-    "rank": 152
+    "rank": 174
   },
   {
     "id": "strat_1789223086",
@@ -7802,7 +8932,7 @@
     "test_r": 4.3,
     "test_pf": 1.52,
     "test_trades": 16,
-    "rank": 153
+    "rank": 175
   },
   {
     "id": "strat_1789133197",
@@ -7853,7 +8983,7 @@
     "train_pf": 1.09,
     "train_trades": 55,
     "train_win_rate": 41.8,
-    "rank": 154
+    "rank": 176
   },
   {
     "id": "strat_1789203450",
@@ -7904,7 +9034,7 @@
     "test_r": 14.6,
     "test_pf": 1.91,
     "test_trades": 34,
-    "rank": 155
+    "rank": 177
   },
   {
     "id": "strat_1789268789",
@@ -7955,7 +9085,7 @@
     "test_r": 4.7,
     "test_pf": 1.27,
     "test_trades": 24,
-    "rank": 156
+    "rank": 178
   },
   {
     "id": "strat_1789099038",
@@ -8006,7 +9136,7 @@
     "test_r": 0.8,
     "test_pf": 1.16,
     "test_trades": 9,
-    "rank": 157
+    "rank": 179
   },
   {
     "id": "strat_1789216385",
@@ -8057,7 +9187,7 @@
     "test_r": 0.4,
     "test_pf": 1.02,
     "test_trades": 23,
-    "rank": 158
+    "rank": 180
   },
   {
     "id": "strat_1789271646",
@@ -8108,7 +9238,7 @@
     "test_r": -3.0,
     "test_pf": 0.0,
     "test_trades": 9,
-    "rank": 159
+    "rank": 181
   },
   {
     "id": "strat_1789123900",
@@ -8159,7 +9289,7 @@
     "train_pf": 1.29,
     "train_trades": 81,
     "train_win_rate": 42.0,
-    "rank": 160
+    "rank": 182
   },
   {
     "id": "strat_1789177548",
@@ -8210,7 +9340,7 @@
     "test_r": 7.0,
     "test_pf": 1.39,
     "test_trades": 37,
-    "rank": 161
+    "rank": 183
   },
   {
     "id": "strat_1789124243",
@@ -8260,7 +9390,7 @@
     "train_pf": 1.27,
     "train_trades": 19,
     "train_win_rate": 42.1,
-    "rank": 162
+    "rank": 184
   },
   {
     "id": "strat_1789142290",
@@ -8311,7 +9441,7 @@
     "test_pf": 0.65,
     "test_trades": 9,
     "train_win_rate": 42.9,
-    "rank": 163
+    "rank": 185
   },
   {
     "id": "strat_1789154125",
@@ -8362,7 +9492,7 @@
     "test_r": 16.7,
     "test_pf": 1.86,
     "test_trades": 41,
-    "rank": 164
+    "rank": 186
   },
   {
     "id": "strat_1789186042",
@@ -8413,7 +9543,58 @@
     "test_r": 14.1,
     "test_pf": 2.74,
     "test_trades": 17,
-    "rank": 165
+    "rank": 187
+  },
+  {
+    "id": "strat_1789278375",
+    "name": "Volume Spread Analysis + Institutional Displacement (Round #67)",
+    "concept": "Filters for high institutional volume spikes (RVOL > 1.8) accompanied by la...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 11:16:15",
+    "code": "def calculate_signals(df):\n    sess = session_mask(df, 'london_ny')\n    macro = htf_trend_filter(df, '1h')\n    sw_highs, sw_lows = find_swings(df, swing_len=5)\n    atr_val = atr(df, 14)\n    ema_fast = ema(df['close'], 21)\n    ema_slow = ema(df['close'], 55)\n    vol_filter = rvol(df, 20) > 1.25\n    \n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n    trend_bull = (ema_fast > ema_slow) & (macro >= 0)\n    trend_bear = (ema_fast < ema_slow) & (macro <= 0)\n    \n    raw_bull = ssl_sweep & trend_bull & vol_filter & sess\n    raw_bear = bsl_sweep & trend_bear & vol_filter & sess\n    \n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n    \n    risk_l = np.maximum(df['close'] - (sw_lows - (1.4 * atr_val)), 4.0)\n    risk_s = np.maximum((sw_highs + (1.4 * atr_val)) - df['close'], 4.0)\n    \n    df['sl_long'] = df['close'] - risk_l\n    df['sl_short'] = df['close'] + risk_s\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_l * 3.2)\n    df['tp2_long'] = df['close'] + (risk_l * 8.0)\n    df['tp1_short'] = df['close'] - (risk_s * 3.2)\n    df['tp2_short'] = df['close'] - (risk_s * 8.0)\n    return df\n",
+    "total_r": 17.2,
+    "total_trades": 144,
+    "winning_trades": 28,
+    "losing_trades": 116,
+    "win_rate": 19.4,
+    "profit_factor": 1.23,
+    "total_pnl": 17280.65,
+    "max_drawdown_r": 14.1,
+    "max_drawdown_pct": 11.28,
+    "sharpe_ratio": 1.23,
+    "monthly_r": {
+      "Jan 2026": 11.2,
+      "Feb 2026": 3.1,
+      "Mar 2026": -4.8,
+      "Apr 2026": 3.9,
+      "May 2026": 7.4,
+      "Jun 2026": -5.7,
+      "Jul 2026": 7.4,
+      "Aug 2026": -7.2,
+      "Sep 2026": 1.9
+    },
+    "months_ge_10r": 1,
+    "monte_carlo": {
+      "expected_max_dd_r": 16.7,
+      "var_95_max_dd_r": 30.37,
+      "risk_of_ruin_10r": 88.1,
+      "risk_of_ruin_20r": 24.6,
+      "probability_of_profit": 79.0,
+      "median_final_r": 16.19
+    },
+    "rank_score": 19.3,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 15.1,
+    "train_pf": 1.29,
+    "train_trades": 101,
+    "train_win_rate": 0.0,
+    "val_r": 7.4,
+    "val_pf": 1.73,
+    "val_trades": 20,
+    "test_r": -5.3,
+    "test_pf": 0.6,
+    "test_trades": 23,
+    "rank": 188
   },
   {
     "id": "strat_1789117798",
@@ -8464,7 +9645,7 @@
     "train_pf": 1.07,
     "train_trades": 65,
     "train_win_rate": 38.5,
-    "rank": 166
+    "rank": 189
   },
   {
     "id": "strat_1789131506",
@@ -8513,7 +9694,7 @@
     "train_pf": 1.01,
     "train_trades": 17,
     "train_win_rate": 35.3,
-    "rank": 167
+    "rank": 190
   },
   {
     "id": "strat_1789218695",
@@ -8564,7 +9745,7 @@
     "test_r": 6.0,
     "test_pf": 1.48,
     "test_trades": 33,
-    "rank": 168
+    "rank": 191
   },
   {
     "id": "strat_1789271455",
@@ -8615,7 +9796,7 @@
     "test_r": 2.2,
     "test_pf": 7.51,
     "test_trades": 3,
-    "rank": 169
+    "rank": 192
   },
   {
     "id": "strat_1789138780",
@@ -8666,7 +9847,7 @@
     "test_pf": 0.73,
     "test_trades": 21,
     "train_win_rate": 42.5,
-    "rank": 170
+    "rank": 193
   },
   {
     "id": "strat_1789121122",
@@ -8717,7 +9898,7 @@
     "train_pf": 1.08,
     "train_trades": 222,
     "train_win_rate": 28.8,
-    "rank": 171
+    "rank": 194
   },
   {
     "id": "strat_1789097622",
@@ -8766,7 +9947,7 @@
     "test_r": 3.6,
     "test_pf": 14.5,
     "test_trades": 3,
-    "rank": 172
+    "rank": 195
   },
   {
     "id": "strat_1789136509",
@@ -8817,7 +9998,7 @@
     "test_pf": 0.76,
     "test_trades": 15,
     "train_win_rate": 41.8,
-    "rank": 173
+    "rank": 196
   },
   {
     "id": "strat_1789215844",
@@ -8868,7 +10049,7 @@
     "test_r": 10.1,
     "test_pf": 1.56,
     "test_trades": 31,
-    "rank": 174
+    "rank": 197
   },
   {
     "id": "strat_1789105044",
@@ -8916,7 +10097,7 @@
     "test_r": -1.0,
     "test_pf": 0.0,
     "test_trades": 1,
-    "rank": 175
+    "rank": 198
   },
   {
     "id": "strat_1789217544",
@@ -8967,7 +10148,58 @@
     "test_r": -6.7,
     "test_pf": 0.8,
     "test_trades": 52,
-    "rank": 176
+    "rank": 199
+  },
+  {
+    "id": "strat_1789278033",
+    "name": "Equal Highs/Lows (EQH/EQL) Liquidity Hunt (Round #61)",
+    "concept": "Hunts double tops/bottoms (equal highs/lows) where retail stops accumulate,...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 11:10:33",
+    "code": "def calculate_signals(df):\n    sess = session_mask(df, 'london_ny')\n    macro = htf_trend_filter(df, '1h')\n    sw_highs, sw_lows = find_swings(df, swing_len=5)\n    atr_val = atr(df, 14)\n    ema_fast = ema(df['close'], 13)\n    ema_slow = ema(df['close'], 55)\n    vol_filter = rvol(df, 20) > 1.4\n    \n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n    trend_bull = (ema_fast > ema_slow) & (macro >= 0)\n    trend_bear = (ema_fast < ema_slow) & (macro <= 0)\n    \n    raw_bull = ssl_sweep & trend_bull & vol_filter & sess\n    raw_bear = bsl_sweep & trend_bear & vol_filter & sess\n    \n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n    \n    risk_l = np.maximum(df['close'] - (sw_lows - (1.4 * atr_val)), 3.5)\n    risk_s = np.maximum((sw_highs + (1.4 * atr_val)) - df['close'], 3.5)\n    \n    df['sl_long'] = df['close'] - risk_l\n    df['sl_short'] = df['close'] + risk_s\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_l * 2.8)\n    df['tp2_long'] = df['close'] + (risk_l * 7.0)\n    df['tp1_short'] = df['close'] - (risk_s * 2.8)\n    df['tp2_short'] = df['close'] - (risk_s * 7.0)\n    return df\n",
+    "total_r": 10.5,
+    "total_trades": 79,
+    "winning_trades": 18,
+    "losing_trades": 61,
+    "win_rate": 22.8,
+    "profit_factor": 1.25,
+    "total_pnl": 10511.46,
+    "max_drawdown_r": 8.6,
+    "max_drawdown_pct": 7.69,
+    "sharpe_ratio": 1.03,
+    "monthly_r": {
+      "Jan 2026": 7.4,
+      "Feb 2026": 0.4,
+      "Mar 2026": -1.1,
+      "Apr 2026": -3.0,
+      "May 2026": 6.1,
+      "Jun 2026": -6.1,
+      "Jul 2026": 7.6,
+      "Aug 2026": -2.5,
+      "Sep 2026": 1.7
+    },
+    "months_ge_10r": 0,
+    "monte_carlo": {
+      "expected_max_dd_r": 11.68,
+      "var_95_max_dd_r": 21.66,
+      "risk_of_ruin_10r": 54.2,
+      "risk_of_ruin_20r": 7.5,
+      "probability_of_profit": 77.1,
+      "median_final_r": 10.78
+    },
+    "rank_score": 16.6,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 3.7,
+    "train_pf": 1.14,
+    "train_trades": 48,
+    "train_win_rate": 0.0,
+    "val_r": 7.6,
+    "val_pf": 2.07,
+    "val_trades": 16,
+    "test_r": -0.8,
+    "test_pf": 0.9,
+    "test_trades": 15,
+    "rank": 200
   },
   {
     "id": "strat_1789196770",
@@ -9018,7 +10250,7 @@
     "test_r": 4.4,
     "test_pf": 1.43,
     "test_trades": 16,
-    "rank": 177
+    "rank": 201
   },
   {
     "id": "strat_1789117241",
@@ -9067,7 +10299,7 @@
     "train_pf": 0.95,
     "train_trades": 17,
     "train_win_rate": 35.3,
-    "rank": 178
+    "rank": 202
   },
   {
     "id": "strat_1789272216",
@@ -9117,7 +10349,7 @@
     "test_r": 6.8,
     "test_pf": 2.28,
     "test_trades": 12,
-    "rank": 179
+    "rank": 203
   },
   {
     "id": "strat_1789147824",
@@ -9168,7 +10400,7 @@
     "test_pf": 1.35,
     "test_trades": 16,
     "train_win_rate": 45.5,
-    "rank": 180
+    "rank": 204
   },
   {
     "id": "strat_1789104548",
@@ -9219,7 +10451,7 @@
     "test_r": -1.7,
     "test_pf": 0.47,
     "test_trades": 4,
-    "rank": 181
+    "rank": 205
   },
   {
     "id": "strat_1789102357",
@@ -9268,7 +10500,7 @@
     "test_r": 2.4,
     "test_pf": 2.05,
     "test_trades": 6,
-    "rank": 182
+    "rank": 206
   },
   {
     "id": "strat_1789108611",
@@ -9319,7 +10551,7 @@
     "test_r": -1.8,
     "test_pf": 0.65,
     "test_trades": 7,
-    "rank": 183
+    "rank": 207
   },
   {
     "id": "strat_1789219310",
@@ -9370,7 +10602,7 @@
     "test_r": 10.1,
     "test_pf": 1.56,
     "test_trades": 31,
-    "rank": 184
+    "rank": 208
   },
   {
     "id": "strat_1789119961",
@@ -9421,7 +10653,7 @@
     "train_pf": 1.05,
     "train_trades": 91,
     "train_win_rate": 41.8,
-    "rank": 185
+    "rank": 209
   },
   {
     "id": "strat_1789139763",
@@ -9472,7 +10704,58 @@
     "test_pf": 1.95,
     "test_trades": 24,
     "train_win_rate": 35.4,
-    "rank": 186
+    "rank": 210
+  },
+  {
+    "id": "strat_1789274793",
+    "name": "Volume Spread Analysis + Institutional Displacement (Round #4)",
+    "concept": "Filters for high institutional volume spikes (RVOL > 1.8) accompanied by la...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:16:33",
+    "code": "def calculate_signals(df):\n    sess = session_mask(df, 'london_ny')\n    macro = htf_trend_filter(df, '1h')\n    sw_highs, sw_lows = find_swings(df, swing_len=12)\n    atr_val = atr(df, 14)\n    ema_fast = ema(df['close'], 21)\n    ema_slow = ema(df['close'], 55)\n    vol_filter = rvol(df, 20) > 1.25\n    \n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n    trend_bull = (ema_fast > ema_slow) & (macro >= 0)\n    trend_bear = (ema_fast < ema_slow) & (macro <= 0)\n    \n    raw_bull = ssl_sweep & trend_bull & vol_filter & sess\n    raw_bear = bsl_sweep & trend_bear & vol_filter & sess\n    \n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n    \n    risk_l = np.maximum(df['close'] - (sw_lows - (1.4 * atr_val)), 5.0)\n    risk_s = np.maximum((sw_highs + (1.4 * atr_val)) - df['close'], 5.0)\n    \n    df['sl_long'] = df['close'] - risk_l\n    df['sl_short'] = df['close'] + risk_s\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_l * 2.8)\n    df['tp2_long'] = df['close'] + (risk_l * 7.0)\n    df['tp1_short'] = df['close'] - (risk_s * 2.8)\n    df['tp2_short'] = df['close'] - (risk_s * 7.0)\n    return df\n",
+    "total_r": 6.5,
+    "total_trades": 72,
+    "winning_trades": 17,
+    "losing_trades": 55,
+    "win_rate": 23.6,
+    "profit_factor": 1.16,
+    "total_pnl": 6332.89,
+    "max_drawdown_r": 8.1,
+    "max_drawdown_pct": 7.32,
+    "sharpe_ratio": 0.7,
+    "monthly_r": {
+      "Jan 2026": 4.3,
+      "Feb 2026": -0.1,
+      "Mar 2026": 0.1,
+      "Apr 2026": 1.6,
+      "May 2026": 1.7,
+      "Jun 2026": -0.2,
+      "Jul 2026": 3.0,
+      "Aug 2026": -1.9,
+      "Sep 2026": -2.0
+    },
+    "months_ge_10r": 0,
+    "monte_carlo": {
+      "expected_max_dd_r": 12.06,
+      "var_95_max_dd_r": 22.86,
+      "risk_of_ruin_10r": 59.6,
+      "risk_of_ruin_20r": 9.2,
+      "probability_of_profit": 69.5,
+      "median_final_r": 6.5
+    },
+    "rank_score": 12.4,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 7.4,
+    "train_pf": 1.26,
+    "train_trades": 47,
+    "train_win_rate": 0.0,
+    "val_r": 3.0,
+    "val_pf": 1.58,
+    "val_trades": 11,
+    "test_r": -3.9,
+    "test_pf": 0.36,
+    "test_trades": 14,
+    "rank": 211
   },
   {
     "id": "strat_1789157478",
@@ -9523,7 +10806,7 @@
     "test_r": 22.3,
     "test_pf": 2.07,
     "test_trades": 55,
-    "rank": 187
+    "rank": 212
   },
   {
     "id": "strat_1789102657",
@@ -9574,7 +10857,7 @@
     "test_r": 2.3,
     "test_pf": 1.28,
     "test_trades": 15,
-    "rank": 188
+    "rank": 213
   },
   {
     "id": "strat_1789097451",
@@ -9624,7 +10907,7 @@
     "test_r": -0.5,
     "test_pf": 0.74,
     "test_trades": 3,
-    "rank": 189
+    "rank": 214
   },
   {
     "id": "strat_1789097111",
@@ -9675,7 +10958,7 @@
     "test_r": 14.7,
     "test_pf": 1.55,
     "test_trades": 65,
-    "rank": 190
+    "rank": 215
   },
   {
     "id": "strat_1789123274",
@@ -9725,7 +11008,109 @@
     "train_pf": 0.89,
     "train_trades": 15,
     "train_win_rate": 26.7,
-    "rank": 191
+    "rank": 216
+  },
+  {
+    "id": "strat_1789279089",
+    "name": "Volume Spread Analysis + Institutional Displacement (Round #80)",
+    "concept": "Filters for high institutional volume spikes (RVOL > 1.8) accompanied by la...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 11:28:09",
+    "code": "def calculate_signals(df):\n    sess = session_mask(df, 'london_ny')\n    macro = htf_trend_filter(df, '1h')\n    sw_highs, sw_lows = find_swings(df, swing_len=10)\n    atr_val = atr(df, 14)\n    ema_fast = ema(df['close'], 21)\n    ema_slow = ema(df['close'], 34)\n    vol_filter = rvol(df, 20) > 1.25\n    \n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n    trend_bull = (ema_fast > ema_slow) & (macro >= 0)\n    trend_bear = (ema_fast < ema_slow) & (macro <= 0)\n    \n    raw_bull = ssl_sweep & trend_bull & vol_filter & sess\n    raw_bear = bsl_sweep & trend_bear & vol_filter & sess\n    \n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n    \n    risk_l = np.maximum(df['close'] - (sw_lows - (1.4 * atr_val)), 4.0)\n    risk_s = np.maximum((sw_highs + (1.4 * atr_val)) - df['close'], 4.0)\n    \n    df['sl_long'] = df['close'] - risk_l\n    df['sl_short'] = df['close'] + risk_s\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_l * 3.2)\n    df['tp2_long'] = df['close'] + (risk_l * 8.0)\n    df['tp1_short'] = df['close'] - (risk_s * 3.2)\n    df['tp2_short'] = df['close'] - (risk_s * 8.0)\n    return df\n",
+    "total_r": 4.2,
+    "total_trades": 57,
+    "winning_trades": 11,
+    "losing_trades": 46,
+    "win_rate": 19.3,
+    "profit_factor": 1.13,
+    "total_pnl": 4213.07,
+    "max_drawdown_r": 7.1,
+    "max_drawdown_pct": 6.82,
+    "sharpe_ratio": 0.48,
+    "monthly_r": {
+      "Jan 2026": 1.1,
+      "Feb 2026": 2.4,
+      "Mar 2026": -2.0,
+      "Apr 2026": 1.2,
+      "May 2026": -2.0,
+      "Jun 2026": 0.4,
+      "Jul 2026": 3.7,
+      "Aug 2026": 0.4,
+      "Sep 2026": -1.0
+    },
+    "months_ge_10r": 0,
+    "monte_carlo": {
+      "expected_max_dd_r": 12.28,
+      "var_95_max_dd_r": 22.46,
+      "risk_of_ruin_10r": 61.6,
+      "risk_of_ruin_20r": 9.0,
+      "probability_of_profit": 63.3,
+      "median_final_r": 4.15
+    },
+    "rank_score": 10.8,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 1.1,
+    "train_pf": 1.05,
+    "train_trades": 37,
+    "train_win_rate": 0.0,
+    "val_r": 7.8,
+    "val_pf": 2.91,
+    "val_trades": 10,
+    "test_r": -4.7,
+    "test_pf": 0.34,
+    "test_trades": 10,
+    "rank": 217
+  },
+  {
+    "id": "strat_1789280276",
+    "name": "Volume Spread Analysis + Institutional Displacement (Round #100)",
+    "concept": "Filters for high institutional volume spikes (RVOL > 1.8) accompanied by la...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 11:47:56",
+    "code": "def calculate_signals(df):\n    sess = session_mask(df, 'london_ny')\n    macro = htf_trend_filter(df, '1h')\n    sw_highs, sw_lows = find_swings(df, swing_len=6)\n    atr_val = atr(df, 14)\n    ema_fast = ema(df['close'], 13)\n    ema_slow = ema(df['close'], 55)\n    vol_filter = rvol(df, 20) > 1.1\n    \n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n    trend_bull = (ema_fast > ema_slow) & (macro >= 0)\n    trend_bear = (ema_fast < ema_slow) & (macro <= 0)\n    \n    raw_bull = ssl_sweep & trend_bull & vol_filter & sess\n    raw_bear = bsl_sweep & trend_bear & vol_filter & sess\n    \n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n    \n    risk_l = np.maximum(df['close'] - (sw_lows - (1.8 * atr_val)), 4.0)\n    risk_s = np.maximum((sw_highs + (1.8 * atr_val)) - df['close'], 4.0)\n    \n    df['sl_long'] = df['close'] - risk_l\n    df['sl_short'] = df['close'] + risk_s\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_l * 2.0)\n    df['tp2_long'] = df['close'] + (risk_l * 5.0)\n    df['tp1_short'] = df['close'] - (risk_s * 2.0)\n    df['tp2_short'] = df['close'] - (risk_s * 5.0)\n    return df\n",
+    "total_r": 5.2,
+    "total_trades": 150,
+    "winning_trades": 41,
+    "losing_trades": 109,
+    "win_rate": 27.3,
+    "profit_factor": 1.07,
+    "total_pnl": 5171.07,
+    "max_drawdown_r": 12.2,
+    "max_drawdown_pct": 10.9,
+    "sharpe_ratio": 0.58,
+    "monthly_r": {
+      "Jan 2026": 10.5,
+      "Feb 2026": 0.5,
+      "Mar 2026": -5.0,
+      "Apr 2026": -0.4,
+      "May 2026": 1.6,
+      "Jun 2026": -2.3,
+      "Jul 2026": 3.4,
+      "Aug 2026": -6.7,
+      "Sep 2026": 3.6
+    },
+    "months_ge_10r": 1,
+    "monte_carlo": {
+      "expected_max_dd_r": 16.78,
+      "var_95_max_dd_r": 29.57,
+      "risk_of_ruin_10r": 85.8,
+      "risk_of_ruin_20r": 27.4,
+      "probability_of_profit": 61.9,
+      "median_final_r": 4.76
+    },
+    "rank_score": 10.3,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 4.9,
+    "train_pf": 1.09,
+    "train_trades": 106,
+    "train_win_rate": 0.0,
+    "val_r": 5.3,
+    "val_pf": 1.52,
+    "val_trades": 23,
+    "test_r": -5.1,
+    "test_pf": 0.55,
+    "test_trades": 21,
+    "rank": 218
   },
   {
     "id": "champion_lss",
@@ -9776,7 +11161,7 @@
     "test_r": -3.3,
     "test_pf": 0.95,
     "test_trades": 121,
-    "rank": 192
+    "rank": 219
   },
   {
     "id": "strat_1789103123",
@@ -9820,7 +11205,58 @@
     "test_r": 0.0,
     "test_pf": 0.0,
     "test_trades": 0,
-    "rank": 193
+    "rank": 220
+  },
+  {
+    "id": "strat_1789276487",
+    "name": "Inverted Fair Value Gap (IFVG) Support/Resistance Breaker (Round #35)",
+    "concept": "Identifies failed Fair Value Gaps where price broke through the gap without...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:44:47",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows with different lookback\n    sw_highs, sw_lows = find_swings(df, swing_len=10)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # Find FVGs\n    b_fvg_top, b_fvg_bot, s_fvg_top, s_fvg_bot = find_fvgs(df)\n\n    # Bullish IFVG breaker condition with additional filters\n    bull_ifvg = (df['low'] <= s_fvg_top) & (df['low'].shift(1) > s_fvg_top) & (df['close'] > s_fvg_top) & (df['close'] > vwap_line) & (df['close'] > levels['pp']) & (df['volume'] > df['volume'].rolling(20).mean())\n\n    # Bearish IFVG breaker condition with additional filters\n    bear_ifvg = (df['high'] >= b_fvg_bot) & (df['high'].shift(1) < b_fvg_bot) & (df['close'] < b_fvg_bot) & (df['close'] < vwap_line) & (df['close'] < levels['pp']) & (df['volume'] > df['volume'].rolling(20).mean())\n\n    # Apply session mask\n    bull_ifvg = bull_ifvg & sess\n    bear_ifvg = bear_ifvg & sess\n\n    # Anti-bleed: Only trigger on first candle of setup\n    df['bull_signal'] = bull_ifvg & (~bull_ifvg.shift(1).fillna(False))\n    df['bear_signal'] = bear_ifvg & (~bear_ifvg.shift(1).fillna(False))\n\n    # Risk management\n    atr_14 = atr(df, 14)\n\n    # Stop loss with 1.5x ATR multiplier\n    df['sl_long'] = np.minimum(df['low'], sw_lows) - (1.5 * atr_14)\n    df['sl_short'] = np.maximum(df['high'], sw_highs) + (1.5 * atr_14)\n\n    # Ensure minimum stop distance of $4.00\n    risk_long = np.maximum(df['close'] - df['sl_long'], 4.00)\n    risk_short = np.maximum(df['sl_short'] - df['close'], 4.00)\n\n    # Multi-target scaling with breakeven protection\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_long * 1.5)\n    df['tp2_long'] = df['close'] + (risk_long * 4.5)\n    df['tp1_short'] = df['close'] - (risk_short * 1.5)\n    df['tp2_short'] = df['close'] - (risk_short * 4.5)\n\n    return df",
+    "total_r": 7.8,
+    "total_trades": 84,
+    "winning_trades": 33,
+    "losing_trades": 51,
+    "win_rate": 39.3,
+    "profit_factor": 1.2,
+    "total_pnl": 7854.43,
+    "max_drawdown_r": 12.1,
+    "max_drawdown_pct": 10.61,
+    "sharpe_ratio": 0.95,
+    "monthly_r": {
+      "Jan 2026": 5.7,
+      "Feb 2026": 8.0,
+      "Mar 2026": -4.8,
+      "Apr 2026": -4.4,
+      "May 2026": 2.6,
+      "Jun 2026": -1.5,
+      "Jul 2026": 4.3,
+      "Aug 2026": -1.2,
+      "Sep 2026": -0.9
+    },
+    "months_ge_10r": 0,
+    "monte_carlo": {
+      "expected_max_dd_r": 9.57,
+      "var_95_max_dd_r": 17.37,
+      "risk_of_ruin_10r": 36.1,
+      "risk_of_ruin_20r": 2.6,
+      "probability_of_profit": 77.3,
+      "median_final_r": 7.34
+    },
+    "rank_score": 9.5,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 6.6,
+    "train_pf": 1.27,
+    "train_trades": 54,
+    "train_win_rate": 0.0,
+    "val_r": 5.1,
+    "val_pf": 1.58,
+    "val_trades": 19,
+    "test_r": -3.9,
+    "test_pf": 0.22,
+    "test_trades": 11,
+    "rank": 221
   },
   {
     "id": "strat_1789220106",
@@ -9871,7 +11307,7 @@
     "test_r": -9.8,
     "test_pf": 0.64,
     "test_trades": 33,
-    "rank": 194
+    "rank": 222
   },
   {
     "id": "strat_1789118669",
@@ -9922,7 +11358,7 @@
     "train_pf": 1.19,
     "train_trades": 29,
     "train_win_rate": 37.9,
-    "rank": 195
+    "rank": 223
   },
   {
     "id": "strat_1789115611",
@@ -9973,7 +11409,7 @@
     "train_pf": 1.08,
     "train_trades": 157,
     "train_win_rate": 34.4,
-    "rank": 196
+    "rank": 224
   },
   {
     "id": "strat_1789216973",
@@ -10024,7 +11460,7 @@
     "test_r": 2.1,
     "test_pf": 1.25,
     "test_trades": 12,
-    "rank": 197
+    "rank": 225
   },
   {
     "id": "strat_1789135135",
@@ -10075,7 +11511,7 @@
     "test_pf": 0.75,
     "test_trades": 7,
     "train_win_rate": 29.6,
-    "rank": 198
+    "rank": 226
   },
   {
     "id": "strat_1789116573",
@@ -10123,7 +11559,7 @@
     "train_pf": 0.8,
     "train_trades": 11,
     "train_win_rate": 27.3,
-    "rank": 199
+    "rank": 227
   },
   {
     "id": "strat_1789099172",
@@ -10174,7 +11610,7 @@
     "test_r": 5.9,
     "test_pf": 1.95,
     "test_trades": 15,
-    "rank": 200
+    "rank": 228
   },
   {
     "id": "strat_1789212664",
@@ -10225,7 +11661,58 @@
     "test_r": 5.6,
     "test_pf": 1.93,
     "test_trades": 12,
-    "rank": 201
+    "rank": 229
+  },
+  {
+    "id": "strat_1789279556",
+    "name": "Sequential SMC Sweep + Multi-Bar FVG Mitigation (Round #88)",
+    "concept": "Temporal state machine: SSL/BSL sweep arms setup for up to 10 bars, trigger...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 11:35:56",
+    "code": "def calculate_signals(df):\n    sess = session_mask(df, 'london_ny')\n    macro = htf_trend_filter(df, '1h')\n    sw_highs, sw_lows = find_swings(df, swing_len=10)\n    bull_fvg_top, bull_fvg_bot, bear_fvg_top, bear_fvg_bot = find_fvgs(df)\n    vwap_line = vwap(df)\n    \n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n    \n    armed_long = ssl_sweep.rolling(8, min_periods=1).max() == 1\n    armed_short = bsl_sweep.rolling(8, min_periods=1).max() == 1\n    \n    fvg_touch_long = (df['low'] <= bull_fvg_top) & (df['close'] > bull_fvg_bot)\n    fvg_touch_short = (df['high'] >= bear_fvg_bot) & (df['close'] < bear_fvg_top)\n    \n    raw_bull = armed_long & fvg_touch_long & (df['close'] > vwap_line) & (macro >= 0) & sess\n    raw_bear = armed_short & fvg_touch_short & (df['close'] < vwap_line) & (macro <= 0) & sess\n    \n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n    \n    atr_val = atr(df, 10)\n    sl_long = np.minimum(df['low'], sw_lows) - (1.3 * atr_val)\n    sl_short = np.maximum(df['high'], sw_highs) + (1.3 * atr_val)\n    \n    risk_l = np.maximum(df['close'] - sl_long, 4.0)\n    risk_s = np.maximum(sl_short - df['close'], 4.0)\n    \n    df['sl_long'] = df['close'] - risk_l\n    df['sl_short'] = df['close'] + risk_s\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_l * 2.2)\n    df['tp2_long'] = df['close'] + (risk_l * 5.5)\n    df['tp1_short'] = df['close'] - (risk_s * 2.2)\n    df['tp2_short'] = df['close'] - (risk_s * 5.5)\n    return df\n",
+    "total_r": 11.1,
+    "total_trades": 190,
+    "winning_trades": 43,
+    "losing_trades": 147,
+    "win_rate": 22.6,
+    "profit_factor": 1.13,
+    "total_pnl": 11086.47,
+    "max_drawdown_r": 12.6,
+    "max_drawdown_pct": 11.93,
+    "sharpe_ratio": 0.72,
+    "monthly_r": {
+      "Jan 2026": 3.5,
+      "Feb 2026": -1.5,
+      "Mar 2026": -0.9,
+      "Apr 2026": -2.2,
+      "May 2026": 0.5,
+      "Jun 2026": 4.7,
+      "Jul 2026": 4.9,
+      "Aug 2026": 4.7,
+      "Sep 2026": -2.6
+    },
+    "months_ge_10r": 0,
+    "monte_carlo": {
+      "expected_max_dd_r": 16.79,
+      "var_95_max_dd_r": 29.51,
+      "risk_of_ruin_10r": 87.8,
+      "risk_of_ruin_20r": 26.8,
+      "probability_of_profit": 72.5,
+      "median_final_r": 11.52
+    },
+    "rank_score": 7.4,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 4.1,
+    "train_pf": 1.06,
+    "train_trades": 145,
+    "train_win_rate": 0.0,
+    "val_r": 3.8,
+    "val_pf": 1.47,
+    "val_trades": 22,
+    "test_r": 3.2,
+    "test_pf": 1.52,
+    "test_trades": 23,
+    "rank": 230
   },
   {
     "id": "strat_1789223906",
@@ -10276,7 +11763,7 @@
     "test_r": -4.0,
     "test_pf": 0.53,
     "test_trades": 22,
-    "rank": 202
+    "rank": 231
   },
   {
     "id": "strat_1789269187",
@@ -10327,7 +11814,7 @@
     "test_r": -4.0,
     "test_pf": 0.53,
     "test_trades": 22,
-    "rank": 203
+    "rank": 232
   },
   {
     "id": "strat_1789219174",
@@ -10378,7 +11865,7 @@
     "test_r": 7.2,
     "test_pf": 1.25,
     "test_trades": 50,
-    "rank": 204
+    "rank": 233
   },
   {
     "id": "strat_1789210169",
@@ -10429,7 +11916,7 @@
     "test_r": 7.9,
     "test_pf": 1.81,
     "test_trades": 24,
-    "rank": 205
+    "rank": 234
   },
   {
     "id": "strat_1789176293",
@@ -10480,7 +11967,7 @@
     "test_r": 1.5,
     "test_pf": 1.08,
     "test_trades": 27,
-    "rank": 206
+    "rank": 235
   },
   {
     "id": "strat_1789096696",
@@ -10530,7 +12017,58 @@
     "test_r": -1.6,
     "test_pf": 0.48,
     "test_trades": 4,
-    "rank": 207
+    "rank": 236
+  },
+  {
+    "id": "strat_1789279973",
+    "name": "Vectorized Linear Regression Velocity Drift (Round #95)",
+    "concept": "Measures continuous institutional directional price drift via 20-bar Linear...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 11:42:53",
+    "code": "def calculate_signals(df):\n    sess = session_mask(df, 'london_ny')\n    macro = htf_trend_filter(df, '1h')\n    sw_highs, sw_lows = find_swings(df, swing_len=5)\n    atr_val = atr(df, 14)\n    ema_fast = ema(df['close'], 21)\n    ema_slow = ema(df['close'], 34)\n    vol_filter = rvol(df, 20) > 1.25\n    \n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n    trend_bull = (ema_fast > ema_slow) & (macro >= 0)\n    trend_bear = (ema_fast < ema_slow) & (macro <= 0)\n    \n    raw_bull = ssl_sweep & trend_bull & vol_filter & sess\n    raw_bear = bsl_sweep & trend_bear & vol_filter & sess\n    \n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n    \n    risk_l = np.maximum(df['close'] - (sw_lows - (1.4 * atr_val)), 4.5)\n    risk_s = np.maximum((sw_highs + (1.4 * atr_val)) - df['close'], 4.5)\n    \n    df['sl_long'] = df['close'] - risk_l\n    df['sl_short'] = df['close'] + risk_s\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_l * 3.2)\n    df['tp2_long'] = df['close'] + (risk_l * 8.0)\n    df['tp1_short'] = df['close'] - (risk_s * 3.2)\n    df['tp2_short'] = df['close'] - (risk_s * 8.0)\n    return df\n",
+    "total_r": 10.2,
+    "total_trades": 120,
+    "winning_trades": 23,
+    "losing_trades": 97,
+    "win_rate": 19.2,
+    "profit_factor": 1.16,
+    "total_pnl": 10245.99,
+    "max_drawdown_r": 13.5,
+    "max_drawdown_pct": 11.46,
+    "sharpe_ratio": 0.84,
+    "monthly_r": {
+      "Jan 2026": 7.7,
+      "Feb 2026": 4.1,
+      "Mar 2026": 1.3,
+      "Apr 2026": 3.9,
+      "May 2026": -3.4,
+      "Jun 2026": -5.7,
+      "Jul 2026": 7.1,
+      "Aug 2026": -6.7,
+      "Sep 2026": 1.9
+    },
+    "months_ge_10r": 0,
+    "monte_carlo": {
+      "expected_max_dd_r": 16.12,
+      "var_95_max_dd_r": 29.98,
+      "risk_of_ruin_10r": 83.8,
+      "risk_of_ruin_20r": 24.8,
+      "probability_of_profit": 71.7,
+      "median_final_r": 9.73
+    },
+    "rank_score": 4.4,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 7.9,
+    "train_pf": 1.18,
+    "train_trades": 83,
+    "train_win_rate": 0.0,
+    "val_r": 7.1,
+    "val_pf": 1.88,
+    "val_trades": 17,
+    "test_r": -4.8,
+    "test_pf": 0.62,
+    "test_trades": 20,
+    "rank": 237
   },
   {
     "id": "strat_1789119133",
@@ -10581,7 +12119,7 @@
     "train_pf": 1.12,
     "train_trades": 60,
     "train_win_rate": 43.3,
-    "rank": 208
+    "rank": 238
   },
   {
     "id": "strat_1789115355",
@@ -10628,7 +12166,58 @@
     "train_pf": 0.96,
     "train_trades": 6,
     "train_win_rate": 33.3,
-    "rank": 209
+    "rank": 239
+  },
+  {
+    "id": "strat_1789279804",
+    "name": "Volume Spread Analysis + Institutional Displacement (Round #92)",
+    "concept": "Filters for high institutional volume spikes (RVOL > 1.8) accompanied by la...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 11:40:04",
+    "code": "def calculate_signals(df):\n    sess = session_mask(df, 'london_ny')\n    macro = htf_trend_filter(df, '1h')\n    sw_highs, sw_lows = find_swings(df, swing_len=5)\n    atr_val = atr(df, 20)\n    ema_fast = ema(df['close'], 21)\n    ema_slow = ema(df['close'], 34)\n    vol_filter = rvol(df, 20) > 1.25\n    \n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n    trend_bull = (ema_fast > ema_slow) & (macro >= 0)\n    trend_bear = (ema_fast < ema_slow) & (macro <= 0)\n    \n    raw_bull = ssl_sweep & trend_bull & vol_filter & sess\n    raw_bear = bsl_sweep & trend_bear & vol_filter & sess\n    \n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n    \n    risk_l = np.maximum(df['close'] - (sw_lows - (1.8 * atr_val)), 5.0)\n    risk_s = np.maximum((sw_highs + (1.8 * atr_val)) - df['close'], 5.0)\n    \n    df['sl_long'] = df['close'] - risk_l\n    df['sl_short'] = df['close'] + risk_s\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_l * 2.8)\n    df['tp2_long'] = df['close'] + (risk_l * 7.0)\n    df['tp1_short'] = df['close'] - (risk_s * 2.8)\n    df['tp2_short'] = df['close'] - (risk_s * 7.0)\n    return df\n",
+    "total_r": 4.1,
+    "total_trades": 113,
+    "winning_trades": 23,
+    "losing_trades": 90,
+    "win_rate": 20.4,
+    "profit_factor": 1.07,
+    "total_pnl": 4005.52,
+    "max_drawdown_r": 10.6,
+    "max_drawdown_pct": 9.84,
+    "sharpe_ratio": 0.41,
+    "monthly_r": {
+      "Jan 2026": 1.2,
+      "Feb 2026": 1.9,
+      "Mar 2026": -1.2,
+      "Apr 2026": 3.1,
+      "May 2026": 2.6,
+      "Jun 2026": -5.3,
+      "Jul 2026": 5.7,
+      "Aug 2026": -6.5,
+      "Sep 2026": 2.6
+    },
+    "months_ge_10r": 0,
+    "monte_carlo": {
+      "expected_max_dd_r": 16.12,
+      "var_95_max_dd_r": 29.44,
+      "risk_of_ruin_10r": 82.4,
+      "risk_of_ruin_20r": 25.0,
+      "probability_of_profit": 59.7,
+      "median_final_r": 3.96
+    },
+    "rank_score": 3.0,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 2.3,
+    "train_pf": 1.05,
+    "train_trades": 79,
+    "train_win_rate": 0.0,
+    "val_r": 5.7,
+    "val_pf": 1.8,
+    "val_trades": 16,
+    "test_r": -3.9,
+    "test_pf": 0.59,
+    "test_trades": 18,
+    "rank": 240
   },
   {
     "id": "strat_1789098188",
@@ -10679,7 +12268,7 @@
     "test_r": -1.6,
     "test_pf": 0.83,
     "test_trades": 15,
-    "rank": 210
+    "rank": 241
   },
   {
     "id": "strat_1789096609",
@@ -10730,7 +12319,7 @@
     "test_r": 0.0,
     "test_pf": 1.01,
     "test_trades": 17,
-    "rank": 211
+    "rank": 242
   },
   {
     "id": "strat_1789139178",
@@ -10781,7 +12370,7 @@
     "test_pf": 0.8,
     "test_trades": 17,
     "train_win_rate": 35.4,
-    "rank": 212
+    "rank": 243
   },
   {
     "id": "strat_1789106085",
@@ -10828,7 +12417,7 @@
     "test_r": 0.6,
     "test_pf": 63962.0,
     "test_trades": 1,
-    "rank": 213
+    "rank": 244
   },
   {
     "id": "strat_1789096331",
@@ -10875,7 +12464,7 @@
     "test_r": -2.5,
     "test_pf": 0.18,
     "test_trades": 4,
-    "rank": 214
+    "rank": 245
   },
   {
     "id": "strat_1789103411",
@@ -10922,7 +12511,58 @@
     "test_r": 0.6,
     "test_pf": 56932.0,
     "test_trades": 1,
-    "rank": 215
+    "rank": 246
+  },
+  {
+    "id": "strat_1789280155",
+    "name": "Inverted Fair Value Gap (IFVG) Support/Resistance Breaker (Round #98)",
+    "concept": "Identifies failed Fair Value Gaps where price broke through the gap without...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 11:45:55",
+    "code": "def calculate_signals(df):\n    sess = session_mask(df, 'london_ny')\n    macro = htf_trend_filter(df, '1h')\n    sw_highs, sw_lows = find_swings(df, swing_len=6)\n    atr_val = atr(df, 20)\n    ema_fast = ema(df['close'], 21)\n    ema_slow = ema(df['close'], 34)\n    vol_filter = rvol(df, 20) > 1.25\n    \n    ssl_sweep = (df['low'] < sw_lows) & (df['close'] > sw_lows)\n    bsl_sweep = (df['high'] > sw_highs) & (df['close'] < sw_highs)\n    trend_bull = (ema_fast > ema_slow) & (macro >= 0)\n    trend_bear = (ema_fast < ema_slow) & (macro <= 0)\n    \n    raw_bull = ssl_sweep & trend_bull & vol_filter & sess\n    raw_bear = bsl_sweep & trend_bear & vol_filter & sess\n    \n    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))\n    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))\n    \n    risk_l = np.maximum(df['close'] - (sw_lows - (1.4 * atr_val)), 5.0)\n    risk_s = np.maximum((sw_highs + (1.4 * atr_val)) - df['close'], 5.0)\n    \n    df['sl_long'] = df['close'] - risk_l\n    df['sl_short'] = df['close'] + risk_s\n    df['use_breakeven'] = True\n    df['tp1_long'] = df['close'] + (risk_l * 2.8)\n    df['tp2_long'] = df['close'] + (risk_l * 7.0)\n    df['tp1_short'] = df['close'] - (risk_s * 2.8)\n    df['tp2_short'] = df['close'] - (risk_s * 7.0)\n    return df\n",
+    "total_r": 1.9,
+    "total_trades": 104,
+    "winning_trades": 19,
+    "losing_trades": 85,
+    "win_rate": 18.3,
+    "profit_factor": 1.03,
+    "total_pnl": 1882.88,
+    "max_drawdown_r": 14.0,
+    "max_drawdown_pct": 12.34,
+    "sharpe_ratio": 0.24,
+    "monthly_r": {
+      "Jan 2026": 10.0,
+      "Feb 2026": 0.3,
+      "Mar 2026": -6.1,
+      "Apr 2026": 4.3,
+      "May 2026": 0.8,
+      "Jun 2026": -5.4,
+      "Jul 2026": 5.8,
+      "Aug 2026": -9.5,
+      "Sep 2026": 1.7
+    },
+    "months_ge_10r": 1,
+    "monte_carlo": {
+      "expected_max_dd_r": 17.52,
+      "var_95_max_dd_r": 31.98,
+      "risk_of_ruin_10r": 86.3,
+      "risk_of_ruin_20r": 31.6,
+      "probability_of_profit": 53.6,
+      "median_final_r": 1.57
+    },
+    "rank_score": 1.0,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 3.9,
+    "train_pf": 1.1,
+    "train_trades": 70,
+    "train_win_rate": 0.0,
+    "val_r": 5.8,
+    "val_pf": 1.81,
+    "val_trades": 16,
+    "test_r": -7.8,
+    "test_pf": 0.38,
+    "test_trades": 18,
+    "rank": 247
   },
   {
     "id": "strat_1789097531",
@@ -10967,7 +12607,7 @@
     "test_r": -2.6,
     "test_pf": 0.36,
     "test_trades": 5,
-    "rank": 216
+    "rank": 248
   },
   {
     "id": "strat_1789145231",
@@ -11018,7 +12658,7 @@
     "test_pf": 0.45,
     "test_trades": 16,
     "train_win_rate": 31.9,
-    "rank": 217
+    "rank": 249
   },
   {
     "id": "strat_1789098579",
@@ -11069,7 +12709,7 @@
     "test_r": 6.8,
     "test_pf": 1.18,
     "test_trades": 69,
-    "rank": 218
+    "rank": 250
   },
   {
     "id": "strat_1789216593",
@@ -11120,7 +12760,7 @@
     "test_r": -10.7,
     "test_pf": 0.58,
     "test_trades": 30,
-    "rank": 219
+    "rank": 251
   },
   {
     "id": "strat_1789098108",
@@ -11171,7 +12811,7 @@
     "test_r": -1.4,
     "test_pf": 0.89,
     "test_trades": 19,
-    "rank": 220
+    "rank": 252
   },
   {
     "id": "strat_1789148205",
@@ -11222,7 +12862,7 @@
     "test_pf": 1.98,
     "test_trades": 30,
     "train_win_rate": 28.7,
-    "rank": 221
+    "rank": 253
   },
   {
     "id": "strat_1789204950",
@@ -11273,7 +12913,7 @@
     "test_r": 0.2,
     "test_pf": 1.05,
     "test_trades": 8,
-    "rank": 222
+    "rank": 254
   },
   {
     "id": "strat_1789208414",
@@ -11324,7 +12964,7 @@
     "test_r": 5.0,
     "test_pf": 1.53,
     "test_trades": 20,
-    "rank": 223
+    "rank": 255
   },
   {
     "id": "strat_1789118780",
@@ -11375,7 +13015,7 @@
     "train_pf": 0.98,
     "train_trades": 59,
     "train_win_rate": 28.8,
-    "rank": 224
+    "rank": 256
   },
   {
     "id": "strat_1789187793",
@@ -11426,7 +13066,7 @@
     "test_r": -11.7,
     "test_pf": 0.46,
     "test_trades": 26,
-    "rank": 225
+    "rank": 257
   },
   {
     "id": "strat_1789189605",
@@ -11477,7 +13117,7 @@
     "test_r": 3.1,
     "test_pf": 1.19,
     "test_trades": 27,
-    "rank": 226
+    "rank": 258
   },
   {
     "id": "strat_1789118729",
@@ -11528,7 +13168,7 @@
     "train_pf": 1.12,
     "train_trades": 157,
     "train_win_rate": 33.8,
-    "rank": 227
+    "rank": 259
   },
   {
     "id": "strat_1789118985",
@@ -11579,7 +13219,7 @@
     "train_pf": 0.92,
     "train_trades": 57,
     "train_win_rate": 28.1,
-    "rank": 228
+    "rank": 260
   },
   {
     "id": "strat_1789201348",
@@ -11630,7 +13270,7 @@
     "test_r": 2.9,
     "test_pf": 1.23,
     "test_trades": 23,
-    "rank": 229
+    "rank": 261
   },
   {
     "id": "strat_1789208687",
@@ -11681,7 +13321,7 @@
     "test_r": 2.6,
     "test_pf": 1.32,
     "test_trades": 13,
-    "rank": 230
+    "rank": 262
   },
   {
     "id": "strat_1789113283",
@@ -11732,7 +13372,7 @@
     "train_pf": 0.95,
     "train_trades": 25,
     "train_win_rate": 28.0,
-    "rank": 231
+    "rank": 263
   },
   {
     "id": "strat_1789099229",
@@ -11783,7 +13423,7 @@
     "test_r": 4.4,
     "test_pf": 1.87,
     "test_trades": 12,
-    "rank": 232
+    "rank": 264
   },
   {
     "id": "strat_1789184561",
@@ -11834,7 +13474,7 @@
     "test_r": 0.0,
     "test_pf": 1.0,
     "test_trades": 17,
-    "rank": 233
+    "rank": 265
   },
   {
     "id": "strat_1789214783",
@@ -11885,7 +13525,7 @@
     "test_r": 16.5,
     "test_pf": 1.49,
     "test_trades": 61,
-    "rank": 234
+    "rank": 266
   },
   {
     "id": "strat_1789117340",
@@ -11936,7 +13576,7 @@
     "train_pf": 1.09,
     "train_trades": 100,
     "train_win_rate": 35.0,
-    "rank": 235
+    "rank": 267
   },
   {
     "id": "strat_1789109995",
@@ -11987,7 +13627,7 @@
     "test_r": 0.7,
     "test_pf": 1.14,
     "test_trades": 9,
-    "rank": 236
+    "rank": 268
   },
   {
     "id": "strat_1789220611",
@@ -12038,7 +13678,7 @@
     "test_r": -10.0,
     "test_pf": 0.6,
     "test_trades": 31,
-    "rank": 237
+    "rank": 269
   },
   {
     "id": "strat_1789116950",
@@ -12089,7 +13729,7 @@
     "train_pf": 1.06,
     "train_trades": 86,
     "train_win_rate": 32.6,
-    "rank": 238
+    "rank": 270
   },
   {
     "id": "strat_1789145734",
@@ -12140,7 +13780,7 @@
     "test_pf": 0.69,
     "test_trades": 7,
     "train_win_rate": 26.5,
-    "rank": 239
+    "rank": 271
   },
   {
     "id": "strat_1789268664",
@@ -12191,7 +13831,58 @@
     "test_r": 9.2,
     "test_pf": 1.29,
     "test_trades": 90,
-    "rank": 240
+    "rank": 272
+  },
+  {
+    "id": "strat_1789275559",
+    "name": "Inverted Fair Value Gap (IFVG) Support/Resistance Breaker (Round #19)",
+    "concept": "Identifies failed Fair Value Gaps where price broke through the gap without...",
+    "author": "Multi-Agent Quant Team",
+    "created_at": "2026-09-13 10:29:19",
+    "code": "def calculate_signals(df):\n    # Session mask for high liquidity periods\n    sess = session_mask(df, 'london_ny')\n\n    # Swing highs and lows with different lookback\n    sw_highs, sw_lows = find_swings(df, swing_len=10)\n\n    # Daily levels\n    levels = daily_levels(df)\n\n    # VWAP line\n    vwap_line = vwap(df)\n\n    # Find FVGs\n    b_fvg_top, b_fvg_bot, s_fvg_top, s_fvg_bot = find_fvgs(df)\n\n    # Bullish IFVG breaker condition with additional filters\n    bull_ifvg = (df['low'] <= s_fvg_top) & (df['low'].shift(1) > s_fvg_top) & (df['close'] > s_fvg_top) & (df['close'] > vwap_line)\n\n    # Bearish IFVG breaker condition with additional filters\n    bear_ifvg = (df['high'] >= b_fvg_bot) & (df['high'].shift(1) < b_fvg_bot) & (df['close'] < b_fvg_bot) & (df['close'] < vwap_line)\n\n    # Combine with session mask to prevent overtrading\n    bull_signal = bull_ifvg & sess & (~bull_ifvg.shift(1).fillna(False))\n    bear_signal = bear_ifvg & sess & (~bear_ifvg.shift(1).fillna(False))\n\n    # Calculate ATR for stop loss\n    atr_value = atr(df, 14)\n\n    # Calculate stop loss levels\n    sl_long = np.minimum(df['low'], sw_lows) - (1.8 * atr_value)\n    sl_short = np.maximum(df['high'], sw_highs) + (1.8 * atr_value)\n\n    # Calculate risk distance\n    risk_long = np.maximum(df['close'] - sl_long, 4.00)\n    risk_short = np.maximum(sl_short - df['close'], 4.00)\n\n    # Set signals and risk management columns\n    df['bull_signal'] = bull_signal\n    df['bear_signal'] = bear_signal\n    df['sl_long'] = sl_long\n    df['sl_short'] = sl_short\n    df['use_breakeven'] = True\n\n    # Set take profit levels with multi-target scaling\n    df['tp1_long'] = df['close'] + (risk_long * 2.0)\n    df['tp2_long'] = df['close'] + (risk_long * 5.0)\n    df['tp1_short'] = df['close'] - (risk_short * 2.0)\n    df['tp2_short'] = df['close'] - (risk_short * 5.0)\n\n    return df",
+    "total_r": 4.5,
+    "total_trades": 156,
+    "winning_trades": 43,
+    "losing_trades": 113,
+    "win_rate": 27.6,
+    "profit_factor": 1.06,
+    "total_pnl": 4403.17,
+    "max_drawdown_r": 23.4,
+    "max_drawdown_pct": 19.27,
+    "sharpe_ratio": 0.44,
+    "monthly_r": {
+      "Jan 2026": 6.6,
+      "Feb 2026": 11.1,
+      "Mar 2026": -2.8,
+      "Apr 2026": -5.6,
+      "May 2026": -0.7,
+      "Jun 2026": -7.2,
+      "Jul 2026": 6.4,
+      "Aug 2026": 0.0,
+      "Sep 2026": -3.3
+    },
+    "months_ge_10r": 1,
+    "monte_carlo": {
+      "expected_max_dd_r": 15.61,
+      "var_95_max_dd_r": 28.53,
+      "risk_of_ruin_10r": 78.6,
+      "risk_of_ruin_20r": 22.6,
+      "probability_of_profit": 59.1,
+      "median_final_r": 3.37
+    },
+    "rank_score": -12.9,
+    "data_split": "mt5_ecn_2026",
+    "train_r": 3.3,
+    "train_pf": 1.06,
+    "train_trades": 109,
+    "train_win_rate": 0.0,
+    "val_r": 6.5,
+    "val_pf": 1.69,
+    "val_trades": 25,
+    "test_r": -5.3,
+    "test_pf": 0.39,
+    "test_trades": 22,
+    "rank": 273
   },
   {
     "id": "strat_1789202966",
@@ -12242,7 +13933,7 @@
     "test_r": 0.4,
     "test_pf": 1.04,
     "test_trades": 17,
-    "rank": 241
+    "rank": 274
   },
   {
     "id": "strat_1789217467",
@@ -12293,7 +13984,7 @@
     "test_r": 2.7,
     "test_pf": 1.25,
     "test_trades": 19,
-    "rank": 242
+    "rank": 275
   },
   {
     "id": "strat_1789122714",
@@ -12344,7 +14035,7 @@
     "train_pf": 0.72,
     "train_trades": 61,
     "train_win_rate": 32.8,
-    "rank": 243
+    "rank": 276
   },
   {
     "id": "strat_1789116106",
@@ -12395,7 +14086,7 @@
     "train_pf": 1.11,
     "train_trades": 161,
     "train_win_rate": 35.4,
-    "rank": 244
+    "rank": 277
   },
   {
     "id": "strat_1789186514",
@@ -12446,7 +14137,7 @@
     "test_r": 4.9,
     "test_pf": 1.31,
     "test_trades": 35,
-    "rank": 245
+    "rank": 278
   },
   {
     "id": "strat_1789115731",
@@ -12497,7 +14188,7 @@
     "train_pf": 0.99,
     "train_trades": 134,
     "train_win_rate": 31.3,
-    "rank": 246
+    "rank": 279
   },
   {
     "id": "strat_1789116383",
@@ -12548,7 +14239,7 @@
     "train_pf": 0.88,
     "train_trades": 39,
     "train_win_rate": 28.2,
-    "rank": 247
+    "rank": 280
   },
   {
     "id": "strat_1789097031",
@@ -12599,7 +14290,7 @@
     "test_r": -3.8,
     "test_pf": 0.54,
     "test_trades": 11,
-    "rank": 248
+    "rank": 281
   },
   {
     "id": "strat_1789212321",
@@ -12650,7 +14341,7 @@
     "test_r": 1.5,
     "test_pf": 1.17,
     "test_trades": 14,
-    "rank": 249
+    "rank": 282
   },
   {
     "id": "strat_1789131704",
@@ -12701,7 +14392,7 @@
     "train_pf": 0.74,
     "train_trades": 30,
     "train_win_rate": 23.3,
-    "rank": 250
+    "rank": 283
   },
   {
     "id": "strat_1789206153",
@@ -12752,7 +14443,7 @@
     "test_r": 4.7,
     "test_pf": 1.36,
     "test_trades": 24,
-    "rank": 251
+    "rank": 284
   },
   {
     "id": "strat_1789209848",
@@ -12803,7 +14494,7 @@
     "test_r": -0.5,
     "test_pf": 0.95,
     "test_trades": 13,
-    "rank": 252
+    "rank": 285
   },
   {
     "id": "strat_1789119619",
@@ -12854,7 +14545,7 @@
     "train_pf": 0.75,
     "train_trades": 61,
     "train_win_rate": 24.6,
-    "rank": 253
+    "rank": 286
   },
   {
     "id": "strat_1789140408",
@@ -12905,7 +14596,7 @@
     "test_pf": 1.45,
     "test_trades": 47,
     "train_win_rate": 29.3,
-    "rank": 254
+    "rank": 287
   },
   {
     "id": "strat_1789136774",
@@ -12956,7 +14647,7 @@
     "test_pf": 0.57,
     "test_trades": 32,
     "train_win_rate": 34.2,
-    "rank": 255
+    "rank": 288
   },
   {
     "id": "strat_1789097788",
@@ -13007,7 +14698,7 @@
     "test_r": -4.0,
     "test_pf": 0.0,
     "test_trades": 4,
-    "rank": 256
+    "rank": 289
   },
   {
     "id": "strat_1789194734",
@@ -13058,7 +14749,7 @@
     "test_r": 6.3,
     "test_pf": 1.25,
     "test_trades": 63,
-    "rank": 257
+    "rank": 290
   },
   {
     "id": "strat_1789102060",
@@ -13107,7 +14798,7 @@
     "test_r": 0.0,
     "test_pf": 0.0,
     "test_trades": 0,
-    "rank": 258
+    "rank": 291
   },
   {
     "id": "strat_1789219515",
@@ -13158,7 +14849,7 @@
     "test_r": 2.3,
     "test_pf": 1.07,
     "test_trades": 57,
-    "rank": 259
+    "rank": 292
   },
   {
     "id": "strat_1789220333",
@@ -13209,7 +14900,7 @@
     "test_r": 4.9,
     "test_pf": 1.4,
     "test_trades": 20,
-    "rank": 260
+    "rank": 293
   },
   {
     "id": "strat_1789199995",
@@ -13260,7 +14951,7 @@
     "test_r": 3.9,
     "test_pf": 1.35,
     "test_trades": 18,
-    "rank": 261
+    "rank": 294
   },
   {
     "id": "strat_1789215717",
@@ -13311,7 +15002,7 @@
     "test_r": -3.6,
     "test_pf": 0.8,
     "test_trades": 23,
-    "rank": 262
+    "rank": 295
   },
   {
     "id": "strat_1789120192",
@@ -13362,7 +15053,7 @@
     "train_pf": 0.76,
     "train_trades": 72,
     "train_win_rate": 27.8,
-    "rank": 263
+    "rank": 296
   },
   {
     "id": "strat_1789116334",
@@ -13413,7 +15104,7 @@
     "train_pf": 0.7,
     "train_trades": 52,
     "train_win_rate": 25.0,
-    "rank": 264
+    "rank": 297
   },
   {
     "id": "strat_1789104363",
@@ -13464,7 +15155,7 @@
     "test_r": -1.0,
     "test_pf": 0.76,
     "test_trades": 6,
-    "rank": 265
+    "rank": 298
   },
   {
     "id": "strat_1789118515",
@@ -13515,7 +15206,7 @@
     "train_pf": 0.83,
     "train_trades": 69,
     "train_win_rate": 29.0,
-    "rank": 266
+    "rank": 299
   },
   {
     "id": "strat_1789200620",
@@ -13566,7 +15257,7 @@
     "test_r": 4.5,
     "test_pf": 1.4,
     "test_trades": 19,
-    "rank": 267
+    "rank": 300
   },
   {
     "id": "strat_1789120542",
@@ -13617,7 +15308,7 @@
     "train_pf": 0.5,
     "train_trades": 35,
     "train_win_rate": 17.1,
-    "rank": 268
+    "rank": 301
   },
   {
     "id": "strat_1789218816",
@@ -13668,7 +15359,7 @@
     "test_r": 1.8,
     "test_pf": 1.12,
     "test_trades": 23,
-    "rank": 269
+    "rank": 302
   },
   {
     "id": "strat_1789211444",
@@ -13719,7 +15410,7 @@
     "test_r": 5.4,
     "test_pf": 1.44,
     "test_trades": 22,
-    "rank": 270
+    "rank": 303
   },
   {
     "id": "strat_1789127435",
@@ -13770,7 +15461,7 @@
     "train_pf": 0.72,
     "train_trades": 64,
     "train_win_rate": 25.0,
-    "rank": 271
+    "rank": 304
   },
   {
     "id": "strat_1789219109",
@@ -13821,7 +15512,7 @@
     "test_r": 3.0,
     "test_pf": 1.21,
     "test_trades": 22,
-    "rank": 272
+    "rank": 305
   },
   {
     "id": "strat_1789219249",
@@ -13872,7 +15563,7 @@
     "test_r": -4.4,
     "test_pf": 0.77,
     "test_trades": 25,
-    "rank": 273
+    "rank": 306
   },
   {
     "id": "strat_1789217058",
@@ -13923,7 +15614,7 @@
     "test_r": -1.5,
     "test_pf": 0.9,
     "test_trades": 22,
-    "rank": 274
+    "rank": 307
   },
   {
     "id": "strat_1789216154",
@@ -13974,7 +15665,7 @@
     "test_r": 0.8,
     "test_pf": 1.02,
     "test_trades": 51,
-    "rank": 275
+    "rank": 308
   },
   {
     "id": "strat_1789118886",
@@ -14025,7 +15716,7 @@
     "train_pf": 1.02,
     "train_trades": 139,
     "train_win_rate": 30.2,
-    "rank": 276
+    "rank": 309
   },
   {
     "id": "strat_1789097211",
@@ -14076,7 +15767,7 @@
     "test_r": -5.2,
     "test_pf": 0.36,
     "test_trades": 10,
-    "rank": 277
+    "rank": 310
   },
   {
     "id": "strat_1789108980",
@@ -14127,7 +15818,7 @@
     "test_r": -12.1,
     "test_pf": 0.84,
     "test_trades": 126,
-    "rank": 278
+    "rank": 311
   },
   {
     "id": "strat_1789202169",
@@ -14178,7 +15869,7 @@
     "test_r": -5.8,
     "test_pf": 0.75,
     "test_trades": 35,
-    "rank": 279
+    "rank": 312
   },
   {
     "id": "strat_1789220042",
@@ -14229,7 +15920,7 @@
     "test_r": -7.9,
     "test_pf": 0.69,
     "test_trades": 35,
-    "rank": 280
+    "rank": 313
   },
   {
     "id": "strat_1789217338",
@@ -14280,7 +15971,7 @@
     "test_r": -2.4,
     "test_pf": 0.87,
     "test_trades": 36,
-    "rank": 281
+    "rank": 314
   },
   {
     "id": "strat_1789207071",
@@ -14331,7 +16022,7 @@
     "test_r": -0.9,
     "test_pf": 0.97,
     "test_trades": 53,
-    "rank": 282
+    "rank": 315
   },
   {
     "id": "strat_1789142589",
@@ -14382,7 +16073,7 @@
     "test_pf": 0.63,
     "test_trades": 41,
     "train_win_rate": 36.3,
-    "rank": 283
+    "rank": 316
   },
   {
     "id": "strat_1789096425",
@@ -14433,7 +16124,7 @@
     "test_r": -4.3,
     "test_pf": 0.67,
     "test_trades": 19,
-    "rank": 284
+    "rank": 317
   },
   {
     "id": "strat_1789133888",
@@ -14484,7 +16175,7 @@
     "train_pf": 0.99,
     "train_trades": 478,
     "train_win_rate": 33.3,
-    "rank": 285
+    "rank": 318
   },
   {
     "id": "strat_1789218844",
@@ -14535,7 +16226,7 @@
     "test_r": -2.2,
     "test_pf": 0.77,
     "test_trades": 25,
-    "rank": 286
+    "rank": 319
   },
   {
     "id": "strat_1789096935",
@@ -14586,7 +16277,7 @@
     "test_r": 4.2,
     "test_pf": 1.03,
     "test_trades": 243,
-    "rank": 287
+    "rank": 320
   },
   {
     "id": "strat_1789218506",
@@ -14637,7 +16328,7 @@
     "test_r": 4.3,
     "test_pf": 1.13,
     "test_trades": 69,
-    "rank": 288
+    "rank": 321
   },
   {
     "id": "strat_1789096150",
@@ -14688,7 +16379,7 @@
     "test_r": -2.9,
     "test_pf": 0.98,
     "test_trades": 261,
-    "rank": 289
+    "rank": 322
   },
   {
     "id": "strat_1789097290",
@@ -14739,7 +16430,7 @@
     "test_r": -16.6,
     "test_pf": 0.55,
     "test_trades": 51,
-    "rank": 290
+    "rank": 323
   },
   {
     "id": "elvaris_v2_baseline",
@@ -14790,7 +16481,7 @@
     "test_r": -5.4,
     "test_pf": 0.82,
     "test_trades": 47,
-    "rank": 291
+    "rank": 324
   },
   {
     "id": "strat_1789096789",
@@ -14841,7 +16532,7 @@
     "test_r": -12.7,
     "test_pf": 0.51,
     "test_trades": 34,
-    "rank": 292
+    "rank": 325
   },
   {
     "id": "strat_1789096226",
@@ -14892,7 +16583,7 @@
     "test_r": -2.9,
     "test_pf": 0.82,
     "test_trades": 24,
-    "rank": 293
+    "rank": 326
   },
   {
     "id": "strat_1789137587",
@@ -14943,7 +16634,7 @@
     "test_pf": 0.82,
     "test_trades": 75,
     "train_win_rate": 28.6,
-    "rank": 294
+    "rank": 327
   },
   {
     "id": "strat_1789107369",
@@ -14994,7 +16685,7 @@
     "test_r": -6.6,
     "test_pf": 0.93,
     "test_trades": 180,
-    "rank": 295
+    "rank": 328
   },
   {
     "id": "strat_1789103930",
@@ -15045,7 +16736,7 @@
     "test_r": -18.3,
     "test_pf": 0.8,
     "test_trades": 143,
-    "rank": 296
+    "rank": 329
   },
   {
     "id": "strat_1789095834",
@@ -15096,7 +16787,7 @@
     "test_r": -8.3,
     "test_pf": 0.91,
     "test_trades": 179,
-    "rank": 297
+    "rank": 330
   },
   {
     "id": "strat_1789108326",
@@ -15147,7 +16838,7 @@
     "test_r": -15.2,
     "test_pf": 0.85,
     "test_trades": 154,
-    "rank": 298
+    "rank": 331
   },
   {
     "id": "strat_1789098327",
@@ -15198,6 +16889,6 @@
     "test_r": -19.8,
     "test_pf": 0.82,
     "test_trades": 228,
-    "rank": 299
+    "rank": 332
   }
 ]

@@ -1152,17 +1152,17 @@ class ParameterGridSweeper:
         if base_net_r < -15.0 or len(base_trades) < 8:
             return base_code, base_stats, base_trades, base_monthly
 
-        best_score = (base_net_r * 1.0) + (base_months_10 * 8.0) - (base_dd_r * 2.0) + (base_pf * 15.0) + (base_wr * 0.2)
+        best_score = (base_net_r * 2.5) + (base_months_10 * 10.0) - (base_dd_r * 2.0) + (base_pf * 8.0) + (base_wr * 0.2)
         if len(base_trades) < 30:
             best_score *= max(0.1, len(base_trades) / 30.0)
 
-        # High-Speed Alpha Sweep Grid (2 ATRs x 4 RRs) for wide alpha & runner coverage
-        atr_mults = [1.4, 1.8]
-        rr_ratios = [2.0, 2.4, 2.8, 3.2]
+        # High-Speed Alpha Sweep Grid (3 ATRs x 5 RRs) for deep alpha & runner expansion
+        atr_mults = [1.4, 1.8, 2.0]
+        rr_ratios = [2.5, 3.0, 3.5, 4.0, 4.5]
 
         consecutive_dead = 0
         for am in atr_mults:
-            if consecutive_dead >= 4 and best_score <= 0:
+            if consecutive_dead >= 5 and best_score <= 0:
                 break
             for rr in rr_ratios:
                 mutated = ParameterGridSweeper._mutate_code_params(base_code, am, rr)
@@ -1175,7 +1175,7 @@ class ParameterGridSweeper:
                     stats = res.get('stats', {})
                     if len(trades) < 5:
                         consecutive_dead += 1
-                        if consecutive_dead >= 4 and best_score <= 0:
+                        if consecutive_dead >= 5 and best_score <= 0:
                             break
                         continue
                     else:
@@ -1188,7 +1188,7 @@ class ParameterGridSweeper:
                         dd_r = float(stats.get('max_drawdown', 0.0) / 1000.0)
                         wr = float(stats.get('win_rate', 0.0))
                         
-                        score = (net_r * 1.0) + (months_10 * 8.0) - (dd_r * 2.0) + (pf * 15.0) + (wr * 0.2)
+                        score = (net_r * 2.5) + (months_10 * 10.0) - (dd_r * 2.0) + (pf * 8.0) + (wr * 0.2)
                         if len(trades) < 30:
                             score *= max(0.1, len(trades) / 30.0)
 
