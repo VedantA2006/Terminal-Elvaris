@@ -389,17 +389,23 @@ class ResearchLoopManager:
                 self.current_hypothesis = f"Round {r}: [{arch['name']}]"
         self._log("💡 Idea Generator", f"Mining Alpha: Generating Candidate [{arch['name']}]...", "info")
 
-        # Gather top leaderboard CODE snippets for the LLM
+        # Gather top leaderboard CODE snippets for the LLM (Archetype-Matched Only to prevent mode collapse)
         leaderboard_code_context = []
         try:
-            for s in get_research_candidates(train_df, min_train_trades=10, limit=3):
-                leaderboard_code_context.append({
-                    'name': s.get('name', '?'),
-                    'total_r': s.get('train_r', 0),          # TRAIN-split only — never val/test
-                    'profit_factor': s.get('train_pf', 0),   # TRAIN-split only
-                    'win_rate': s.get('train_win_rate', 0),  # TRAIN-split only
-                    'code': s['code'][:600]
-                })
+            arch_tokens = [t for t in arch['name'].lower().split() if len(t) > 3 and t not in ['confluence', 'intraday', 'temporal', 'breakout']]
+            for s in get_research_candidates(train_df, min_train_trades=10, limit=25):
+                s_name = s.get('name', '').lower()
+                s_concept = s.get('concept', '').lower()
+                if arch['name'].lower() in s_name or arch_id.lower() in s_name or (arch_tokens and any(tok in s_name or tok in s_concept for tok in arch_tokens[:2])):
+                    leaderboard_code_context.append({
+                        'name': s.get('name', '?'),
+                        'total_r': s.get('train_r', 0),          # TRAIN-split only — never val/test
+                        'profit_factor': s.get('train_pf', 0),   # TRAIN-split only
+                        'win_rate': s.get('train_win_rate', 0),  # TRAIN-split only
+                        'code': s['code'][:600]
+                    })
+                    if len(leaderboard_code_context) >= 2:
+                        break
         except Exception:
             pass
 

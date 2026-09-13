@@ -53,7 +53,9 @@ Focus on building a Temporal Multi-Bar Setup with Wide Institutional Confluence:
      `bull_signal = raw_bull & (~raw_bull.shift(1).fillna(False))`
      `raw_bear = armed_short & sess & fvg_touch_short & (df['close'] < vwap(df))`
      `bear_signal = raw_bear & (~raw_bear.shift(1).fillna(False))`
-5. Healthy Institutional Risk: Stop loss anchored below swing low with 1.2x to 1.8x ATR buffer (minimum $2.50 distance). Take Profit scaled at 1.5x to 2.0x risk.
+5. Multi-Target Runner Risk:
+   - SL anchored below swing low with 1.2x to 1.8x ATR buffer (minimum $4.00 stop distance).
+   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_l * 2.0)` (50% profit bank), `df['tp2_long'] = df['close'] + (risk_l * 4.5)` (runner).
 """
     },
     {
@@ -69,7 +71,9 @@ Focus on combining:
    - Price sweeps below S1 or PDL, closes back above it (SSL sweep), price above VWAP -> Bullish Entry.
    - Price sweeps above R1 or PDH, closes back below it (BSL sweep), price below VWAP -> Bearish Entry.
    - Anti-bleed: `bull_signal = raw_bull & (~raw_bull.shift(1).fillna(False))`
-5. Institutional Stops: Anchor SL below candle low or S1 with a 1.2x to 1.8x ATR buffer (minimum $2.50 distance). R:R = 1.5 to 2.0.
+5. Multi-Target Runner Risk:
+   - Anchor SL below candle low or S1 with a 1.2x to 1.8x ATR buffer (minimum $4.00 stop distance).
+   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 2.0)`, `df['tp2_long'] = df['close'] + (risk_long * 4.5)`.
 """
     },
     {
@@ -84,7 +88,10 @@ Focus on combining:
 4. Entry Conditions (Transition crossovers only):
    - Bullish: `(st_dir == 1) & (st_dir.shift(1) <= 0) & (er > 0.28) & (adx_val > 22) & sess`
    - Bearish: `(st_dir == -1) & (st_dir.shift(1) >= 0) & (er > 0.28) & (adx_val > 22) & sess`
-5. Trailing / Structural Risk: SL anchored 1.5x ATR below entry or at Supertrend line (min $2.50 distance). R:R = 1.6 to 2.2.
+   - NOTE: DO NOT use swing liquidity sweeps here! Trade the authentic Supertrend regime transition.
+5. Multi-Target Runner Risk:
+   - SL anchored 1.5x ATR below entry or at Supertrend line (min $4.00 stop distance).
+   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_l * 2.0)`, `df['tp2_long'] = df['close'] + (risk_l * 4.5)`.
 """
     },
     {
@@ -93,11 +100,12 @@ Focus on combining:
         "concept": "Cross-pollinating the LSS Champion framework with VWAP alignment and dynamic session volatility filters.",
         "instructions": """
 The Champion Strategy operates on:
-- Swing Length = 7, ATR Length = 14, R:R = 1.5 to 2.0.
+- Swing Length = 7, ATR Length = 14.
 - Liquidity sweeps of swing highs/lows confirmed by subsequent FVG mitigation in London/NY killzones.
 Cross-pollination goal:
 - Add `vwap(df)` intraday trend filter (Longs only above VWAP, Shorts only below VWAP) or central floor pivot `pp` confirmation.
-- Use healthy 1.2x to 1.8x ATR buffer (minimum $2.50 stop distance) so broker spread and slippage never erode edges.
+- Minimum $4.00 stop distance with 1.2x to 1.8x ATR buffer.
+- Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 2.0)`, `df['tp2_long'] = df['close'] + (risk_long * 4.5)`.
 - Prevent consecutive candle firing: `bull_signal = raw_bull & (~raw_bull.shift(1).fillna(False))`.
 """
     },
@@ -119,7 +127,10 @@ Focus on Volatility Squeeze & Directional Expansion:
    - Bullish: Squeeze fire & (macd_hist > 0) & (df['close'] > kc_upper) & sess
    - Bearish: Squeeze fire & (macd_hist < 0) & (df['close'] < kc_lower) & sess
    - Anti-bleed: ensure signals fire only on first breakout bar.
-4. Risk Management: SL anchored to opposite Keltner mid band with 1.2x to 1.6x ATR buffer (min $2.50). Target 1.5R to 2.0R.
+   - NOTE: DO NOT use swing sweeps here! Trade the authentic Bollinger Squeeze breakout.
+4. Multi-Target Runner Risk:
+   - SL anchored to opposite Keltner mid band with 1.2x to 1.6x ATR buffer (min $4.00 stop distance).
+   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 2.0)`, `df['tp2_long'] = df['close'] + (risk_long * 4.5)`.
 """
     },
     {
@@ -138,9 +149,9 @@ Focus on Statistical Quantitative Arbitrage:
    - Bullish Fade: `(z_val < -2.2) & (rsi_val < 32) & (df['close'] > df['open']) & sess`
    - Bearish Fade: `(z_val > 2.2) & (rsi_val > 68) & (df['close'] < df['open']) & sess`
    - Anti-bleed: `bull_signal = raw_bull & (~raw_bull.shift(1).fillna(False))`
-4. Risk & Target:
-   - SL anchored beyond candle extreme + 1.2x ATR (minimum $2.50 distance).
-   - TP targeted at VWAP line or 1.5x risk distance.
+4. Multi-Target Runner Risk:
+   - SL anchored beyond candle extreme + 1.2x ATR (minimum $4.00 distance).
+   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 1.8)`, `df['tp2_long'] = df['close'] + (risk_long * 3.5)`.
 """
     },
     {
@@ -158,7 +169,9 @@ Focus on Session High/Low Liquidity Engineering:
 3. Confirmation:
    - Relative Volume spike: `rvol(df, 20) > 1.2`
    - Anti-bleed: trigger strictly on the first candle closing back inside the range.
-4. Structural Risk: Anchor SL at the spike wick extreme + 1.2x ATR buffer (minimum $2.50). Target 1.5R to 2.2R.
+4. Multi-Target Runner Risk:
+   - Anchor SL at the spike wick extreme + 1.2x ATR buffer (minimum $4.00 stop distance).
+   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 2.0)`, `df['tp2_long'] = df['close'] + (risk_long * 4.5)`.
 """
     },
     {
@@ -179,7 +192,9 @@ Focus on Institutional Footprint & Displacement:
 4. Signals (First-Touch Transition):
    - Bullish: `is_displacement & (df['close'] > df['open']) & (rvol_val > 1.4) & (df['close'] > sw_high) & session_mask(df, 'london_ny')`
    - Anti-bleed: `bull_signal = raw_bull & (~raw_bull.shift(1).fillna(False))`
-5. Risk Management: SL anchored at displacement candle low/high with 1.2x to 1.6x ATR buffer (minimum $2.50). Target 1.5R to 2.0R.
+5. Multi-Target Runner Risk:
+   - SL anchored at displacement candle low/high with 1.2x to 1.6x ATR buffer (minimum $4.00 stop distance).
+   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 2.0)`, `df['tp2_long'] = df['close'] + (risk_long * 4.5)`.
 """
     },
     {
@@ -194,7 +209,10 @@ Focus on Trend Persistence & Momentum:
 4. Entry Signals:
    - Bullish: `(df['close'] > d_up.shift(1)) & (df['close'] > ema(df['close'], 55)) & (er > 0.25) & session_mask(df, 'london_ny')`
    - Anti-bleed: fire only on initial breakout bar (`~df['close'].shift(1) > d_up.shift(2)`).
-5. Risk: SL anchored to `chan_long` / `chan_short` or 1.5x ATR buffer (minimum $2.50). Target 1.6R to 2.4R.
+   - NOTE: DO NOT use swing sweeps here! Trade the authentic Donchian Channel breakout.
+5. Multi-Target Runner Risk:
+   - SL anchored to `chan_long` / `chan_short` or 1.5x ATR buffer (minimum $4.00 stop distance).
+   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 2.0)`, `df['tp2_long'] = df['close'] + (risk_long * 4.5)`.
 """
     },
     {
@@ -209,7 +227,9 @@ Focus on Structural Momentum Divergence:
    - Price makes fresh swing low (`df['low'] < sw_l.shift(1)`), but RSI is higher than previous swing low RSI.
    - Filter: `session_mask(df, 'london_ny')` and price above intraday VWAP.
    - Anti-bleed: fire only on the confirmation reversal bar.
-4. Risk Management: SL anchored to swing extreme with 1.2x to 1.8x ATR buffer (minimum $2.50 distance). Target 1.5R to 2.0R.
+4. Multi-Target Runner Risk:
+   - SL anchored to swing extreme with 1.2x to 1.8x ATR buffer (minimum $4.00 distance).
+   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 2.0)`, `df['tp2_long'] = df['close'] + (risk_long * 4.5)`.
 """
     },
     {
@@ -224,8 +244,11 @@ Focus on Order Block Mitigation:
 2. Retest Entry (First Touch):
    - Price retraces into the OB zone and prints a rejection wick in the original displacement direction.
    - Anti-bleed: fire only on the first retest bar.
+   - NOTE: DO NOT use generic swing sweeps! Trade the authentic Order Block zone mitigation.
 3. Session Filter: `session_mask(df, 'london_ny')` and RVOL > 1.2.
-4. Structural Stops: SL placed strictly below the OB candle low/high with 1.2x to 1.6x ATR buffer (minimum $2.50). Target 1.5R to 2.0R.
+4. Multi-Target Runner Risk:
+   - SL placed strictly below the OB candle low/high with 1.2x to 1.6x ATR buffer (minimum $4.00 stop distance).
+   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 2.0)`, `df['tp2_long'] = df['close'] + (risk_long * 4.5)`.
 """
     },
     {
@@ -239,7 +262,10 @@ Focus on Statistical Price Velocity:
 3. Pullback Entry (First Touch):
    - Bullish: `(slope > 0.15) & (fast_ema > slow_ema) & (df['low'] <= fast_ema) & (df['close'] > fast_ema) & session_mask(df, 'london_ny')`
    - Anti-bleed: `bull_signal = raw_bull & (~raw_bull.shift(1).fillna(False))`
-4. Risk: SL anchored below recent swing low with 1.2x to 1.6x ATR buffer (minimum $2.50). Target 1.5R to 2.0R.
+   - NOTE: DO NOT use swing liquidity sweeps here! Trade the authentic Linear Regression slope continuation.
+4. Multi-Target Runner Risk:
+   - SL anchored below recent swing low with 1.2x to 1.6x ATR buffer (minimum $4.00 stop distance).
+   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 2.0)`, `df['tp2_long'] = df['close'] + (risk_long * 4.5)`.
 """
     },
     {
@@ -255,7 +281,9 @@ Focus on Retail Liquidity Pools:
    - Price breaches EQL/EQH by 0.20 to 1.5x ATR, but fails to sustain and closes back within the range on heavy volume (`rvol(df, 20) > 1.2`).
    - Anti-bleed: trigger strictly on the candle closing back inside the range.
 3. Session Filter: `session_mask(df, 'london_ny')` with Supertrend trend confirmation.
-4. Risk: SL anchored at sweep wick extreme + 1.2x to 1.6x ATR (minimum $2.50). Target 1.5R to 2.0R.
+4. Multi-Target Runner Risk:
+   - SL anchored at sweep wick extreme + 1.2x to 1.6x ATR (minimum $4.00 stop distance).
+   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 2.0)`, `df['tp2_long'] = df['close'] + (risk_long * 4.5)`.
 """
     },
     {
@@ -270,7 +298,9 @@ Focus on Indicator Cycle Confluence:
    - Bullish: `(k.shift(1) < 25) & (k > d) & (k.shift(1) <= d.shift(1)) & (macd_hist > 0) & session_mask(df, 'london_ny')`
    - Bearish: `(k.shift(1) > 75) & (k < d) & (k.shift(1) >= d.shift(1)) & (macd_hist < 0) & session_mask(df, 'london_ny')`
    - Anti-bleed: crossover condition inherently fires only once.
-4. Risk: SL anchored at lowest low of last 5 bars + 1.2x to 1.6x ATR (minimum $2.50). Target 1.5R to 2.0R.
+4. Multi-Target Runner Risk:
+   - SL anchored at lowest low of last 5 bars + 1.2x to 1.6x ATR (minimum $4.00 stop distance).
+   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 2.0)`, `df['tp2_long'] = df['close'] + (risk_long * 4.5)`.
 """
     },
     {
@@ -284,7 +314,9 @@ Focus on Inverted FVG Flip Levels:
    - Bullish Breaker: A bearish FVG (`s_fvg_top`) that price blew upward through. When price pulls back to retest `s_fvg_top` from above, it acts as support.
    - Retest touch: `(df['low'] <= s_fvg_top) & (df['low'].shift(1) > s_fvg_top) & (df['close'] > s_fvg_top)`
 3. Gating: `session_mask(df, 'london_ny')` and price above VWAP.
-4. Risk: SL placed 1.2x to 1.8x ATR past the breaker zone (minimum $2.50). Target 1.5R to 2.0R.
+4. Multi-Target Runner Risk:
+   - SL placed 1.2x to 1.8x ATR past the breaker zone (minimum $4.00 stop distance).
+   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 2.0)`, `df['tp2_long'] = df['close'] + (risk_long * 4.5)`.
 """
     },
     {
@@ -299,7 +331,9 @@ Focus on Opening Range Directional Drives:
    - Bullish: Candle closes above Opening Range High with `rvol(df, 20) > 1.2` and `(~close.shift(1) > orb_high)`.
    - Bearish: Candle closes below Opening Range Low with `rvol(df, 20) > 1.2` and `(~close.shift(1) < orb_low)`.
 3. Filter: `session_mask(df, 'london_ny')` and ADX > 20.
-4. Risk: SL at Opening Range Midpoint or 1.5x ATR buffer (minimum $2.50). Target 1.5R to 2.2R.
+4. Multi-Target Runner Risk:
+   - SL at Opening Range Midpoint or 1.5x ATR buffer (minimum $4.00 stop distance).
+   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 2.0)`, `df['tp2_long'] = df['close'] + (risk_long * 4.5)`.
 """
     },
     {
@@ -428,6 +462,19 @@ The following parameter combinations were RECENTLY TESTED for this archetype:
 CRITICAL MANDATE: You MUST use DIFFERENT lookbacks, periods, or multipliers! For example, if recent runs used swing_len=7 and period=20, you must explore swing_len in [10, 14, 21], ema in [34, 89], or wider ATR multipliers in [1.8, 2.4, 3.0]. Do NOT replicate the same parameter footprint!
 """
 
+        # Anti-Mode-Collapse Mandate: Forbid ssl_sweep on non-sweep archetypes
+        arch_name_lower = archetype['name'].lower()
+        is_sweep_archetype = any(k in arch_name_lower for k in ['sweep', 'liquidity', 'judas', 'fvg', 'smc', 'asian range'])
+        purity_mandate = ""
+        if not is_sweep_archetype and not champion_code:
+            purity_mandate = f"""
+🚫 CRITICAL ANTI-MODE-COLLAPSE MANDATE (ARCHETYPE PURITY):
+You are generating code specifically for the [{archetype['name']}] archetype.
+DO NOT use swing sweeps (ssl_sweep / bsl_sweep) or `find_swings(...)` sweeps as your primary entry triggers!
+You MUST implement the authentic mathematical indicators of this archetype as described in the instructions above (e.g. Donchian channels, Supertrend, Bollinger-Keltner squeeze, Linear Regression slope, or HTF EMA).
+Do NOT copy or default to generic swing sweep templates!
+"""
+
         # UPGRADE 4: Failure Memory — teach LLM from past mistakes
         failure_section = ""
         if failure_memory:
@@ -501,6 +548,7 @@ Research Guidelines:
 
 {f'Specialized Focus: {custom_focus}' if custom_focus else ''}
 {breeding_mandate if champion_code else novelty_mandate}
+{purity_mandate}
 {negative_section}
 {failure_section}
 {leaderboard_section}
@@ -984,23 +1032,46 @@ class ParameterGridSweeper:
         )
 
         # 3. Risk multiplier expressions in Take Profit (maintaining long and short risk independently)
-        mutated = re.sub(
-            r'\b(risk_\w+|risk[ls]|sl_dist(?:_\w+)?)\s*\*\s*[\d\.]+',
-            rf'\g<1> * {rr}',
-            mutated
-        )
-        mutated = re.sub(
-            r'[\d\.]+\s*\*\s*(risk_\w+|risk[ls]|sl_dist(?:_\w+)?)',
-            rf'{rr} * \g<1>',
-            mutated
-        )
+        runner_rr = round(rr * 1.8, 1)
+        if 'tp2_long' in mutated or 'tp2_short' in mutated:
+            mutated = re.sub(
+                r"(df\['tp1_long'\]\s*=\s*df\['close'\]\s*\+\s*\(?risk_\w+\s*\*\s*)[\d\.]+",
+                rf"\g<1>{rr}",
+                mutated
+            )
+            mutated = re.sub(
+                r"(df\['tp1_short'\]\s*=\s*df\['close'\]\s*-\s*\(?risk_\w+\s*\*\s*)[\d\.]+",
+                rf"\g<1>{rr}",
+                mutated
+            )
+            mutated = re.sub(
+                r"(df\['tp2_long'\]\s*=\s*df\['close'\]\s*\+\s*\(?risk_\w+\s*\*\s*)[\d\.]+",
+                rf"\g<1>{runner_rr}",
+                mutated
+            )
+            mutated = re.sub(
+                r"(df\['tp2_short'\]\s*=\s*df\['close'\]\s*-\s*\(?risk_\w+\s*\*\s*)[\d\.]+",
+                rf"\g<1>{runner_rr}",
+                mutated
+            )
+        else:
+            mutated = re.sub(
+                r'\b(risk_\w+|risk[ls]|sl_dist(?:_\w+)?)\s*\*\s*[\d\.]+',
+                rf'\g<1> * {rr}',
+                mutated
+            )
+            mutated = re.sub(
+                r'[\d\.]+\s*\*\s*(risk_\w+|risk[ls]|sl_dist(?:_\w+)?)',
+                rf'{rr} * \g<1>',
+                mutated
+            )
 
         return mutated
 
     @staticmethod
     def sweep_and_optimize(base_code: str, df: pd.DataFrame) -> Tuple[str, Dict[str, Any], List[Dict[str, Any]], Dict[str, float]]:
         """
-        Sweeps combinations of (atr_mult in [1.2, 1.5, 2.0], rr_ratio in [1.5, 1.8, 2.2, 2.5]).
+        Sweeps combinations of (atr_mult in [1.4, 1.8], rr_ratio in [2.0, 2.4, 2.8, 3.2]).
         Returns: (best_code, best_stats, best_trades, best_monthly)
         """
         # Fast 1-Pass Baseline Prune:
@@ -1024,9 +1095,9 @@ class ParameterGridSweeper:
         base_dd_r = float(base_stats.get('max_drawdown', 0.0) / 1000.0)
         base_wr = float(base_stats.get('win_rate', 0.0))
 
-        # High-Speed Prune: If baseline is severely bleeding (Net R < -8.0R) or has too few trades (< 8),
+        # High-Speed Prune: If baseline is severely bleeding (Net R < -15.0R) or has too few trades (< 8),
         # abort immediately without running full grid sweeps — saves 15-20s per bad candidate.
-        if base_net_r < -8.0 or len(base_trades) < 8:
+        if base_net_r < -15.0 or len(base_trades) < 8:
             return base_code, base_stats, base_trades, base_monthly
 
         best_score = (base_net_r * 1.0) + (base_months_10 * 8.0) - (base_dd_r * 2.0) + (base_pf * 15.0) + (base_wr * 0.2)
@@ -1035,7 +1106,7 @@ class ParameterGridSweeper:
 
         # High-Speed Alpha Sweep Grid (2 ATRs x 4 RRs) for wide alpha & runner coverage
         atr_mults = [1.4, 1.8]
-        rr_ratios = [1.8, 2.2, 2.6, 3.0]
+        rr_ratios = [2.0, 2.4, 2.8, 3.2]
 
         consecutive_dead = 0
         for am in atr_mults:
@@ -1147,7 +1218,14 @@ TARGET OBJECTIVES FOR INSTITUTIONAL PROFITABILITY:
 1. Strictly enforce London/NY killzones: `session_mask(df, 'london_ny')` to eliminate low-volume chop.
 2. Anchor Stop Loss with a healthy institutional 1.2x to 2.2x ATR buffer (minimum $4.00 distance from entry). NEVER use micro-stops (< $4.00) that get eaten by spread and slippage!
 3. Enforce anti-bleed transition triggers (`signal & ~signal.shift(1)`) so trades only enter on setup initiation, targeting ~0.5 to 1.5 high-conviction trades per trading day on average.
-4. Scale Take-Profit dynamically to at least 1.5x to 2.2x the true stop distance.
+4. Mandatory Multi-Target Runners & Breakeven Protection:
+   - MUST maintain or add `df['use_breakeven'] = True` (eliminates full losses after +1.2R move).
+   - MUST define multi-target scaling:
+     `df['tp1_long'] = df['close'] + (risk_long * 2.0)` (banks 50% profit)
+     `df['tp2_long'] = df['close'] + (risk_long * 4.5)` (runner to capture mega-trends)
+     `df['tp1_short'] = df['close'] - (risk_short * 2.0)`
+     `df['tp2_short'] = df['close'] - (risk_short * 4.5)`
+   - NEVER strip or collapse tp2 into a single low-multiple target!
 5. Target consistent positive monthly expectancy and solid risk-adjusted return across all market regimes.
 6. Keep the code clean, fast, and STRICTLY CAUSAL (Zero lookahead).
 7. MUST end with `return df`.
