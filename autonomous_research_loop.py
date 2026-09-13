@@ -342,7 +342,7 @@ class ResearchLoopManager:
             arch = ALPHA_ARCHETYPES[archetype_idx]
             if saturated_arch_ids:
                 sat_names = [a['name'] for a in ALPHA_ARCHETYPES if a.get('id', a['name']) in saturated_arch_ids]
-                self._log("🌐 Alpha Explorer", f"Exploration mode: Saturated archetypes locked in Top 15 ({', '.join(sat_names[:2])}). Exploring novel domain: [{arch['name']}].", "info")
+                self._log("🌐 Alpha Explorer", f"Exploration mode: Archetypes saturated in Leaderboard Top-15 ({', '.join(sat_names[:2])}). Cycling through novel domains across all {len(ALPHA_ARCHETYPES)} institutional archetypes: [{arch['name']}].", "info")
 
         # UPGRADE 5: SMART BREEDING — Cross-pollinate top 3 parents every 3rd round
         is_breeding_round = (r % 3 == 0)
