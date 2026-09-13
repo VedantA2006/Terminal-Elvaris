@@ -235,10 +235,11 @@ def find_fvgs(df: pd.DataFrame):
 def session_mask(df: pd.DataFrame, session: str = 'london_ny') -> pd.Series:
     """
     Returns a boolean mask for institutional trading sessions (UTC hours).
-    - 'london':    06:00 – 11:00 UTC  (London open through European morning)
-    - 'ny':        12:20 – 17:30 UTC  (COMEX Gold floor / US institutional hours)
-    - 'asia':      00:00 – 06:00 UTC  (Asian session)
-    - 'london_ny': Combined London + NY (the two highest-volume Gold windows)
+    - 'london':                 06:00 - 11:00 UTC  (London open through European morning)
+    - 'ny':                     12:20 - 17:30 UTC  (COMEX Gold floor / US institutional hours)
+    - 'asia':                   00:00 - 06:00 UTC  (Asian session)
+    - 'london_fix':             14:30 - 15:30 UTC  (Official LBMA London Gold PM Fix window)
+    - 'london_ny' / 'continuous': 06:00 - 18:00 UTC (Continuous full institutional window - NO midday blackout)
     """
     times = df.index if isinstance(df.index, pd.DatetimeIndex) else pd.to_datetime(df.get('dt', df.get('datetime', df.index)))
     mins = times.hour * 60 + times.minute
@@ -248,9 +249,11 @@ def session_mask(df: pd.DataFrame, session: str = 'london_ny') -> pd.Series:
         m = (12 * 60 + 20 <= mins) & (mins < 17 * 60 + 30)
     elif session == 'asia':
         m = (0 <= mins) & (mins < 6 * 60)
+    elif session == 'london_fix':
+        m = (14 * 60 + 30 <= mins) & (mins < 15 * 60 + 30)
     else:
-        # london_ny: covers both institutional sessions with the overlap (12:20-17:30)
-        m = ((6 * 60 <= mins) & (mins < 11 * 60)) | ((12 * 60 + 20 <= mins) & (mins < 17 * 60 + 30))
+        # london_ny / continuous / institutional: continuous 06:00 to 18:00 UTC window
+        m = (6 * 60 <= mins) & (mins < 18 * 60)
     return pd.Series(m, index=df.index)
 
 @_memoize_indicator
@@ -352,6 +355,129 @@ def volatility_ratio(df: pd.DataFrame, fast_period: int = 5, slow_period: int = 
     fast_atr = atr(df, fast_period)
     slow_atr = atr(df, slow_period).replace(0, np.nan)
     return fast_atr / slow_atr
+
+
+@_memoize_indicator
+def volume_profile_levels(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Returns causal Previous Day Volume Profile Value Area:
+    POC (Point of Control), VAH (Value Area High - 70%), and VAL (Value Area Low - 70%).
+    Strictly shifted by 1 day so today's bars only see yesterday's completed profile levels.
+    """
+    date_col = df.index.date if isinstance(df.index, pd.DatetimeIndex) else pd.to_datetime(df.get('dt', df.get('datetime', df.index))).dt.date
+    daily_groups = df.groupby(date_col)
+
+    profiles = {}
+    for d, g in daily_groups:
+        vol = g['volume'] if 'volume' in g.columns and (g['volume'] > 0).any() else pd.Series(1.0, index=g.index)
+        p_min, p_max = g['low'].min(), g['high'].max()
+        if p_max - p_min < 0.5:
+            p_max = p_min + 1.0
+        bins = np.linspace(p_min, p_max, 25)
+        typ = (g['high'] + g['low'] + g['close']) / 3.0
+        binned = pd.cut(typ, bins=bins, labels=bins[:-1])
+        vol_per_bin = vol.groupby(binned, observed=False).sum()
+
+        if len(vol_per_bin) > 0 and vol_per_bin.max() > 0:
+            poc_level = float(vol_per_bin.idxmax())
+            total_vol = vol_per_bin.sum()
+            sorted_bins = vol_per_bin.sort_values(ascending=False)
+            cum_vol = sorted_bins.cumsum()
+            val_bins = sorted_bins[cum_vol <= total_vol * 0.70].index
+            if len(val_bins) > 0:
+                vah_level = float(max(val_bins))
+                val_level = float(min(val_bins))
+            else:
+                vah_level = poc_level + 2.0
+                val_level = poc_level - 2.0
+        else:
+            poc_level = (p_min + p_max) / 2.0
+            vah_level = poc_level + 2.0
+            val_level = poc_level - 2.0
+
+        profiles[d] = {'poc': poc_level, 'vah': vah_level, 'val': val_level}
+
+    prof_df = pd.DataFrame(profiles).T
+    prof_df_shifted = prof_df.shift(1)
+    df_date = pd.Series(date_col, index=df.index)
+    res = df_date.map(prof_df_shifted.to_dict(orient='index'))
+    return pd.DataFrame(res.tolist(), index=df.index)
+
+
+@_memoize_indicator
+def htf_swings(df: pd.DataFrame, swing_len: int = 5, timeframe: str = '15min'):
+    """
+    Causal Multi-Timeframe Swings:
+    Resamples 5m bars to Higher Timeframe (e.g. 15min), detects swing highs/lows on
+    completed HTF bars, and projects them forward to 5m index causally.
+    """
+    resampled = df.resample(timeframe).agg({
+        'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last'
+    }).dropna()
+
+    n = len(resampled)
+    h_vals, l_vals = resampled['high'].values, resampled['low'].values
+    sh = np.full(n, np.nan)
+    sl = np.full(n, np.nan)
+    for i in range(swing_len * 2, n):
+        mid = i - swing_len
+        if h_vals[mid] == max(h_vals[i - 2 * swing_len : i + 1]):
+            sh[i] = h_vals[mid]
+        if l_vals[mid] == min(l_vals[i - 2 * swing_len : i + 1]):
+            sl[i] = l_vals[mid]
+
+    res_h = pd.Series(sh, index=resampled.index).ffill()
+    res_l = pd.Series(sl, index=resampled.index).ffill()
+
+    s_h_5m = res_h.reindex(df.index, method='ffill')
+    s_l_5m = res_l.reindex(df.index, method='ffill')
+    return s_h_5m, s_l_5m
+
+
+@_memoize_indicator
+def session_compression(df: pd.DataFrame, session: str = 'asia', lookback: int = 10) -> pd.Series:
+    """
+    Computes session volatility compression ratio:
+    Today's session range / 10-day rolling median session range.
+    Value < 0.70 indicates extreme institutional accumulation / coiled expansion setup.
+    """
+    times = df.index if isinstance(df.index, pd.DatetimeIndex) else pd.to_datetime(df.get('dt', df.get('datetime', df.index)))
+    mins = times.hour * 60 + times.minute
+    if session == 'asia':
+        s_mask = (0 <= mins) & (mins < 6 * 60)
+    elif session == 'london':
+        s_mask = (6 * 60 <= mins) & (mins < 11 * 60)
+    else:
+        s_mask = (12 * 60 <= mins) & (mins < 17 * 60)
+
+    s_df = df[s_mask]
+    if len(s_df) == 0:
+        return pd.Series(1.0, index=df.index)
+
+    date_col = s_df.index.date
+    s_range = s_df.groupby(date_col).apply(lambda g: g['high'].max() - g['low'].min())
+    rolling_med = s_range.rolling(lookback, min_periods=3).median()
+    ratio_by_date = (s_range / rolling_med).shift(1)  # Causal: shifted by 1 day or completed session
+
+    full_date = pd.Series(times.date, index=df.index)
+    return full_date.map(ratio_by_date).fillna(1.0)
+
+
+@_memoize_indicator
+def absorption_volume(df: pd.DataFrame, rvol_len: int = 20, spread_len: int = 20) -> pd.Series:
+    """
+    Institutional Volume Absorption (Stopping Volume):
+    High relative volume (RVOL > 1.3) compressed into narrow price spread (< 0.90x avg spread),
+    indicating institutional iceberg limit order absorption at structural levels.
+    """
+    vol = df['volume'] if 'volume' in df.columns and (df['volume'] > 0).any() else pd.Series(1.0, index=df.index)
+    rvol_val = vol / vol.rolling(rvol_len, min_periods=5).mean().replace(0, np.nan)
+    spread = df['high'] - df['low']
+    avg_spread = spread.rolling(spread_len, min_periods=5).mean().replace(0, np.nan)
+    spread_ratio = spread / avg_spread
+    is_abs = (rvol_val > 1.3) & (spread_ratio < 0.90)
+    return is_abs.fillna(False)
+
 
 
 class RuntimeLookaheadTrap:
@@ -658,6 +784,10 @@ def execute_strategy(code_str: str, raw_df: pd.DataFrame, initial_capital: float
         'htf_ema': htf_ema,
         'htf_trend_filter': htf_trend_filter,
         'volatility_ratio': volatility_ratio,
+        'volume_profile_levels': volume_profile_levels,
+        'htf_swings': htf_swings,
+        'session_compression': session_compression,
+        'absorption_volume': absorption_volume,
     }
 
     try:

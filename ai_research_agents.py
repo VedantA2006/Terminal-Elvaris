@@ -32,30 +32,22 @@ from leaderboard import compute_monthly_r_breakdown, compute_rank_score
 # Archetype prompt blueprints for combinatorial alpha mining (16 Diverse Institutional Archetypes)
 ALPHA_ARCHETYPES = [
     {
-        "id": "sequential_smc_fvg_state_machine",
-        "name": "Sequential SMC Sweep + Multi-Bar FVG Mitigation",
-        "concept": "Temporal state machine: SSL/BSL sweep arms setup for up to 10 bars, triggers entry when price mitigates 5m FVG on the FIRST touch with structural swing-anchored SL and Intraday VWAP alignment.",
+        "id": "london_pm_fix_orderflow_imbalance",
+        "name": "London PM Gold Fix 15:00 UTC Fixation Surge",
+        "concept": "Exploits the official LBMA London Gold PM Fix auction (14:30 - 15:30 UTC), capturing institutional volume displacement and continuation expansion following the daily sovereign gold fixing auction.",
         "instructions": """
-Focus on building a Temporal Multi-Bar Setup with Wide Institutional Confluence:
-1. Detect Liquidity Sweeps & Macro Direction:
-   - SSL Sweep (Bullish): `ssl_sweep = (df['low'] < swing_lows) & (df['close'] > swing_lows)`
-   - BSL Sweep (Bearish): `bsl_sweep = (df['high'] > swing_highs) & (df['close'] < swing_highs)`
-   - Macro Alignment: Longs preferred when `df['close'] > vwap(df)` or above previous day pivot `levels['pp']`.
-2. Multi-Bar Armed Window (up to 10 bars):
-   - `armed_long = ssl_sweep.rolling(10, min_periods=1).max() == 1`
-   - `armed_short = bsl_sweep.rolling(10, min_periods=1).max() == 1`
-3. Mandatory London/NY Session Gating: `sess = session_mask(df, 'london_ny')`
-4. First-Touch Mitigation Cross (ANTI-BLEED GUARD — NEVER FIRE CONTINUOUSLY):
-   - `fvg_touch_long = (df['low'] <= bull_fvg_top) & (df['low'].shift(1) > bull_fvg_top) & (df['close'] > bull_fvg_bot)`
-   - `fvg_touch_short = (df['high'] >= bear_fvg_bot) & (df['high'].shift(1) < bear_fvg_bot) & (df['close'] < bear_fvg_top)`
-   - Transition signals:
-     `raw_bull = armed_long & sess & fvg_touch_long & (df['close'] > vwap(df))`
-     `bull_signal = raw_bull & (~raw_bull.shift(1).fillna(False))`
-     `raw_bear = armed_short & sess & fvg_touch_short & (df['close'] < vwap(df))`
-     `bear_signal = raw_bear & (~raw_bear.shift(1).fillna(False))`
-5. Multi-Target Runner Risk:
-   - SL anchored below swing low with 1.2x to 1.8x ATR buffer (minimum $4.00 stop distance).
-   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_l * 2.0)` (50% profit bank), `df['tp2_long'] = df['close'] + (risk_l * 4.5)` (runner).
+Focus on the official LBMA London Gold PM Fix (15:00 UTC auction):
+1. Fix Window Session Filter: `sess_fix = session_mask(df, 'london_fix')` (14:30 to 15:30 UTC) or continuous institutional session.
+2. Fix Imbalance Confirmation:
+   - RVOL spike (`rvol(df, 20) > 1.3`) or Absorption Volume (`absorption_volume(df)`).
+   - Intraday VWAP alignment: `df['close'] > vwap(df)` for long, `df['close'] < vwap(df)` for short.
+   - Floor Pivot Confluence: Price clearing `levels['pivot']` or expanding beyond `levels['s1']`/`levels['r1']`.
+3. Signal Execution:
+   - Bullish: 15:00 UTC fix displacement above VWAP & Pivot with volume expansion.
+   - Bearish: 15:00 UTC fix displacement below VWAP & Pivot with volume expansion.
+4. Risk Management:
+   - Structural Stop: `sl_long = np.minimum(df['low'], sw_lows) - (1.8 * atr(df, 14))` (min $4.00).
+   - Target: Gold impulse expansion target `tp1_long = df['close'] + (risk_long * 3.8)`.
 """
     },
     {
@@ -134,24 +126,22 @@ Focus on Volatility Squeeze & Directional Expansion:
 """
     },
     {
-        "id": "vwap_statistical_zscore_fade",
-        "name": "Intraday VWAP 2.5-Sigma Z-Score Mean Reversion Fade",
-        "concept": "Exploits institutional mean-reversion when Gold stretches 2.5+ standard deviations away from intraday VWAP during peak sessions.",
+        "id": "mtf_15m_swings_5m_trigger",
+        "name": "Multi-Timeframe Structural Fractality (15m Swings + 5m Triggers)",
+        "concept": "Filters out 5m noise by calculating structural swing highs and lows on completed 15-minute bars (htf_swings), using 5m bars exclusively for precision execution triggers.",
         "instructions": """
-Focus on Statistical Quantitative Arbitrage:
-1. Intraday VWAP & Deviation:
-   - `vwap_line = vwap(df)`
-   - `z_val = zscore(df['close'] - vwap_line, period=30)`
-2. Trend Exhaustion Indicator:
-   - Wilder's RSI: `rsi_val = rsi(df['close'], 14)`
-   - Session Filter: `sess = session_mask(df, 'london_ny')`
-3. Mean Reversion Entry (First Reversal Candle):
-   - Bullish Fade: `(z_val < -2.2) & (rsi_val < 32) & (df['close'] > df['open']) & sess`
-   - Bearish Fade: `(z_val > 2.2) & (rsi_val > 68) & (df['close'] < df['open']) & sess`
-   - Anti-bleed: `bull_signal = raw_bull & (~raw_bull.shift(1).fillna(False))`
-4. Multi-Target Runner Risk:
-   - SL anchored beyond candle extreme + 1.2x ATR (minimum $4.00 distance).
-   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 1.8)`, `df['tp2_long'] = df['close'] + (risk_long * 3.5)`.
+Focus on True Higher-Timeframe Market Structure:
+1. HTF Swings: `htf_h, htf_l = htf_swings(df, swing_len=5, timeframe='15min')`
+   - These represent real 15-minute structural swing liquidity pools, immune to 5m micro-wicks.
+2. Institutional Confluence:
+   - Intraday VWAP: `vwap_line = vwap(df)`
+   - Daily Levels: `levels = daily_levels(df)`
+3. Entry Execution:
+   - Bullish: 5m low sweeps below 15m swing low `htf_l`, closes back above it (liquidity hunt), and price > vwap.
+   - Bearish: 5m high sweeps above 15m swing high `htf_h`, closes back below it, and price < vwap.
+4. Risk Management:
+   - Stop Loss: Anchored to the 15m structural swing low: `np.minimum(df['low'], htf_l) - (1.8 * atr(df, 14))`.
+   - Target: Clean 3.8R to 4.4R expansion payout.
 """
     },
     {
@@ -233,39 +223,40 @@ Focus on Structural Momentum Divergence:
 """
     },
     {
-        "id": "order_block_mitigation_bos",
-        "name": "Institutional Order Block Retest + Market BOS",
-        "concept": "Locates the last down-candle before a violent upward displacement (Bullish OB) and enters on the causal retest of the OB zone.",
+        "id": "volume_profile_value_area_expansion",
+        "name": "Volume Profile Value Area Out-of-Balance Expansion",
+        "concept": "Identifies when Gold opens or displaces outside yesterday's Volume Profile Value Area (> VAH or < VAL) and holds outside, riding the explosive institutional out-of-balance trend day.",
         "instructions": """
-Focus on Order Block Mitigation:
-1. Identify Order Block Zone:
-   - Bullish OB: Bearish candle (`close < open`) preceding strong displacement candle (`close > open + 1.2*ATR`).
-   - Bearish OB: Bullish candle (`close > open`) preceding strong displacement candle (`close < open - 1.2*ATR`).
-2. Retest Entry (First Touch):
-   - Price retraces into the OB zone and prints a rejection wick in the original displacement direction.
-   - Anti-bleed: fire only on the first retest bar.
-   - NOTE: DO NOT use generic swing sweeps! Trade the authentic Order Block zone mitigation.
-3. Session Filter: `session_mask(df, 'london_ny')` and RVOL > 1.2.
-4. Multi-Target Runner Risk:
-   - SL placed strictly below the OB candle low/high with 1.2x to 1.6x ATR buffer (minimum $4.00 stop distance).
-   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 2.0)`, `df['tp2_long'] = df['close'] + (risk_long * 4.5)`.
+Focus on Institutional Market Profile & Value Area:
+1. Value Area Levels: `vp = volume_profile_levels(df)` (provides previous day's 'poc', 'vah', 'val' strictly shifted).
+2. Out-of-Balance Expansion Rule:
+   - Bullish: London/NY price crosses and holds above `vp['vah']` (Value Area High) & above `vwap(df)` during `session_mask(df, 'london_ny')`.
+   - Bearish: London/NY price crosses and holds below `vp['val']` (Value Area Low) & below `vwap(df)` during `session_mask(df, 'london_ny')`.
+3. Execution Trigger:
+   - Anti-bleed first-bar transition: `raw_bull = (df['close'] > vp['vah']) & (df['close'] > vwap(df)) & sess`
+   - `bull_signal = raw_bull & (~raw_bull.shift(1).fillna(False))`
+4. Risk Management:
+   - Stop Loss: Placed just inside the Value Area or 1.8x ATR below swing low.
+   - Target: Asymmetric expansion target `tp1 = df['close'] + (risk * 4.1)` (or 3.8R to 4.4R).
 """
     },
     {
-        "id": "linear_regression_slope_drift",
-        "name": "Vectorized Linear Regression Velocity Drift",
-        "concept": "Measures continuous institutional directional price drift via 20-bar Linear Regression Slope, entering pullbacks in the drift direction.",
+        "id": "asian_compression_london_expansion_coil",
+        "name": "Asian Session Range Compression into London Open Expansion",
+        "concept": "Measures Asian session range vs 10-day median Asian ATR. When compression is extreme (< 0.75x), arms explosive London Open (06:00 UTC) directional breakouts with 3.8R-4.4R targets.",
         "instructions": """
-Focus on Statistical Price Velocity:
-1. Linear Regression Slope: `slope = linear_regression_slope(df['close'], 20)`
-2. EMA Trend Alignment: `fast_ema = ema(df['close'], 21)`, `slow_ema = ema(df['close'], 55)`
-3. Pullback Entry (First Touch):
-   - Bullish: `(slope > 0.15) & (fast_ema > slow_ema) & (df['low'] <= fast_ema) & (df['close'] > fast_ema) & session_mask(df, 'london_ny')`
-   - Anti-bleed: `bull_signal = raw_bull & (~raw_bull.shift(1).fillna(False))`
-   - NOTE: DO NOT use swing liquidity sweeps here! Trade the authentic Linear Regression slope continuation.
-4. Multi-Target Runner Risk:
-   - SL anchored below recent swing low with 1.2x to 1.6x ATR buffer (minimum $4.00 stop distance).
-   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 2.0)`, `df['tp2_long'] = df['close'] + (risk_long * 4.5)`.
+Focus on Pre-London Volatility Compression:
+1. Asian Compression Indicator: `comp = session_compression(df, session='asia', lookback=10)`
+   - When `comp < 0.75`, the Asian session is in an institutional coil/compression regime.
+2. London Breakout Execution:
+   - Session: London open `(6 * 60 <= mins) & (mins < 11 * 60)` or continuous `session_mask(df, 'london_ny')`.
+   - Directional Sweep / Break: Price breaks above Asian high (or 8-bar swing high) with `df['close'] > vwap(df)`.
+3. Signal Transition:
+   - `raw_bull = (comp < 0.75) & (df['close'] > sw_highs) & (df['close'] > vwap(df)) & sess`
+   - `bull_signal = raw_bull & (~raw_bull.shift(1).fillna(False))`
+4. Risk Management:
+   - Stop Loss: 1.8x ATR below structural swing low (min $4.00).
+   - Target: `tp1 = df['close'] + (risk * 3.8)` to `4.1R` trend expansion.
 """
     },
     {
@@ -304,19 +295,22 @@ Focus on Indicator Cycle Confluence:
 """
     },
     {
-        "id": "inverted_fvg_breaker",
-        "name": "Inverted Fair Value Gap (IFVG) Support/Resistance Breaker",
-        "concept": "Identifies failed Fair Value Gaps where price broke through the gap without respecting it, converting it into a potent support/resistance breaker level.",
+        "id": "continuous_institutional_momentum_expansion",
+        "name": "Continuous Institutional Session MACD Momentum Expansion",
+        "concept": "Combines 7-bar liquidity sweeps with an expanding MACD histogram filter across the continuous institutional window (06:00 - 18:00 UTC) and calibrated 3.8R targets (our +125.5R Champion framework).",
         "instructions": """
-Focus on Inverted FVG Flip Levels:
-1. FVG Detection: `b_fvg_top, b_fvg_bot, s_fvg_top, s_fvg_bot = find_fvgs(df)`
-2. Inversion (Breaker):
-   - Bullish Breaker: A bearish FVG (`s_fvg_top`) that price blew upward through. When price pulls back to retest `s_fvg_top` from above, it acts as support.
-   - Retest touch: `(df['low'] <= s_fvg_top) & (df['low'].shift(1) > s_fvg_top) & (df['close'] > s_fvg_top)`
-3. Gating: `session_mask(df, 'london_ny')` and price above VWAP.
-4. Multi-Target Runner Risk:
-   - SL placed 1.2x to 1.8x ATR past the breaker zone (minimum $4.00 stop distance).
-   - Multi-Target Scaling: `df['use_breakeven'] = True`, `df['tp1_long'] = df['close'] + (risk_long * 2.0)`, `df['tp2_long'] = df['close'] + (risk_long * 4.5)`.
+Implement the Project's Proven #1 Champion Architecture (+125.5R Return, -12.0R Drawdown):
+1. Continuous Institutional Session: `sess = session_mask(df, 'london_ny')` (06:00 to 18:00 UTC continuous).
+2. Swings & Momentum:
+   - Swings: `sw_h, sw_l = find_swings(df, swing_len=7)`
+   - Sweep Arming: `ssl_sweep = (df['low'] < sw_l) & (df['close'] > sw_l)`, armed 10 bars.
+   - MACD Acceleration: `macd_line, macd_sig, macd_hist = macd(df['close'], 12, 26, 9)` or `(10, 20, 7)`.
+3. Entry Rule:
+   - Bullish: `(armed_long & (macd_hist > macd_hist.shift(1)) & (df['close'] > vwap(df)) & sess)`
+   - Bearish: `(armed_short & (macd_hist < macd_hist.shift(1)) & (df['close'] < vwap(df)) & sess)`
+4. Risk Management:
+   - Stop Loss: `sl_long = np.minimum(df['low'], sw_l) - (1.8 * atr(df, 14))` (min $4.00).
+   - Target: Calibrated peak target `tp1_long = df['close'] + (risk_long * 3.8)`.
 """
     },
     {
@@ -490,24 +484,24 @@ Focus on Trend Persistence & Band Walking:
 """
     },
     {
-        "id": "climax_exhaustion_fade_pivots",
-        "name": "Multi-Bar Climax Exhaustion Fade at Daily Floor Pivots",
-        "concept": "Fades retail exhaustion spikes into Daily Floor Pivot extremes (R1/R2 or S1/S2) when 5+ consecutive expansion candles fail and reverse on heavy volume.",
+        "id": "institutional_volume_absorption",
+        "name": "Institutional Volume Absorption at Daily Floor Pivots",
+        "concept": "Detects high-volume, narrow-spread stopping volume absorption candles (absorption_volume) occurring at Daily Floor S1/R1 levels, entering on the immediate directional breakout.",
         "instructions": """
-Focus on Climax Exhaustion at Key Daily Pivots:
-1. Daily Floor Pivots: `levels = daily_levels(df)` (pp, r1, s1, r2, s2)
-2. Climax Expansion Run:
-   - 4 or 5 consecutive higher closes: `(df['close'] > df['close'].shift(1)).rolling(4).sum() == 4`
-   - Price penetrates into R1 or R2: `df['high'] >= levels['r1']`
-3. Exhaustion Reversal Bar:
-   - Candle closes below previous candle low with heavy volume: `(df['close'] < df['low'].shift(1)) & (rvol(df, 20) > 1.3)`
-   - Anti-bleed: fire only on this reversal bar.
-4. Target Central Pivot (`levels['pp']`):
-   - SL above the climax wick + 1.4x ATR (min $4.00).
-   - Scale out: `tp1` at 2.0x risk, `tp2` at 4.5x risk, `df['use_breakeven'] = True`.
+Focus on Smart Money Iceberg Limit Order Absorption:
+1. Absorption Detection: `is_abs = absorption_volume(df, rvol_len=20, spread_len=20)`
+   - Flags candles where massive institutional volume entered without allowing price to expand (stopping volume).
+2. Key Level Confluence:
+   - Longs: Absorption occurs near Daily S1 (`df['low'] <= levels['s1'] + 2.0`) with price above or reclaiming VWAP.
+   - Shorts: Absorption occurs near Daily R1 (`df['high'] >= levels['r1'] - 2.0`) with price below or rejecting VWAP.
+3. Signal Execution:
+   - Arm on absorption candle: `armed_long = is_abs.rolling(8, min_periods=1).max() == 1`
+   - Trigger when price closes in the direction of the absorption defense during institutional session.
+4. Risk Management:
+   - Stop Loss: Placed 1.8x ATR behind the absorption candle low/high (min $4.00).
+   - Target: 3.8R to 4.4R daily expansion run.
 """
-    }
-]
+    }]
 
 
 # ===========================================================================
@@ -673,14 +667,25 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
       `risk_long = np.maximum(df['close'] - sl_long, 4.00)`
       `risk_short = np.maximum(sl_short - df['close'], 4.00)`
     - Multi-Target Scaling & Breakeven Protection:
-      `df['use_breakeven'] = True   # Automatically ratchets stop to entry at +1.2R, eliminating full losses`
-      `df['tp1_long'] = df['close'] + (risk_long * 2.0)   # Primary target (2.0R): Banks 50% profit`
-      `df['tp2_long'] = df['close'] + (risk_long * 5.5)   # Multi-target runner (5.5R): Trails dynamically to ride mega-trends`
-      `df['tp1_short'] = df['close'] - (risk_short * 2.0)`
-      `df['tp2_short'] = df['close'] - (risk_short * 5.5)`
+      # OPTIMAL GOLD PAYOUT (Empirical peak sweet spot is 3.8R to 4.4R):
+      `df['tp1_long'] = df['close'] + (risk_long * 3.8)   # Optimal target (3.8R - 4.4R): Captures full Gold daily trend expansion`
+      `df['tp1_short'] = df['close'] - (risk_short * 3.8)`
+      # Optional multi-target runner (if desired):
+      # `df['tp2_long'] = df['close'] + (risk_long * 4.4)`
+      # `df['use_breakeven'] = True`
     - NEVER use buffer_factor < 1.0 for ATR multipliers! Values like 0.20, 0.25, 0.35 are FORBIDDEN.
     - NEVER invert Risk-to-Reward or use micro-stops (< $4.00)!
-5. Mandatory Session Gating: Wrap all entries in `session_mask(df, 'london_ny')`.
+5. Mandatory Session Gating: Wrap all entries in `session_mask(df, 'london_ny')` (Continuous 06:00-18:00 UTC institutional window - NO midday blackout!). Or use `session_mask(df, 'london_fix')` for 15:00 UTC PM Fixation.
+6. AVAILABLE ADVANCED INSTITUTIONAL INDICATORS:
+   - `volume_profile_levels(df)`: Previous day's Volume Profile ('poc', 'vah', 'val' strictly shifted).
+   - `htf_swings(df, swing_len=5, timeframe='15min')`: Causal 15-minute Higher-Timeframe Swings.
+   - `session_compression(df, 'asia')`: Pre-London compression ratio (< 0.75 indicates coil).
+   - `absorption_volume(df)`: Boolean Series indicating institutional stopping volume absorption at S1/R1.
+   - `volatility_ratio(df, 5, 30)`: Dynamic ATR expansion ratio (> 1.10 = explosive expansion).
+   - `daily_levels(df)`: Daily Floor Pivots ('pdh', 'pdl', 'pdc', 'pivot', 'r1', 's1', 'r2', 's2').
+   - `vwap(df)`: Intraday volume-weighted average price.
+   - `macd(df['close'], 12, 26, 9)` or `(10, 20, 7)`.
+   - `find_swings(df, swing_len=7)`.
 6. Define calculate_signals(df) returning df with 'bull_signal', 'bear_signal', 'sl_long', 'sl_short', 'tp1_long', 'tp1_short', 'tp2_long', 'tp2_short', 'use_breakeven'.
 7. MUST end with `return df`.
 8. Return ONLY executable Python code in ```python ... ``` block.
