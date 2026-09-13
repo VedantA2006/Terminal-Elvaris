@@ -346,6 +346,14 @@ def htf_trend_filter(df: pd.DataFrame, timeframe: str = '1h') -> pd.Series:
     return pd.Series(regime, index=df.index)
 
 
+@_memoize_indicator
+def volatility_ratio(df: pd.DataFrame, fast_period: int = 5, slow_period: int = 30) -> pd.Series:
+    """Computes dynamic volatility ratio: ATR(fast) / ATR(slow). Value < 0.65 = extreme compression, > 1.10 = explosive expansion."""
+    fast_atr = atr(df, fast_period)
+    slow_atr = atr(df, slow_period).replace(0, np.nan)
+    return fast_atr / slow_atr
+
+
 class RuntimeLookaheadTrap:
     """
     Guarantees at runtime that no strategy can sneak past the AST validator
@@ -649,6 +657,7 @@ def execute_strategy(code_str: str, raw_df: pd.DataFrame, initial_capital: float
         'chandelier_exit': chandelier_exit,
         'htf_ema': htf_ema,
         'htf_trend_filter': htf_trend_filter,
+        'volatility_ratio': volatility_ratio,
     }
 
     try:

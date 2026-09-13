@@ -222,27 +222,36 @@ def run_backtest(df, initial_capital=100000.0, lot_size=100.0, partial_tp=False,
                     position = None
                     closed = True
 
-            # 3. Close on opposite signal
+            # 3. Close on opposite signal (Cut losses early, but protect profitable runners)
             if not closed and position is not None:
                 opp_signal = (position['direction'] == 'long' and bool(row.get('bear_signal', False))) or \
                              (position['direction'] == 'short' and bool(row.get('bull_signal', False)))
                 if opp_signal:
+                    # If trade already achieved TP1 or is deeply in profit (>= 1.2R with BE active), preserve runner and let trailing stop govern exit
+                    unrealized_r = 0.0
                     if position['direction'] == 'long':
-                        exit_price = row['close'] - cost_per_oz
-                        pnl = (exit_price - position['entry_price']) * position['remaining_size']
+                        unrealized_r = (row['close'] - position['entry_price']) / risk_dist if risk_dist > 0 else 0.0
                     else:
-                        exit_price = row['close'] + cost_per_oz
-                        pnl = (position['entry_price'] - exit_price) * position['remaining_size']
+                        unrealized_r = (position['entry_price'] - row['close']) / risk_dist if risk_dist > 0 else 0.0
 
-                    cumulative_pnl += pnl
-                    position['pnl'] += pnl
-                    position['exit_price'] = exit_price
-                    position['exit_time'] = bar_time
-                    position['exit_time_ts'] = bar_ts
-                    position['exit_reason'] = 'Signal'
-                    trades.append(_finalize_trade(position, cumulative_pnl, initial_capital))
-                    position = None
-                    closed = True
+                    is_protected_runner = bool(position.get('tp_hits')) or (unrealized_r >= 1.2 and bool(position.get('be_activated')))
+                    if not is_protected_runner:
+                        if position['direction'] == 'long':
+                            exit_price = row['close'] - cost_per_oz
+                            pnl = (exit_price - position['entry_price']) * position['remaining_size']
+                        else:
+                            exit_price = row['close'] + cost_per_oz
+                            pnl = (position['entry_price'] - exit_price) * position['remaining_size']
+
+                        cumulative_pnl += pnl
+                        position['pnl'] += pnl
+                        position['exit_price'] = exit_price
+                        position['exit_time'] = bar_time
+                        position['exit_time_ts'] = bar_ts
+                        position['exit_reason'] = 'Signal'
+                        trades.append(_finalize_trade(position, cumulative_pnl, initial_capital))
+                        position = None
+                        closed = True
 
             # 4. Asymmetric Dynamic Trailing Stop for Multi-Target Runners
             # Strictly causal: peak/trough updated at bar close; trails 1.6x risk behind extreme

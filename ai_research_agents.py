@@ -409,6 +409,103 @@ Focus on Market Structure Shift & Breaker Retest:
    - SL placed below breaker wick + 1.4x ATR (min $3.50).
    - Scale out: `tp1` = 2.0x risk, `tp2` = 4.5x risk, `df['use_breakeven'] = True`.
 """
+    },
+    {
+        "id": "dual_volatility_ratio_squeeze",
+        "name": "Dual-Horizon Volatility Ratio Squeeze (ATR 5 / ATR 30 Expansion)",
+        "concept": "Detects institutional energy buildup via volatility compression (ATR 5 / ATR 30 < 0.65) and fires explosive trend breakout entries on directional expansion.",
+        "instructions": """
+Focus on Volatility Compression & Breakout:
+1. Volatility Ratio: `vr = volatility_ratio(df, 5, 30)`
+2. Compression & Expansion Trigger:
+   - Compression state: `compressed = (vr < 0.65).rolling(8, min_periods=1).max() == 1`
+   - Directional expansion: `expansion = compressed & (vr > 1.05) & (vr.shift(1) <= 1.05)`
+3. Trend Confirmation:
+   - Donchian channels: `d_up, d_dn, d_mid = donchian_channels(df, 20)`
+   - Bullish: `expansion & (df['close'] >= d_up.shift(1)) & (df['close'] > vwap(df)) & session_mask(df, 'london_ny')`
+   - Bearish: `expansion & (df['close'] <= d_dn.shift(1)) & (df['close'] < vwap(df)) & session_mask(df, 'london_ny')`
+4. Runner Risk:
+   - SL at `d_mid` + 1.4x ATR (min $4.00).
+   - Multi-target: `df['tp1_long'] = df['close'] + (risk_l * 2.0)`, `df['tp2_long'] = df['close'] + (risk_l * 5.5)`, `df['use_breakeven'] = True`.
+"""
+    },
+    {
+        "id": "volume_profile_poc_rejection",
+        "name": "Volume Profile Daily POC / Value Area Rejection & Expansion",
+        "concept": "Trades daily auction theory: executes mean-reversion rejections outside Value Area toward POC, or rides clean trend expansions when price accepts beyond VAH/VAL.",
+        "instructions": """
+Focus on Daily Auction Theory & Value Area:
+1. Daily Levels & Value Area Approximation:
+   - `levels = daily_levels(df)`
+   - `vah = levels['pp'] + 0.70 * (levels['pdh'] - levels['pp'])`
+   - `val = levels['pp'] - 0.70 * (levels['pp'] - levels['pdl'])`
+   - `poc = levels['pp']`
+2. Value Area Sweep & Rejection:
+   - Bullish Rejection: Price sweeps below VAL (`df['low'] < val`) and closes back above VAL (`df['close'] > val`) with `rvol(df, 20) > 1.2`
+   - Bearish Rejection: Price sweeps above VAH (`df['high'] > vah`) and closes back below VAH (`df['close'] < vah`) with `rvol(df, 20) > 1.2`
+3. Gating: `session_mask(df, 'london_ny')` and anti-bleed transition.
+4. Asymmetric Runner Target:
+   - SL placed beyond sweep wick + 1.4x ATR (min $4.00).
+   - Target POC (`df['tp1_long'] = poc`) and Expansion (`df['tp2_long'] = df['close'] + (risk_l * 5.0)`).
+   - `df['use_breakeven'] = True`.
+"""
+    },
+    {
+        "id": "asian_judas_ote_equilibrium",
+        "name": "ICT Asian Range Equilibrium (0.50 OTE) Judas Retest",
+        "concept": "Advanced two-stage liquidity setup: London sweeps Asian session extreme, breaks local structure, and enters on the 50% discount equilibrium retest.",
+        "instructions": """
+Focus on London Open Judas Swing & Equilibrium Retest:
+1. Asian Session Tracking:
+   - Asian mask: `m_asia = session_mask(df, 'asia')`
+   - Rolling Asian High / Low.
+2. London Judas Sweep & Structure Shift:
+   - London price sweeps Asian Low, then prints a strong displacement candle closing above previous 3 bars high (CHoCH).
+3. Equilibrium (50% OTE) Retest:
+   - Calculate midpoint between sweep low and displacement high.
+   - Enter when price retests this equilibrium level from above during London (07:00-11:00 UTC).
+4. Multi-Target Runner Risk:
+   - SL anchored below Asian sweep low + 1.2x ATR (min $4.00).
+   - Scale out: `tp1` at 2.0x risk (bank 50%), `tp2` at 5.5x risk (trail 50%), `df['use_breakeven'] = True`.
+"""
+    },
+    {
+        "id": "vwap_2sigma_band_walking",
+        "name": "VWAP Upper/Lower 2.0-Sigma Band Walking Momentum Drive",
+        "concept": "Rides institutional trend persistence when Gold walks along the 2.0-sigma VWAP band during high-efficiency London/NY sessions.",
+        "instructions": """
+Focus on Trend Persistence & Band Walking:
+1. VWAP & Standard Deviation Bands:
+   - `vwap_line = vwap(df)`
+   - `z_val = zscore(df['close'] - vwap_line, 20)`
+2. Trend Efficiency Filter:
+   - `adx_val, _, _ = adx(df, 14)` (> 24)
+   - `er = efficiency_ratio(df['close'], 20)` (> 0.30)
+3. Entry (Transition Cross of 2-Sigma Band):
+   - Bullish: `(z_val >= 2.0) & (z_val.shift(1) < 2.0) & (adx_val > 24) & (er > 0.30) & session_mask(df, 'london_ny')`
+   - Bearish: `(z_val <= -2.0) & (z_val.shift(1) > -2.0) & (adx_val > 24) & (er > 0.30) & session_mask(df, 'london_ny')`
+4. Runner Risk:
+   - SL anchored at VWAP line or 1.5x ATR (min $4.00).
+   - Multi-target: `df['tp1_long'] = df['close'] + (risk_l * 2.0)`, `df['tp2_long'] = df['close'] + (risk_l * 5.5)`, `df['use_breakeven'] = True`.
+"""
+    },
+    {
+        "id": "climax_exhaustion_fade_pivots",
+        "name": "Multi-Bar Climax Exhaustion Fade at Daily Floor Pivots",
+        "concept": "Fades retail exhaustion spikes into Daily Floor Pivot extremes (R1/R2 or S1/S2) when 5+ consecutive expansion candles fail and reverse on heavy volume.",
+        "instructions": """
+Focus on Climax Exhaustion at Key Daily Pivots:
+1. Daily Floor Pivots: `levels = daily_levels(df)` (pp, r1, s1, r2, s2)
+2. Climax Expansion Run:
+   - 4 or 5 consecutive higher closes: `(df['close'] > df['close'].shift(1)).rolling(4).sum() == 4`
+   - Price penetrates into R1 or R2: `df['high'] >= levels['r1']`
+3. Exhaustion Reversal Bar:
+   - Candle closes below previous candle low with heavy volume: `(df['close'] < df['low'].shift(1)) & (rvol(df, 20) > 1.3)`
+   - Anti-bleed: fire only on this reversal bar.
+4. Target Central Pivot (`levels['pp']`):
+   - SL above the climax wick + 1.4x ATR (min $4.00).
+   - Scale out: `tp1` at 2.0x risk, `tp2` at 4.5x risk, `df['use_breakeven'] = True`.
+"""
     }
 ]
 
@@ -685,7 +782,9 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
                 return mutated
 
         idx = archetype_idx % len(ALPHA_ARCHETYPES)
-        if idx == 0:
+        arch_id = ALPHA_ARCHETYPES[idx].get('id', '')
+
+        if idx == 0 or arch_id == 'sequential_smc_fvg_state_machine':
             return f'''def calculate_signals(df):
     sess = session_mask(df, 'london_ny')
     macro = htf_trend_filter(df, '1h')
@@ -718,6 +817,7 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
     df['sl_long'] = df['close'] - risk_l
     df['sl_short'] = df['close'] + risk_s
     df['use_breakeven'] = True
+    df['use_trailing'] = True
     df['tp1_long'] = df['close'] + (risk_l * {rr})
     df['tp2_long'] = df['close'] + (risk_l * {runner_rr})
     df['tp1_short'] = df['close'] - (risk_s * {rr})
@@ -725,7 +825,7 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
     return df
 '''
 
-        elif idx == 1:
+        elif idx == 1 or arch_id == 'multi_timeframe_key_levels':
             return f'''def calculate_signals(df):
     sess = session_mask(df, 'london_ny')
     macro = htf_trend_filter(df, '1h')
@@ -748,6 +848,7 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
     df['sl_long'] = df['close'] - risk_l
     df['sl_short'] = df['close'] + risk_s
     df['use_breakeven'] = True
+    df['use_trailing'] = True
     df['tp1_long'] = df['close'] + (risk_l * {rr})
     df['tp2_long'] = df['close'] + (risk_l * {runner_rr})
     df['tp1_short'] = df['close'] - (risk_s * {rr})
@@ -755,7 +856,7 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
     return df
 '''
 
-        elif idx == 2:
+        elif idx == 2 or arch_id == 'regime_gated_execution':
             return f'''def calculate_signals(df):
     sess = session_mask(df, 'london_ny')
     macro = htf_trend_filter(df, '1h')
@@ -783,6 +884,180 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
     df['sl_long'] = df['close'] - risk_l
     df['sl_short'] = df['close'] + risk_s
     df['use_breakeven'] = True
+    df['use_trailing'] = True
+    df['tp1_long'] = df['close'] + (risk_l * {rr})
+    df['tp2_long'] = df['close'] + (risk_l * {runner_rr})
+    df['tp1_short'] = df['close'] - (risk_s * {rr})
+    df['tp2_short'] = df['close'] - (risk_s * {runner_rr})
+    return df
+'''
+
+        elif arch_id == 'donchian_turtle_momentum' or idx == 8:
+            return f'''def calculate_signals(df):
+    sess = session_mask(df, 'london_ny')
+    macro = htf_trend_filter(df, '1h')
+    d_up, d_dn, d_mid = donchian_channels(df, period=20)
+    atr_val = atr(df, {atr_period})
+    er = efficiency_ratio(df['close'], 20)
+    
+    bull_break = (df['close'] > d_up.shift(1)) & (~(df['close'].shift(1) > d_up.shift(2)))
+    bear_break = (df['close'] < d_dn.shift(1)) & (~(df['close'].shift(1) < d_dn.shift(2)))
+    
+    raw_bull = bull_break & (er > 0.25) & (macro >= 0) & sess
+    raw_bear = bear_break & (er > 0.25) & (macro <= 0) & sess
+    
+    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))
+    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))
+    
+    risk_l = np.maximum(df['close'] - d_mid, {min_dist})
+    risk_s = np.maximum(d_mid - df['close'], {min_dist})
+    risk_l = np.maximum(risk_l, {atr_mult} * atr_val)
+    risk_s = np.maximum(risk_s, {atr_mult} * atr_val)
+    
+    df['sl_long'] = df['close'] - risk_l
+    df['sl_short'] = df['close'] + risk_s
+    df['use_breakeven'] = True
+    df['use_trailing'] = True
+    df['tp1_long'] = df['close'] + (risk_l * {rr})
+    df['tp2_long'] = df['close'] + (risk_l * {runner_rr})
+    df['tp1_short'] = df['close'] - (risk_s * {rr})
+    df['tp2_short'] = df['close'] - (risk_s * {runner_rr})
+    return df
+'''
+
+        elif arch_id == 'stochastic_macd_momentum' or idx == 13:
+            return f'''def calculate_signals(df):
+    sess = session_mask(df, 'london_ny')
+    macro = htf_trend_filter(df, '1h')
+    k, d = stochastic(df, 14, 3)
+    macd_line, macd_sig, macd_hist = macd(df['close'], 12, 26, 9)
+    atr_val = atr(df, {atr_period})
+    
+    bull_cross = (k.shift(1) < 30) & (k > d) & (k.shift(1) <= d.shift(1)) & (macd_hist > 0)
+    bear_cross = (k.shift(1) > 70) & (k < d) & (k.shift(1) >= d.shift(1)) & (macd_hist < 0)
+    
+    raw_bull = bull_cross & (macro >= 0) & sess
+    raw_bear = bear_cross & (macro <= 0) & sess
+    
+    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))
+    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))
+    
+    risk_l = np.maximum({atr_mult} * atr_val, {min_dist})
+    risk_s = np.maximum({atr_mult} * atr_val, {min_dist})
+    
+    df['sl_long'] = df['close'] - risk_l
+    df['sl_short'] = df['close'] + risk_s
+    df['use_breakeven'] = True
+    df['use_trailing'] = True
+    df['tp1_long'] = df['close'] + (risk_l * {rr})
+    df['tp2_long'] = df['close'] + (risk_l * {runner_rr})
+    df['tp1_short'] = df['close'] - (risk_s * {rr})
+    df['tp2_short'] = df['close'] - (risk_s * {runner_rr})
+    return df
+'''
+
+        elif arch_id == 'opening_range_breakout_orb' or idx == 15:
+            return f'''def calculate_signals(df):
+    sess = session_mask(df, 'london_ny')
+    macro = htf_trend_filter(df, '1h')
+    atr_val = atr(df, {atr_period})
+    times = df.index if isinstance(df.index, pd.DatetimeIndex) else pd.to_datetime(df.get('dt', df.index))
+    mins = times.hour * 60 + times.minute
+    
+    # 15m opening windows
+    is_orb_london = (7 * 60 <= mins) & (mins < 7 * 60 + 15)
+    is_orb_ny = (12 * 60 + 30 <= mins) & (mins < 12 * 60 + 45)
+    is_orb = is_orb_london | is_orb_ny
+    
+    orb_high = df['high'].where(is_orb).rolling(3, min_periods=1).max().ffill()
+    orb_low = df['low'].where(is_orb).rolling(3, min_periods=1).min().ffill()
+    
+    bull_break = (df['close'] > orb_high) & (~(df['close'].shift(1) > orb_high.shift(1))) & (~is_orb)
+    bear_break = (df['close'] < orb_low) & (~(df['close'].shift(1) < orb_low.shift(1))) & (~is_orb)
+    vol_ok = rvol(df, 20) > 1.15
+    
+    raw_bull = bull_break & vol_ok & (macro >= 0) & sess
+    raw_bear = bear_break & vol_ok & (macro <= 0) & sess
+    
+    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))
+    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))
+    
+    risk_l = np.maximum({atr_mult} * atr_val, {min_dist})
+    risk_s = np.maximum({atr_mult} * atr_val, {min_dist})
+    
+    df['sl_long'] = df['close'] - risk_l
+    df['sl_short'] = df['close'] + risk_s
+    df['use_breakeven'] = True
+    df['use_trailing'] = True
+    df['tp1_long'] = df['close'] + (risk_l * {rr})
+    df['tp2_long'] = df['close'] + (risk_l * {runner_rr})
+    df['tp1_short'] = df['close'] - (risk_s * {rr})
+    df['tp2_short'] = df['close'] - (risk_s * {runner_rr})
+    return df
+'''
+
+        elif arch_id == 'dual_volatility_ratio_squeeze' or idx == 20:
+            return f'''def calculate_signals(df):
+    sess = session_mask(df, 'london_ny')
+    macro = htf_trend_filter(df, '1h')
+    vr = volatility_ratio(df, 5, 30)
+    atr_val = atr(df, {atr_period})
+    d_up, d_dn, d_mid = donchian_channels(df, 20)
+    vwap_line = vwap(df)
+    
+    compressed = (vr < 0.70).rolling(8, min_periods=1).max() == 1
+    expansion = compressed & (vr > 1.05) & (vr.shift(1) <= 1.05)
+    
+    raw_bull = expansion & (df['close'] >= d_up.shift(1)) & (df['close'] > vwap_line) & (macro >= 0) & sess
+    raw_bear = expansion & (df['close'] <= d_dn.shift(1)) & (df['close'] < vwap_line) & (macro <= 0) & sess
+    
+    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))
+    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))
+    
+    risk_l = np.maximum(df['close'] - d_mid, {min_dist})
+    risk_s = np.maximum(d_mid - df['close'], {min_dist})
+    risk_l = np.maximum(risk_l, {atr_mult} * atr_val)
+    risk_s = np.maximum(risk_s, {atr_mult} * atr_val)
+    
+    df['sl_long'] = df['close'] - risk_l
+    df['sl_short'] = df['close'] + risk_s
+    df['use_breakeven'] = True
+    df['use_trailing'] = True
+    df['tp1_long'] = df['close'] + (risk_l * {rr})
+    df['tp2_long'] = df['close'] + (risk_l * {runner_rr})
+    df['tp1_short'] = df['close'] - (risk_s * {rr})
+    df['tp2_short'] = df['close'] - (risk_s * {runner_rr})
+    return df
+'''
+
+        elif arch_id == 'vwap_2sigma_band_walking' or idx == 23:
+            return f'''def calculate_signals(df):
+    sess = session_mask(df, 'london_ny')
+    macro = htf_trend_filter(df, '1h')
+    vwap_line = vwap(df)
+    z_val = zscore(df['close'] - vwap_line, 20)
+    atr_val = atr(df, {atr_period})
+    adx_val, _, _ = adx(df, 14)
+    er = efficiency_ratio(df['close'], 20)
+    
+    bull_drive = (z_val >= 1.8) & (z_val.shift(1) < 1.8) & (adx_val > 22) & (er > 0.28)
+    bear_drive = (z_val <= -1.8) & (z_val.shift(1) > -1.8) & (adx_val > 22) & (er > 0.28)
+    
+    raw_bull = bull_drive & (macro >= 0) & sess
+    raw_bear = bear_drive & (macro <= 0) & sess
+    
+    df['bull_signal'] = raw_bull & (~raw_bull.shift(1).fillna(False))
+    df['bear_signal'] = raw_bear & (~raw_bear.shift(1).fillna(False))
+    
+    risk_l = np.maximum(df['close'] - vwap_line, {min_dist})
+    risk_s = np.maximum(vwap_line - df['close'], {min_dist})
+    risk_l = np.maximum(risk_l, {atr_mult} * atr_val)
+    risk_s = np.maximum(risk_s, {atr_mult} * atr_val)
+    
+    df['sl_long'] = df['close'] - risk_l
+    df['sl_short'] = df['close'] + risk_s
+    df['use_breakeven'] = True
+    df['use_trailing'] = True
     df['tp1_long'] = df['close'] + (risk_l * {rr})
     df['tp2_long'] = df['close'] + (risk_l * {runner_rr})
     df['tp1_short'] = df['close'] - (risk_s * {rr})
@@ -817,6 +1092,7 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
     df['sl_long'] = df['close'] - risk_l
     df['sl_short'] = df['close'] + risk_s
     df['use_breakeven'] = True
+    df['use_trailing'] = True
     df['tp1_long'] = df['close'] + (risk_l * {rr})
     df['tp2_long'] = df['close'] + (risk_l * {runner_rr})
     df['tp1_short'] = df['close'] - (risk_s * {rr})
@@ -1053,9 +1329,14 @@ class ParameterGridSweeper:
     """
 
     @staticmethod
-    def _mutate_code_params(code: str, am: float, rr: float) -> str:
-        """Robustly mutates ATR stop buffers and TP risk multipliers without corrupting code."""
+    def _mutate_code_params(code: str, am: float, rr: float, lookback_param: Optional[Tuple[str, int]] = None) -> str:
+        """Robustly mutates ATR stop buffers, lookbacks, and TP risk multipliers with multi-target runners."""
         mutated = code
+        # 0. Lookback sensitivity mutation
+        if lookback_param:
+            p_name, p_val = lookback_param
+            mutated = re.sub(rf'\b({p_name})\s*=\s*\d+', rf'\g<1> = {p_val}', mutated)
+
         # 1. Parameter variable assignments
         mutated = re.sub(r'\b(atr_mult|atr_multiplier|atr_buffer_factor)\s*=\s*[\d\.]+', rf'\g<1> = {am}', mutated)
         mutated = re.sub(r'\b(rr_ratio|rr_factor|reward_risk_ratio|target_rr)\s*=\s*[\d\.]+', rf'\g<1> = {rr}', mutated)
@@ -1073,7 +1354,7 @@ class ParameterGridSweeper:
         )
 
         # 3. Risk multiplier expressions in Take Profit (maintaining long and short risk independently)
-        runner_rr = max(4.5, round(rr * 2.5, 1))
+        runner_rr = max(4.5, round(rr * 2.2, 1))
         if 'tp2_long' in mutated or 'tp2_short' in mutated:
             mutated = re.sub(
                 r"(df\['tp1_long'\]\s*=\s*df\['close'\]\s*\+\s*\(?risk_\w+\s*\*\s*)[\d\.]+",
@@ -1109,25 +1390,28 @@ class ParameterGridSweeper:
             if 'tp1_long' in mutated and 'tp2_long' not in mutated:
                 mutated = re.sub(
                     r"(df\['tp1_long'\]\s*=\s*df\['close'\]\s*\+\s*\(?(?:risk_\w+|risk[ls]|sl_dist(?:_\w+)?)\s*\*\s*[\d\.]+\)?)",
-                    rf"\g<1>\n    df['tp2_long'] = df['close'] + (risk_l * {runner_rr})\n    df['use_breakeven'] = True",
+                    rf"\g<1>\n    df['tp2_long'] = df['close'] + (risk_l * {runner_rr})\n    df['use_breakeven'] = True\n    df['use_trailing'] = True",
                     mutated
                 )
                 mutated = re.sub(
                     r"(df\['tp1_short'\]\s*=\s*df\['close'\]\s*-\s*\(?(?:risk_\w+|risk[ls]|sl_dist(?:_\w+)?)\s*\*\s*[\d\.]+\)?)",
-                    rf"\g<1>\n    df['tp2_short'] = df['close'] - (risk_s * {runner_rr})\n    df['use_breakeven'] = True",
+                    rf"\g<1>\n    df['tp2_short'] = df['close'] - (risk_s * {runner_rr})\n    df['use_breakeven'] = True\n    df['use_trailing'] = True",
                     mutated
                 )
+
+        if 'use_trailing' not in mutated and 'use_breakeven' in mutated:
+            mutated = mutated.replace("df['use_breakeven'] = True", "df['use_breakeven'] = True\n    df['use_trailing'] = True")
 
         return mutated
 
     @staticmethod
     def sweep_and_optimize(base_code: str, df: pd.DataFrame) -> Tuple[str, Dict[str, Any], List[Dict[str, Any]], Dict[str, float]]:
         """
-        Sweeps combinations of (atr_mult in [1.4, 1.8], rr_ratio in [2.0, 2.4, 2.8, 3.2]).
-        Returns: (best_code, best_stats, best_trades, best_monthly)
+        Two-Tier Fast Vectorized Parameter Optimizer:
+        Stage 1: Quick lookback sensitivity sweep (swing_len in [5, 7, 10] or period in [10, 14, 20]).
+        Stage 2: Asymmetrical runner grid sweep (3 ATRs x 5 RRs with trailing stops).
         """
         # Fast 1-Pass Baseline Prune:
-        # If the candidate produces < 5 trades, abort immediately without wasting full grid sweeps!
         base_res = execute_strategy(base_code, df)
         if not base_res.get('success'):
             return base_code, {}, [], {}
@@ -1147,8 +1431,7 @@ class ParameterGridSweeper:
         base_dd_r = float(base_stats.get('max_drawdown', 0.0) / 1000.0)
         base_wr = float(base_stats.get('win_rate', 0.0))
 
-        # High-Speed Prune: If baseline is severely bleeding (Net R < -15.0R) or has too few trades (< 8),
-        # abort immediately without running full grid sweeps — saves 15-20s per bad candidate.
+        # High-Speed Prune: If baseline is severely bleeding (Net R < -15.0R) or has too few trades (< 8)
         if base_net_r < -15.0 or len(base_trades) < 8:
             return base_code, base_stats, base_trades, base_monthly
 
@@ -1156,7 +1439,28 @@ class ParameterGridSweeper:
         if len(base_trades) < 30:
             best_score *= max(0.1, len(base_trades) / 30.0)
 
-        # High-Speed Alpha Sweep Grid (3 ATRs x 5 RRs) for deep alpha & runner expansion
+        # STAGE 1: Lookback Sensitivity Coordinate Sweep
+        lookback_candidates = []
+        if 'swing_len' in base_code:
+            lookback_candidates = [('swing_len', 5), ('swing_len', 7), ('swing_len', 10)]
+        elif 'period=' in base_code or 'period =' in base_code:
+            lookback_candidates = [('period', 10), ('period', 14), ('period', 20)]
+
+        for lb in lookback_candidates:
+            mut_lb = ParameterGridSweeper._mutate_code_params(base_code, 1.5, 3.0, lookback_param=lb)
+            if mut_lb != base_code:
+                lb_res = execute_strategy(mut_lb, df)
+                if lb_res.get('success'):
+                    lb_tr = lb_res.get('trades', [])
+                    if len(lb_tr) >= 10:
+                        lb_st = lb_res.get('stats', {})
+                        lb_m = compute_monthly_r_breakdown(lb_tr)
+                        lb_net_r = sum(lb_m.values()) if lb_m else lb_st.get('total_pnl', 0.0) / 1000.0
+                        if lb_net_r > base_net_r:
+                            base_code = mut_lb
+                            base_net_r = lb_net_r
+
+        # STAGE 2: High-Speed Alpha Runner Grid (3 ATRs x 5 RRs)
         atr_mults = [1.4, 1.8, 2.0]
         rr_ratios = [2.5, 3.0, 3.5, 4.0, 4.5]
 

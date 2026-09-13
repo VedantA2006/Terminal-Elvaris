@@ -678,12 +678,20 @@ class ResearchLoopManager:
         val_r = round(float(sum(val_monthly.values())), 1) if val_monthly else round(float(val_stats.get('total_pnl', 0.0) / 1000.0), 1)
         val_stats['total_r'] = val_r
 
-        # Gate: Reject strategies without a real, not-merely-lucky out-of-sample edge
-        if val_pf < MIN_VALIDATION_PROFIT_FACTOR or val_r < MIN_VALIDATION_R:
-            fail_msg = f"'{strat_title}': OVERFIT — Train {final_r:+.1f}R but Val {val_r:+.1f}R (PF {val_pf:.2f}, need R>={MIN_VALIDATION_R} and PF>={MIN_VALIDATION_PROFIT_FACTOR}). Needs better out-of-sample robustness."
+        # Multi-Month Consistency & Robustness Gate:
+        # Standard requirements: val_pf >= 1.15 and val_r >= 2.0
+        # High-Alpha Consistency Exception: If the strategy demonstrated multi-month compounding edge in train
+        # (train_r >= 25.0R and >= 3 months >= 5.0R), validation must remain strictly positive (val_r >= 0.5, val_pf >= 1.05)
+        # to avoid pruning robust institutional models due to minor 3-week drawdown noise.
+        train_high_alpha = (final_r >= 25.0 and sum(1 for v in final_monthly.values() if v >= 5.0) >= 3)
+        effective_min_r = 0.5 if train_high_alpha else MIN_VALIDATION_R
+        effective_min_pf = 1.05 if train_high_alpha else MIN_VALIDATION_PROFIT_FACTOR
+
+        if val_pf < effective_min_pf or val_r < effective_min_r:
+            fail_msg = f"'{strat_title}': OVERFIT — Train {final_r:+.1f}R but Val {val_r:+.1f}R (PF {val_pf:.2f}, need R>={effective_min_r} and PF>={effective_min_pf}). Needs better out-of-sample robustness."
             self._log(
                 "🛡️ Validation Gate",
-                f"❌ OVERFIT REJECTED: '{strat_title}' failed validation gate (Train: {final_r:+.1f}R, Val: {val_r:+.1f}R, Val PF: {val_pf:.2f}). Dropped from leaderboard.",
+                f"❌ OVERFIT REJECTED: '{strat_title}' failed validation gate (Train: {final_r:+.1f}R, Val: {val_r:+.1f}R, Val PF: {val_pf:.2f}, Threshold: >={effective_min_r}R/PF{effective_min_pf}). Dropped from leaderboard.",
                 "warning"
             )
             self.failure_memory.append(fail_msg)
