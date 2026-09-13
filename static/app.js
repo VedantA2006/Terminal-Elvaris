@@ -1658,7 +1658,14 @@ function renderLeaderboardTable(items) {
             monthlyHtml += `<div class="lb-months-headline">⭐ <strong>${monthsCount10} Months ≥ +10R</strong></div>`;
         }
         monthlyHtml += `<div class="lb-monthly-pills">`;
-        for (const [mName, mVal] of Object.entries(monthly)) {
+        const monthOrder = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const sortedMonthly = Object.entries(monthly).sort((a, b) => {
+            const [mA, yA] = a[0].split(' ');
+            const [mB, yB] = b[0].split(' ');
+            if (yA !== yB) return (parseInt(yA) || 0) - (parseInt(yB) || 0);
+            return monthOrder.indexOf(mA) - monthOrder.indexOf(mB);
+        });
+        for (const [mName, mVal] of sortedMonthly) {
             const isHigh = mVal >= 10.0;
             const pClass = isHigh ? 'high-yield' : (mVal > 0 ? 'positive' : 'negative');
             const sign = mVal > 0 ? '+' : '';
