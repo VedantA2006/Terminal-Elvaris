@@ -496,10 +496,13 @@ CRITICAL JSON RULES:
                             t = TimeoutThread()
                             t.daemon = True # Allow main program to exit if this hangs
                             t.start()
-                            t.join(timeout=180.0) # 3 minutes max
+                            t.join(timeout=480.0) # 8 minutes max (to allow for slow API failovers)
                             
                             if t.is_alive():
-                                self._log(inst, f"Timeout Error: Agent stalled for >3 minutes (possible infinite loop). Aborting round {r}.", "error")
+                                import sys, traceback
+                                frame = sys._current_frames().get(t.ident, None)
+                                stack_trace = "".join(traceback.format_stack(frame)) if frame else "No frame found"
+                                self._log(inst, f"Timeout Error: Agent stalled for >8 minutes (LLM API sluggish or infinite loop). Aborting round {r}.\nStuck at:\n{stack_trace}", "error")
                                 added_to_top15 = False
                             elif t.exc:
                                 self._log(inst, f"Execution Error: {t.exc}", "error")

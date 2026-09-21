@@ -339,7 +339,7 @@ def call_ai_llm(provider: str, api_key: str, model: str, prompt: str, system_pro
                 'max_tokens': 4096,
             }
             try:
-                res = requests.post(url, headers=headers, json=payload, timeout=(5, 40))
+                res = requests.post(url, headers=headers, json=payload, timeout=(5, 25))
                 if res.status_code in (400, 401, 404, 429, 500, 502, 503, 504):
                     last_err = requests.HTTPError(f"HTTP {res.status_code} on model {cand_model}: {res.text[:120]}")
                     time.sleep(1.0)

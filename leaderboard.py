@@ -517,7 +517,7 @@ def add_strategy_to_leaderboard(name: str,
 
     import uuid
     if strategy_id is None:
-        strategy_id = uuid.uuid4().hex[:8]
+        strategy_id = f"{instrument}-{uuid.uuid4().hex[:8]}"
 
     # Deduplication Guard: Check if an identical strategy already exists in current_board
     def _norm_code(c: str) -> str:
