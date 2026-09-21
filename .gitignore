@@ -1,0 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs
+*.log
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Temporary and diagnostic test scripts
+analyze_strats.py
+diagnose_loss.py
+inspect_winners.py
+print_target.py
+test_inspect.py
+test_fix_experiment.py
+test_generation_pipeline.py
+test_live_ai_round.py
+audit_board.py
+update_board.py
+champion_81_8r_trades.csv
+verify_remediation.py
+check_loop.py
+
+# IDE and OS files
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
+# Temporary data dumps & scratch files
+logs_dump.json
+logs_live.json
+scratch_dashboard.py
+temp_dashboard.html
+scratch/
+scratch_*.py
+data/*_backup.*

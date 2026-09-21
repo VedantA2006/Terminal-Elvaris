@@ -1,0 +1,92 @@
+[
+    {
+        "id": "kalman_momentum_divergence",
+        "name": "Kalman Filter Momentum Divergence",
+        "concept": "Detects when the Kalman\u2011smoothed price trajectory diverges sharply from raw price momentum, indicating institutional entry.",
+        "instructions": "Compute a Kalman filter estimate of the close series using a simple state\u2011space model (state = price, observation = close, process variance = 0.01, observation variance = variance of close). Derive the smoothed series (kalman_price). Calculate raw momentum as the difference of close over a 5\u2011bar window. Signal long when kalman_price > close and momentum turns positive within the London\u2011NY killzone, and short when kalman_price < close and momentum turns negative. Apply a minimum efficiency_ratio > 0.30 and rvol > 1.2 filter. Generate bull_signal and bear_signal only on the first bar of each divergence event."
+    },
+    {
+        "id": "gaussian_mixture_regime",
+        "name": "Multivariate Gaussian Mixture Regime Filter",
+        "concept": "Fits a two\u2011component Gaussian mixture to recent returns to identify bullish or bearish regimes.",
+        "instructions": "Calculate log returns of close over the last 60 bars. Fit a 2\u2011component Gaussian mixture (use sklearn's GaussianMixture with covariance_type='full') on the return window. Label the component with higher mean as bullish. If the current return belongs to the bullish component with posterior probability > 0.75 and the session mask is london_ny, set bull_signal. If it belongs to the bearish component with probability > 0.75, set bear_signal. Add a guard that signals fire only when the component assignment changes from the previous bar."
+    },
+    {
+        "id": "eigenvalue_covariance_trend",
+        "name": "Eigenvalue Covariance Trend Detector",
+        "concept": "Uses the leading eigenvalue of a rolling covariance matrix of price and volume to gauge market pressure.",
+        "instructions": "Create a rolling window of 30 bars. For each window compute a 2\u00d72 covariance matrix of (close, volume). Extract the largest eigenvalue (np.linalg.eigvals). When the eigenvalue series is rising (current > previous) and exceeds its 20\u2011bar mean by more than 1.5 z\u2011score, generate a bull_signal inside the killzone. When falling below the mean by more than 1.5 z\u2011score, generate a bear_signal. Apply an ADX > 22 filter and ensure signals fire only on the first bar of a crossing."
+    },
+    {
+        "id": "spectral_density_breakout",
+        "name": "Spectral Density Breakout",
+        "concept": "Identifies breakouts when the power spectral density of price fluctuations shifts to higher frequencies.",
+        "instructions": "For each bar compute a 64\u2011point FFT of the close series over the previous 64 bars. Calculate the spectral centroid (sum(freq*power)/sum(power)). When the centroid jumps upward by more than 20% compared to its 20\u2011bar rolling median, flag a bullish breakout; a downward jump flags a bearish breakout. Restrict to london_ny session and require rvol > 1.3 and efficiency_ratio > 0.28. Emit signals only on the first bar after the centroid jump."
+    },
+    {
+        "id": "fractal_variance_ratio",
+        "name": "Fractal Variance Ratio (FVR) Filter",
+        "concept": "Compares variance at multiple time scales to detect scaling anomalies that precede strong moves.",
+        "instructions": "Compute variance of close over 5\u2011bar and 20\u2011bar windows. Define FVR = var_5 / var_20. When FVR > 1.5 and zscore(FVR, 30) > 2, generate bull_signal; when FVR < 0.5 and zscore(FVR, 30) < -2, generate bear_signal. Apply a minimum ADX > 25 and restrict to london_ny. Ensure signals fire only on the first bar where the condition becomes true."
+    },
+    {
+        "id": "dynamic_pca_trend",
+        "name": "Dynamic PCA Trend Tracker",
+        "concept": "Applies rolling principal component analysis on price, volume, and ATR to extract the dominant market direction.",
+        "instructions": "Construct a DataFrame with columns close, volume, atr(14). Use a rolling window of 40 bars and compute PCA (np.linalg.svd) on the standardized matrix. The first principal component loading on close indicates trend direction: positive loading \u2192 bullish, negative \u2192 bearish. When the sign of the loading flips inside the killzone and the magnitude exceeds 0.6, emit the corresponding signal. Add rvol > 1.2 and efficiency_ratio > 0.30 as filters. Signal only on the first bar after a sign change."
+    },
+    {
+        "id": "time_weighted_autocorr_decay",
+        "name": "Time\u2011Weighted Autocorrelation Decay",
+        "concept": "Measures the decay rate of lag\u20111 autocorrelation with exponential weighting to spot regime shifts.",
+        "instructions": "Compute exponentially weighted moving autocorrelation of close with span 30 (use pandas ewm). When the autocorrelation drops below 0.2 after being above 0.6, flag a bearish regime change; when it rises above 0.6 after being below 0.2, flag a bullish regime change. Apply only during london_ny, require ADX > 22 and rvol > 1.15. Emit signals only on the first bar of each transition."
+    },
+    {
+        "id": "adaptive_garch_squeeze",
+        "name": "Adaptive GARCH Volatility Squeeze",
+        "concept": "Uses a rolling GARCH(1,1) estimate of volatility to detect squeezes and subsequent expansions.",
+        "instructions": "Fit a simple GARCH(1,1) model on close returns over the last 100 bars (use arch package if available, otherwise approximate with EWMA of squared returns). Define squeeze when the GARCH volatility is below its 20\u2011bar median by more than 1.5 standard deviations. When the next bar's volatility exceeds the median by 2 standard deviations, generate a breakout signal: bullish if price closes above the prior high, bearish if below prior low. Apply rvol > 1.2, ADX > 20, and killzone filter. Signal only on the first expansion bar."
+    },
+    {
+        "id": "wavelet_energy_spike",
+        "name": "Wavelet Transform Energy Spike",
+        "concept": "Detects sudden increases in high\u2011frequency wavelet energy that precede sharp moves.",
+        "instructions": "Perform a discrete wavelet transform (Haar) on the close series over the last 64 bars. Compute the energy of the detail coefficients at level 1 (high frequency). When the energy exceeds its 30\u2011bar rolling mean by 2.5 standard deviations, generate a bullish signal if the close is above the median of the window, otherwise a bearish signal. Filter with rvol > 1.25, efficiency_ratio > 0.28, and london_ny session. Emit only on the first bar where the spike occurs."
+    },
+    {
+        "id": "quantile_regression_sr",
+        "name": "Quantile Regression Support/Resistance",
+        "concept": "Fits upper and lower quantile regression lines to recent price to define dynamic S/R zones.",
+        "instructions": "Using the last 80 bars, fit a linear quantile regression (statsmodels) for the 0.9 quantile (resistance) and 0.1 quantile (support) of close versus time index. When the current close breaks above the resistance line by more than 0.2% inside the killzone, set bull_signal; when it breaks below the support line by more than 0.2%, set bear_signal. Require ADX > 24 and rvol > 1.2. Signals fire only on the first break bar."
+    },
+    {
+        "id": "entropy_regime_shift",
+        "name": "Shannon Entropy Regime Shift",
+        "concept": "Measures the entropy of price return distribution; low entropy indicates trending, high entropy indicates mean\u2011reversion.",
+        "instructions": "Create a histogram of close returns over a 40\u2011bar window with 20 bins. Compute Shannon entropy (\u2011sum(p*log(p)) ). When entropy falls below the 20\u2011bar rolling 10th percentile and the price is above its 20\u2011bar SMA, generate bull_signal; when entropy rises above the 90th percentile and price is below SMA, generate bear_signal. Apply rvol > 1.15, ADX > 22, and killzone filter. Emit only on the first bar where the entropy threshold is crossed."
+    },
+    {
+        "id": "stochastic_volatility_ratio",
+        "name": "Stochastic Volatility Ratio (SVR)",
+        "concept": "Compares short\u2011term to long\u2011term volatility to capture rapid volatility regime changes.",
+        "instructions": "Compute short_vol = atr(5) and long_vol = atr(30). Define SVR = short_vol / long_vol. When SVR > 1.8 and zscore(SVR, 20) > 2, generate bull_signal; when SVR < 0.5 and zscore(SVR, 20) < -2, generate bear_signal. Filter with rvol > 1.2, ADX > 20, and london_ny session. Signal only on the first bar where SVR crosses the threshold."
+    },
+    {
+        "id": "lagged_cross_correlation",
+        "name": "Lagged Cross\u2011Correlation with Returns",
+        "concept": "Measures correlation between current returns and returns lagged by multiple periods to detect predictive lag structures.",
+        "instructions": "Calculate returns series r_t. For lags 3, 5, 8 compute rolling correlation between r_t and r_{t\u2011lag} over a 40\u2011bar window. When any lagged correlation exceeds 0.6 and the current return is positive, set bull_signal; when correlation < -0.6 and current return is negative, set bear_signal. Apply ADX > 23, rvol > 1.2, and killzone filter. Emit signals only on the first bar where the correlation condition appears."
+    },
+    {
+        "id": "recursive_least_squares_slope",
+        "name": "Recursive Least Squares Adaptive Slope",
+        "concept": "Continuously updates a linear regression slope using RLS to capture evolving trend strength.",
+        "instructions": "Initialize RLS parameters (lambda=0.99, delta=0.1). For each new close, update the slope estimate of close versus time index. When the adaptive slope turns positive and exceeds its 20\u2011bar rolling mean by 1.5 standard deviations, generate bull_signal; when it turns negative and falls below the mean by 1.5 std, generate bear_signal. Require rvol > 1.2, efficiency_ratio > 0.30, and london_ny session. Signal only on the first bar after the slope crosses the dynamic threshold."
+    },
+    {
+        "id": "multiscale_hurst_confluence",
+        "name": "Multiscale Hurst Exponent Confluence",
+        "concept": "Computes Hurst exponent over short and long windows; confluence of persistent regimes triggers trades.",
+        "instructions": "Estimate Hurst exponent using the rescaled range method over 20\u2011bar and 80\u2011bar windows. When both H values > 0.6 (persistent) and price is above its 20\u2011bar SMA, emit bull_signal; when both H < 0.4 (mean\u2011reverting) and price is below SMA, emit bear_signal. Apply ADX > 22, rvol > 1.2, and killzone filter. Signals fire only on the first bar where the dual\u2011H condition is satisfied."
+    }
+]

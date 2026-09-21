@@ -1,0 +1,92 @@
+[
+    {
+        "id": "spx500_hurst_exponent_regime",
+        "name": "Hurst Exponent Trend Persistence",
+        "concept": "Uses rolling Hurst exponent to identify long-memory trend persistence vs anti-persistent mean reversion regimes.",
+        "instructions": "Calculate rolling Hurst exponent over 50-bar windows using R/S analysis. When H > 0.6, market is trending: take momentum breakouts in direction of 20-bar EMA slope. When H < 0.4, market is mean-reverting: fade extremes beyond 2 standard deviations from 20-bar VWAP. Gate with London/NY killzone. Use 1.8x ATR stops and 2.5R targets."
+    },
+    {
+        "id": "spx500_spectral_density_shift",
+        "name": "Spectral Density Regime Shift",
+        "concept": "Detects shifts in dominant frequency components of price series to identify trend vs chop transitions.",
+        "instructions": "Compute rolling FFT power spectrum over 64-bar windows. Identify dominant frequency. When dominant frequency shifts from low-frequency (trend) to high-frequency (chop), switch from breakout to mean-reversion logic. Use spectral entropy as volatility regime filter. Execute only when spectral entropy < 0.7 (ordered regime). 1.5x ATR stops, 2.0R targets."
+    },
+    {
+        "id": "spx500_state_space_kalman",
+        "name": "Kalman Filter State-Space Tracking",
+        "concept": "Uses Kalman filter to estimate hidden trend state and uncertainty, trading when state confidence exceeds threshold.",
+        "instructions": "Implement 1D Kalman filter with state [price, velocity]. When estimated velocity > 0 and state covariance < 0.5*ATR^2, take long breakouts. When velocity < 0 and low covariance, take short breakouts. Use innovation (residual) spikes > 2*std as entry triggers. 1.6x ATR stops, 2.2R targets. Gate with NY killzone."
+    },
+    {
+        "id": "spx500_fractal_dimension_break",
+        "name": "Fractal Dimension Breakout",
+        "concept": "Measures fractal dimension of price path to detect when market transitions from efficient random walk to trending regime.",
+        "instructions": "Calculate rolling fractal dimension using box-counting over 40-bar windows. When fractal dimension drops below 1.3 (smoother path = trend), take momentum entries in direction of 10-bar momentum. When fractal dimension > 1.5 (rough path = chop), fade extremes. Use 1.7x ATR stops, 2.3R targets. London/NY session gate."
+    },
+    {
+        "id": "spx500_regime_switching_hmm",
+        "name": "Hidden Markov Regime Switching",
+        "concept": "Uses simplified HMM to identify bull/bear/chop regimes and trade regime transitions with momentum confirmation.",
+        "instructions": "Implement 3-state HMM (bull, bear, chop) using 20-bar returns and volatility. When regime transitions from chop to bull (probability > 0.7), take long entries on first 5-min candle above 20-bar high. When chop to bear, take short on first candle below 20-bar low. 1.8x ATR stops, 2.5R targets. Killzone gating."
+    },
+    {
+        "id": "spx500_entropy_collapse",
+        "name": "Shannon Entropy Collapse Breakout",
+        "concept": "Detects entropy collapse in price distribution as precursor to explosive directional moves.",
+        "instructions": "Calculate rolling Shannon entropy of 20-bar price distribution (bin into 10 bins). When entropy drops below 0.6 (highly concentrated distribution), expect breakout. Take long if next candle closes above 20-bar high, short if below 20-bar low. 1.5x ATR stops, 2.0R targets. NY killzone only."
+    },
+    {
+        "id": "spx500_wavelet_multiscale",
+        "name": "Wavelet Multiscale Momentum",
+        "concept": "Uses wavelet decomposition to align momentum across multiple time scales for high-conviction entries.",
+        "instructions": "Perform 3-level wavelet decomposition (detail coefficients at scales 1, 2, 4). When all three detail coefficients have same sign (aligned momentum), take entry in that direction. Use wavelet energy ratio as confidence filter (must be > 0.6). 1.7x ATR stops, 2.4R targets. London/NY gate."
+    },
+    {
+        "id": "spx500_lorenz_attractor",
+        "name": "Lorenz Attractor Phase Space",
+        "concept": "Maps price dynamics to Lorenz attractor phase space to identify chaotic vs ordered regimes.",
+        "instructions": "Construct phase space using (price, 5-bar momentum, 10-bar volatility). Calculate Lyapunov exponent over 30-bar window. When Lyapunov exponent < 0 (ordered), take trend-following entries. When > 0 (chaotic), fade extremes. Use 1.6x ATR stops, 2.2R targets. Session gating."
+    },
+    {
+        "id": "spx500_order_flow_imbalance",
+        "name": "Order Flow Imbalance Detection",
+        "concept": "Detects institutional order flow imbalances using volume-price divergence and candle body asymmetry.",
+        "instructions": "Calculate volume-weighted body asymmetry: (close - open) / (high - low) * volume. When asymmetry > 0.7 and volume > 1.5x 20-bar average, take long. When asymmetry < -0.7 and high volume, take short. Use 1.5x ATR stops, 2.0R targets. NY killzone."
+    },
+    {
+        "id": "spx500_microstructure_spread",
+        "name": "Microstructure Spread Compression",
+        "concept": "Detects bid-ask spread compression as precursor to institutional accumulation and directional moves.",
+        "instructions": "Calculate rolling spread proxy: (high - low) / close. When spread compresses below 0.5x 20-bar average spread, expect expansion. Take long if next 3-bar range expands upward, short if downward. Use 1.4x ATR stops, 1.8R targets. London/NY gate."
+    },
+    {
+        "id": "spx500_quantile_crossing",
+        "name": "Quantile Crossing Momentum",
+        "concept": "Uses rolling quantile crossing to detect when price breaks out of historical distribution bounds.",
+        "instructions": "Calculate 10th, 50th, 90th percentiles over 30-bar window. When price crosses above 90th percentile with volume > 1.3x average, take long. When crosses below 10th percentile with high volume, take short. Use 1.6x ATR stops, 2.3R targets. Killzone gating."
+    },
+    {
+        "id": "spx500_autocorrelation_lag",
+        "name": "Autocorrelation Lag Detection",
+        "concept": "Detects significant autocorrelation at specific lags to identify momentum or mean-reversion tendencies.",
+        "instructions": "Calculate rolling autocorrelation at lags 1, 3, 5 over 40-bar window. When lag-1 autocorrelation > 0.3 (momentum), take trend-following entries. When lag-1 < -0.2 (mean-reversion), fade extremes. Use 1.7x ATR stops, 2.4R targets. London/NY session."
+    },
+    {
+        "id": "spx500_volatility_surface",
+        "name": "Volatility Surface Skew",
+        "concept": "Detects skew in implied volatility surface using realized volatility term structure.",
+        "instructions": "Calculate realized volatility at 5-bar, 15-bar, 30-bar horizons. When short-term vol > long-term vol (inverted term structure), expect volatility expansion. Take breakout entries in direction of 5-bar momentum. Use 1.5x ATR stops, 2.0R targets. NY killzone."
+    },
+    {
+        "id": "spx500_markov_chain",
+        "name": "Markov Chain State Transition",
+        "concept": "Uses Markov chain to model state transitions between up/down/sideways and trade high-probability transitions.",
+        "instructions": "Build 3-state Markov chain (up, down, sideways) using 5-bar returns. Calculate transition probabilities over 100-bar window. When in 'sideways' state and probability of transition to 'up' > 0.6, take long. When probability to 'down' > 0.6, take short. 1.6x ATR stops, 2.2R targets. Session gate."
+    },
+    {
+        "id": "spx500_information_flow",
+        "name": "Information Flow Velocity",
+        "concept": "Measures velocity of information flow using entropy rate and detects when new information is being absorbed.",
+        "instructions": "Calculate entropy rate over 20-bar window. When entropy rate spikes > 1.5x average, new information is being absorbed. Take entry in direction of 3-bar momentum. Use 1.5x ATR stops, 1.9R targets. London/NY killzone."
+    }
+]

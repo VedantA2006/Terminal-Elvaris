@@ -1,0 +1,21 @@
+{
+  "strategy": "Structural Swing Divergence with Wilder's RSI (Round #42) (Optimized)",
+  "period": "2026-01 to 2026-09",
+  "initial_capital": 50000.0,
+  "final_equity": 58796.43,
+  "net_profit": 8796.43,
+  "net_profit_pct": 17.59,
+  "trades_taken": 126,
+  "trades_skipped_daily_cb": 0,
+  "trades_skipped_trailing_cb": 233,
+  "win_rate": 19.8,
+  "worst_daily_loss": 1017.08,
+  "worst_trailing_drawdown": 2444.77,
+  "account_breached": false,
+  "breach_reason": "N/A",
+  "monthly_pnl": {
+    "2026-01": 6521.31,
+    "2026-02": 2532.98,
+    "2026-03": -257.86
+  }
+}

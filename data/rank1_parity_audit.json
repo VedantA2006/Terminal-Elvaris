@@ -1,0 +1,33 @@
+{
+  "audit_timestamp": "2026-09-14T18:59:54.717391+00:00",
+  "strategy_name": "Structural Swing Divergence with Wilder's RSI (Round #42) (Optimized)",
+  "rank": 1,
+  "parity_certified": true,
+  "expected_trades": 359,
+  "engine_trades": 359,
+  "matched_trades": 359,
+  "match_percentage": 100.0,
+  "canonical_win_rate": 26.2,
+  "engine_win_rate": 26.2,
+  "canonical_profit_factor": 1.73,
+  "engine_profit_factor": 1.73,
+  "canonical_total_pnl": 129042.52,
+  "engine_total_pnl": 129042.52,
+  "discrepancies_sample": [],
+  "equity_edge_50k_safeguards": {
+    "account_size_usd": 50000.0,
+    "risk_per_trade_usd": 250.0,
+    "risk_per_trade_pct": 0.5,
+    "max_allowed_risk_pct": 1.0,
+    "daily_circuit_breaker_usd": 1250.0,
+    "daily_limit_usd": 1500.0,
+    "daily_safety_buffer_usd": 250.0,
+    "trailing_circuit_breaker_usd": 2250.0,
+    "trailing_limit_usd": 2500.0,
+    "trailing_safety_buffer_usd": 250.0,
+    "consecutive_losses_to_daily_breaker": 5,
+    "consecutive_losses_to_daily_breach": 6,
+    "max_concurrent_trades": 1,
+    "breach_risk": "0.00% (Mathematically impossible under circuit breaker rules)"
+  }
+}

@@ -1,0 +1,386 @@
+{
+  "fortress_3": [
+    {
+      "risk_pct": 0.1,
+      "risk_dollars": 50.0,
+      "trail_dd_pct": 0.8,
+      "trail_dd_dollars": 400.0,
+      "worst_day_pct": 0.30799999999999983,
+      "worst_day_dollars": 153.99999999999991,
+      "net_return_dollars": 5440.0,
+      "net_return_pct": 10.88,
+      "status": "[CONSERVATIVE] Ultra Safe"
+    },
+    {
+      "risk_pct": 0.15,
+      "risk_dollars": 75.0,
+      "trail_dd_pct": 1.2,
+      "trail_dd_dollars": 600.0,
+      "worst_day_pct": 0.46199999999999974,
+      "worst_day_dollars": 230.99999999999986,
+      "net_return_dollars": 8160.0,
+      "net_return_pct": 16.32,
+      "status": "[CONSERVATIVE] Ultra Safe"
+    },
+    {
+      "risk_pct": 0.2,
+      "risk_dollars": 100.0,
+      "trail_dd_pct": 1.6,
+      "trail_dd_dollars": 800.0,
+      "worst_day_pct": 0.6159999999999997,
+      "worst_day_dollars": 307.99999999999983,
+      "net_return_dollars": 10880.0,
+      "net_return_pct": 21.76,
+      "status": "[CONSERVATIVE] Ultra Safe"
+    },
+    {
+      "risk_pct": 0.25,
+      "risk_dollars": 125.0,
+      "trail_dd_pct": 2.0,
+      "trail_dd_dollars": 1000.0,
+      "worst_day_pct": 0.7699999999999996,
+      "worst_day_dollars": 384.9999999999998,
+      "net_return_dollars": 13600.0,
+      "net_return_pct": 27.2,
+      "status": "[CONSERVATIVE] Ultra Safe"
+    },
+    {
+      "risk_pct": 0.3,
+      "risk_dollars": 150.0,
+      "trail_dd_pct": 2.4,
+      "trail_dd_dollars": 1200.0,
+      "worst_day_pct": 0.9239999999999995,
+      "worst_day_dollars": 461.9999999999997,
+      "net_return_dollars": 16320.0,
+      "net_return_pct": 32.64,
+      "status": "[OPTIMAL] Recommended Sweet Spot"
+    },
+    {
+      "risk_pct": 0.35,
+      "risk_dollars": 174.99999999999997,
+      "trail_dd_pct": 2.8,
+      "trail_dd_dollars": 1399.9999999999998,
+      "worst_day_pct": 1.0779999999999994,
+      "worst_day_dollars": 538.9999999999998,
+      "net_return_dollars": 19039.999999999996,
+      "net_return_pct": 38.08,
+      "status": "[OPTIMAL] Recommended Sweet Spot"
+    },
+    {
+      "risk_pct": 0.4,
+      "risk_dollars": 200.0,
+      "trail_dd_pct": 3.2,
+      "trail_dd_dollars": 1600.0,
+      "worst_day_pct": 1.2319999999999993,
+      "worst_day_dollars": 615.9999999999997,
+      "net_return_dollars": 21760.0,
+      "net_return_pct": 43.52,
+      "status": "[OPTIMAL] Recommended Sweet Spot"
+    },
+    {
+      "risk_pct": 0.45,
+      "risk_dollars": 225.00000000000003,
+      "trail_dd_pct": 3.6,
+      "trail_dd_dollars": 1800.0000000000002,
+      "worst_day_pct": 1.3859999999999992,
+      "worst_day_dollars": 692.9999999999997,
+      "net_return_dollars": 24480.000000000004,
+      "net_return_pct": 48.96,
+      "status": "[AGGRESSIVE] Tight Buffer"
+    },
+    {
+      "risk_pct": 0.5,
+      "risk_dollars": 250.0,
+      "trail_dd_pct": 4.0,
+      "trail_dd_dollars": 2000.0,
+      "worst_day_pct": 1.5399999999999991,
+      "worst_day_dollars": 769.9999999999995,
+      "net_return_dollars": 27200.0,
+      "net_return_pct": 54.4,
+      "status": "[AGGRESSIVE] Tight Buffer"
+    },
+    {
+      "risk_pct": 0.55,
+      "risk_dollars": 275.0,
+      "trail_dd_pct": 4.4,
+      "trail_dd_dollars": 2200.0,
+      "worst_day_pct": 1.6939999999999993,
+      "worst_day_dollars": 846.9999999999997,
+      "net_return_dollars": 29920.0,
+      "net_return_pct": 59.84,
+      "status": "[DANGER] Extreme Risk"
+    },
+    {
+      "risk_pct": 0.6,
+      "risk_dollars": 300.0,
+      "trail_dd_pct": 4.8,
+      "trail_dd_dollars": 2400.0,
+      "worst_day_pct": 1.847999999999999,
+      "worst_day_dollars": 923.9999999999994,
+      "net_return_dollars": 32640.0,
+      "net_return_pct": 65.28,
+      "status": "[DANGER] Extreme Risk"
+    },
+    {
+      "risk_pct": 0.65,
+      "risk_dollars": 325.00000000000006,
+      "trail_dd_pct": 5.2,
+      "trail_dd_dollars": 2600.0000000000005,
+      "worst_day_pct": 2.001999999999999,
+      "worst_day_dollars": 1000.9999999999994,
+      "net_return_dollars": 35360.00000000001,
+      "net_return_pct": 70.72,
+      "status": "[FAIL] BREACHED (Exceeds Limits)"
+    },
+    {
+      "risk_pct": 0.7,
+      "risk_dollars": 349.99999999999994,
+      "trail_dd_pct": 5.6,
+      "trail_dd_dollars": 2799.9999999999995,
+      "worst_day_pct": 2.155999999999999,
+      "worst_day_dollars": 1077.9999999999995,
+      "net_return_dollars": 38079.99999999999,
+      "net_return_pct": 76.16,
+      "status": "[FAIL] BREACHED (Exceeds Limits)"
+    },
+    {
+      "risk_pct": 0.75,
+      "risk_dollars": 375.0,
+      "trail_dd_pct": 6.0,
+      "trail_dd_dollars": 3000.0,
+      "worst_day_pct": 2.3099999999999987,
+      "worst_day_dollars": 1154.9999999999993,
+      "net_return_dollars": 40800.0,
+      "net_return_pct": 81.6,
+      "status": "[FAIL] BREACHED (Exceeds Limits)"
+    },
+    {
+      "risk_pct": 0.8,
+      "risk_dollars": 400.0,
+      "trail_dd_pct": 6.4,
+      "trail_dd_dollars": 3200.0,
+      "worst_day_pct": 2.4639999999999986,
+      "worst_day_dollars": 1231.9999999999993,
+      "net_return_dollars": 43520.0,
+      "net_return_pct": 87.04,
+      "status": "[FAIL] BREACHED (Exceeds Limits)"
+    },
+    {
+      "risk_pct": 0.9,
+      "risk_dollars": 450.00000000000006,
+      "trail_dd_pct": 7.2,
+      "trail_dd_dollars": 3600.0000000000005,
+      "worst_day_pct": 2.7719999999999985,
+      "worst_day_dollars": 1385.9999999999993,
+      "net_return_dollars": 48960.00000000001,
+      "net_return_pct": 97.92,
+      "status": "[FAIL] BREACHED (Exceeds Limits)"
+    },
+    {
+      "risk_pct": 1.0,
+      "risk_dollars": 500.0,
+      "trail_dd_pct": 8.0,
+      "trail_dd_dollars": 4000.0,
+      "worst_day_pct": 3.0799999999999983,
+      "worst_day_dollars": 1539.999999999999,
+      "net_return_dollars": 54400.0,
+      "net_return_pct": 108.8,
+      "status": "[FAIL] BREACHED (Exceeds Limits)"
+    }
+  ],
+  "calmar_king_4": [
+    {
+      "risk_pct": 0.1,
+      "risk_dollars": 50.0,
+      "trail_dd_pct": 0.73,
+      "trail_dd_dollars": 365.0,
+      "worst_day_pct": 0.31099999999999994,
+      "worst_day_dollars": 155.49999999999997,
+      "net_return_dollars": 6070.0,
+      "net_return_pct": 12.14,
+      "status": "[CONSERVATIVE] Ultra Safe"
+    },
+    {
+      "risk_pct": 0.15,
+      "risk_dollars": 75.0,
+      "trail_dd_pct": 1.095,
+      "trail_dd_dollars": 547.5,
+      "worst_day_pct": 0.4664999999999999,
+      "worst_day_dollars": 233.24999999999994,
+      "net_return_dollars": 9105.0,
+      "net_return_pct": 18.21,
+      "status": "[CONSERVATIVE] Ultra Safe"
+    },
+    {
+      "risk_pct": 0.2,
+      "risk_dollars": 100.0,
+      "trail_dd_pct": 1.46,
+      "trail_dd_dollars": 730.0,
+      "worst_day_pct": 0.6219999999999999,
+      "worst_day_dollars": 310.99999999999994,
+      "net_return_dollars": 12140.0,
+      "net_return_pct": 24.28,
+      "status": "[CONSERVATIVE] Ultra Safe"
+    },
+    {
+      "risk_pct": 0.25,
+      "risk_dollars": 125.0,
+      "trail_dd_pct": 1.825,
+      "trail_dd_dollars": 912.4999999999999,
+      "worst_day_pct": 0.7774999999999999,
+      "worst_day_dollars": 388.74999999999994,
+      "net_return_dollars": 15175.0,
+      "net_return_pct": 30.35,
+      "status": "[CONSERVATIVE] Ultra Safe"
+    },
+    {
+      "risk_pct": 0.3,
+      "risk_dollars": 150.0,
+      "trail_dd_pct": 2.19,
+      "trail_dd_dollars": 1095.0,
+      "worst_day_pct": 0.9329999999999998,
+      "worst_day_dollars": 466.4999999999999,
+      "net_return_dollars": 18210.0,
+      "net_return_pct": 36.42,
+      "status": "[CONSERVATIVE] Ultra Safe"
+    },
+    {
+      "risk_pct": 0.35,
+      "risk_dollars": 174.99999999999997,
+      "trail_dd_pct": 2.5549999999999997,
+      "trail_dd_dollars": 1277.4999999999998,
+      "worst_day_pct": 1.0884999999999998,
+      "worst_day_dollars": 544.2499999999999,
+      "net_return_dollars": 21244.999999999996,
+      "net_return_pct": 42.49,
+      "status": "[OPTIMAL] Recommended Sweet Spot"
+    },
+    {
+      "risk_pct": 0.4,
+      "risk_dollars": 200.0,
+      "trail_dd_pct": 2.92,
+      "trail_dd_dollars": 1460.0,
+      "worst_day_pct": 1.2439999999999998,
+      "worst_day_dollars": 621.9999999999999,
+      "net_return_dollars": 24280.0,
+      "net_return_pct": 48.56,
+      "status": "[OPTIMAL] Recommended Sweet Spot"
+    },
+    {
+      "risk_pct": 0.45,
+      "risk_dollars": 225.00000000000003,
+      "trail_dd_pct": 3.285,
+      "trail_dd_dollars": 1642.5000000000002,
+      "worst_day_pct": 1.3994999999999997,
+      "worst_day_dollars": 699.7499999999999,
+      "net_return_dollars": 27315.000000000004,
+      "net_return_pct": 54.63,
+      "status": "[OPTIMAL] Recommended Sweet Spot"
+    },
+    {
+      "risk_pct": 0.5,
+      "risk_dollars": 250.0,
+      "trail_dd_pct": 3.65,
+      "trail_dd_dollars": 1824.9999999999998,
+      "worst_day_pct": 1.5549999999999997,
+      "worst_day_dollars": 777.4999999999999,
+      "net_return_dollars": 30350.0,
+      "net_return_pct": 60.7,
+      "status": "[AGGRESSIVE] Tight Buffer"
+    },
+    {
+      "risk_pct": 0.55,
+      "risk_dollars": 275.0,
+      "trail_dd_pct": 4.015000000000001,
+      "trail_dd_dollars": 2007.5000000000002,
+      "worst_day_pct": 1.7105,
+      "worst_day_dollars": 855.2499999999999,
+      "net_return_dollars": 33385.0,
+      "net_return_pct": 66.77000000000001,
+      "status": "[AGGRESSIVE] Tight Buffer"
+    },
+    {
+      "risk_pct": 0.6,
+      "risk_dollars": 300.0,
+      "trail_dd_pct": 4.38,
+      "trail_dd_dollars": 2190.0,
+      "worst_day_pct": 1.8659999999999997,
+      "worst_day_dollars": 932.9999999999998,
+      "net_return_dollars": 36420.0,
+      "net_return_pct": 72.84,
+      "status": "[DANGER] Extreme Risk"
+    },
+    {
+      "risk_pct": 0.65,
+      "risk_dollars": 325.00000000000006,
+      "trail_dd_pct": 4.745,
+      "trail_dd_dollars": 2372.5,
+      "worst_day_pct": 2.0214999999999996,
+      "worst_day_dollars": 1010.7499999999999,
+      "net_return_dollars": 39455.00000000001,
+      "net_return_pct": 78.91000000000001,
+      "status": "[DANGER] Extreme Risk"
+    },
+    {
+      "risk_pct": 0.7,
+      "risk_dollars": 349.99999999999994,
+      "trail_dd_pct": 5.109999999999999,
+      "trail_dd_dollars": 2554.9999999999995,
+      "worst_day_pct": 2.1769999999999996,
+      "worst_day_dollars": 1088.4999999999998,
+      "net_return_dollars": 42489.99999999999,
+      "net_return_pct": 84.98,
+      "status": "[FAIL] BREACHED (Exceeds Limits)"
+    },
+    {
+      "risk_pct": 0.75,
+      "risk_dollars": 375.0,
+      "trail_dd_pct": 5.475,
+      "trail_dd_dollars": 2737.4999999999995,
+      "worst_day_pct": 2.3324999999999996,
+      "worst_day_dollars": 1166.2499999999998,
+      "net_return_dollars": 45525.0,
+      "net_return_pct": 91.05000000000001,
+      "status": "[FAIL] BREACHED (Exceeds Limits)"
+    },
+    {
+      "risk_pct": 0.8,
+      "risk_dollars": 400.0,
+      "trail_dd_pct": 5.84,
+      "trail_dd_dollars": 2920.0,
+      "worst_day_pct": 2.4879999999999995,
+      "worst_day_dollars": 1243.9999999999998,
+      "net_return_dollars": 48560.0,
+      "net_return_pct": 97.12,
+      "status": "[FAIL] BREACHED (Exceeds Limits)"
+    },
+    {
+      "risk_pct": 0.9,
+      "risk_dollars": 450.00000000000006,
+      "trail_dd_pct": 6.57,
+      "trail_dd_dollars": 3285.0000000000005,
+      "worst_day_pct": 2.7989999999999995,
+      "worst_day_dollars": 1399.4999999999998,
+      "net_return_dollars": 54630.00000000001,
+      "net_return_pct": 109.26,
+      "status": "[FAIL] BREACHED (Exceeds Limits)"
+    },
+    {
+      "risk_pct": 1.0,
+      "risk_dollars": 500.0,
+      "trail_dd_pct": 7.3,
+      "trail_dd_dollars": 3649.9999999999995,
+      "worst_day_pct": 3.1099999999999994,
+      "worst_day_dollars": 1554.9999999999998,
+      "net_return_dollars": 60700.0,
+      "net_return_pct": 121.4,
+      "status": "[FAIL] BREACHED (Exceeds Limits)"
+    }
+  ],
+  "theoretical_limits": {
+    "fortress_3": 62.5,
+    "calmar_king_4": 68.49,
+    "safe_f3": 46.88,
+    "safe_c4": 51.37
+  }
+}

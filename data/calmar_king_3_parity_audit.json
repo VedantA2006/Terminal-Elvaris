@@ -1,0 +1,95 @@
+{
+  "audit_timestamp": "2026-09-15T19:26:36.034803+00:00",
+  "dataset_evaluated": "XAUUSD_5min.csv",
+  "candles_evaluated": 49773,
+  "parity_score_pct": 42.01,
+  "parity_status": "DISCREPANCY DETECTED",
+  "zero_lookahead_verified": true,
+  "total_expected_trades": 907,
+  "total_simulated_trades": 381,
+  "discrepancies_count": 2,
+  "discrepancies": [
+    "Rank #8 trades mismatch: generated 312 vs expected 276, 362 divergent signals",
+    "Rank #9 trades mismatch: generated 438 vs expected 250, 396 divergent signals"
+  ],
+  "sub_strategies": {
+    "rank_2": {
+      "strategy_name": "Champion Cross-Pollination (LSS Hybrid + VWAP Slope) (Round #15) (Optimized)",
+      "expected_trades": 381,
+      "simulated_trades": 381,
+      "trade_parity_match": true,
+      "symmetric_diff_count": 0,
+      "win_rate_pct": 27.6,
+      "expected_win_rate": 27.6,
+      "total_pnl_usd": 94371.05,
+      "first_trade": {
+        "id": 1,
+        "direction": "long",
+        "entry_time": "2026-01-02T12:55:00+00:00",
+        "entry_price": 4394.57,
+        "sl": 4383.49,
+        "tp": 4442.52
+      },
+      "last_trade": {
+        "id": 381,
+        "direction": "short",
+        "entry_time": "2026-09-15T14:05:00+00:00",
+        "entry_price": 4285.13,
+        "sl": 4303.09,
+        "tp": 4206.91
+      }
+    },
+    "rank_8": {
+      "strategy_name": "Champion Cross-Pollination (LSS Hybrid + VWAP Slope) (Round #39)",
+      "expected_trades": 276,
+      "simulated_trades": 312,
+      "trade_parity_match": false,
+      "symmetric_diff_count": 362,
+      "win_rate_pct": 30.1,
+      "expected_win_rate": 28.6,
+      "total_pnl_usd": 35996.5,
+      "first_trade": {
+        "id": 1,
+        "direction": "long",
+        "entry_time": "2026-01-02T12:55:00+00:00",
+        "entry_price": 4394.57,
+        "sl": 4383.49,
+        "tp": 4427.21
+      },
+      "last_trade": {
+        "id": 312,
+        "direction": "short",
+        "entry_time": "2026-09-15T14:05:00+00:00",
+        "entry_price": 4285.13,
+        "sl": 4303.09,
+        "tp": 4231.84
+      }
+    },
+    "rank_9": {
+      "strategy_name": "Dual-Horizon Volatility Ratio Squeeze (ATR 5 / ATR 30 Expansion) (Round #21) (Optimized)",
+      "expected_trades": 250,
+      "simulated_trades": 438,
+      "trade_parity_match": false,
+      "symmetric_diff_count": 396,
+      "win_rate_pct": 28.8,
+      "expected_win_rate": 33.2,
+      "total_pnl_usd": 71335.02,
+      "first_trade": {
+        "id": 1,
+        "direction": "long",
+        "entry_time": "2026-01-02T12:55:00+00:00",
+        "entry_price": 4394.57,
+        "sl": 4383.49,
+        "tp": 4427.21
+      },
+      "last_trade": {
+        "id": 438,
+        "direction": "short",
+        "entry_time": "2026-09-15T14:05:00+00:00",
+        "entry_price": 4285.13,
+        "sl": 4303.09,
+        "tp": 4231.84
+      }
+    }
+  }
+}

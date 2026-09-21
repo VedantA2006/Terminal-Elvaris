@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elvaris Capital — {{ asset }} (5m)</title>
+    <meta name="description" content="TradingView duplicate terminal featuring live Python strategy scripting, bar-by-bar backtesting on MetaTrader 5 ECN broker data, AST anti-lookahead guard, and AI continuous optimizer.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Lightweight Charts (TradingView) -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    
+    <!-- Monaco Editor (VS Code engine) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    
+    <link rel="stylesheet" href="/static/styles.css?v=engine_telemetry_v2">
+</head>
+<body class="tv-theme-dark">
+
+<!-- =========================================================================
+     TOP NAVIGATION BAR (TradingView Replica)
+========================================================================= -->
+<header id="tvHeader">
+    <div class="tv-header-left">
+        <!-- Logo -->
+        <div class="tv-logo-group" title="TradingView Terminal">
+            <svg class="tv-logo-svg" width="28" height="20" viewBox="0 0 28 20" fill="none">
+                <path d="M0 17H6L11 4H5L0 17Z" fill="#2962FF"/>
+                <path d="M8 17H14L19 4H13L8 17Z" fill="#00BCD4"/>
+                <path d="M16 17H22L27 4H21L16 17Z" fill="#2962FF"/>
+            </svg>
+            <span class="tv-brand-name">Elvaris Capital</span>
+        </div>
+
+        <div class="tv-divider-v"></div>
+
+        <!-- Symbol Search Pill -->
+        <button class="tv-symbol-btn" id="symbolBtn" title="Symbol Search">
+            <span class="tv-symbol-ticker">{{ asset }}</span>
+            <span class="tv-symbol-desc">Gold / US Dollar</span>
+            <span class="tv-source-tag">MT5 Equity Edge</span>
+        </button>
+
+        <div class="tv-divider-v"></div>
+
+        <!-- Timeframe Buttons -->
+        <div class="tv-timeframes">
+            <button class="tv-tf-btn" data-tf="1m">1m</button>
+            <button class="tv-tf-btn active" data-tf="5m">5m</button>
+            <button class="tv-tf-btn" data-tf="15m">15m</button>
+            <button class="tv-tf-btn" data-tf="1h">1h</button>
+            <button class="tv-tf-btn" data-tf="4h">4h</button>
+            <button class="tv-tf-btn" data-tf="1D">1D</button>
+        </div>
+
+        <div class="tv-divider-v"></div>
+
+        <!-- Chart Type -->
+        <button class="tv-icon-btn active" title="Candlestick Chart">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
+                <rect x="3" y="4" width="3" height="10" rx="0.5"/>
+                <line x1="4.5" y1="1" x2="4.5" y2="4" stroke="currentColor" stroke-width="1.5"/>
+                <line x1="4.5" y1="14" x2="4.5" y2="17" stroke="currentColor" stroke-width="1.5"/>
+                <rect x="11" y="2" width="3" height="12" rx="0.5"/>
+                <line x1="12.5" y1="0.5" x2="12.5" y2="2" stroke="currentColor" stroke-width="1.5"/>
+                <line x1="12.5" y1="14" x2="12.5" y2="16.5" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+        <!-- Trade Position Boxes Toggle -->
+        <button class="tv-header-text-btn active" id="toggleTradeBoxesBtn" title="Toggle Long/Short Trade Position Boxes on chart">
+            <span class="tv-box-icon">▣</span>
+            <span>Trade Boxes</span>
+        </button>
+    </div>
+
+    <!-- Center Quote Display -->
+    <div class="tv-header-center">
+        <div class="tv-live-quote" id="headerQuote">
+            <span class="tv-quote-label">{{ asset }}</span>
+            <span class="tv-quote-price" id="quotePrice">—</span>
+            <span class="tv-quote-change" id="quoteChange">—</span>
+        </div>
+    </div>
+
+    <!-- Right Controls -->
+    <div class="tv-header-right">
+        <div class="tv-divider-v"></div>
+
+
+
+
+        <!-- Fullscreen Button -->
+        <button class="tv-icon-btn" id="fullscreenBtn" title="Toggle Fullscreen">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M1 5V1h4M11 1h4v4M15 11v4h-4M5 15H1v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+        </button>
+    </div>
+</header>
+
+<!-- =========================================================================
+     BODY CONTAINER (Toolbar + Chart Canvas + Right Sidebar)
+========================================================================= -->
+<div id="tvWorkspace">
+    
+
+    <!-- CENTER MAIN WORKSPACE (Chart Canvas + Bottom Dock) -->
+    <section id="tvCenterStage">
+        
+        <!-- CHART AREA -->
+        <div id="tvChartContainer">
+            <!-- Dynamic OHLCV Hover Legend -->
+            <div id="chartLegend">
+                <div class="legend-row-primary">
+                    <span class="legend-symbol">{{ asset }} &middot; 5 &middot; MT5 Equity Edge</span>
+                    <span class="legend-ohlc" id="legendOhlc">O: &mdash;  H: &mdash;  L: &mdash;  C: &mdash;</span>
+                </div>
+            </div>
+
+            <!-- TradingView Watermark -->
+            <div class="tv-watermark">
+                <span class="wm-symbol">{{ asset }}</span>
+                <span class="wm-tf">5</span>
+            </div>
+
+            <!-- Lightweight Charts mount point -->
+            <div id="mainChartMount"></div>
+
+            <!-- Trade Position Boxes Canvas Overlay -->
+            <canvas id="tradeOverlayCanvas"></canvas>
+
+            <!-- Floating Monthly Performance Table (TradingView style) -->
+            <div id="tvFloatingStatsTable" class="tv-floating-stats-widget minimized">
+                <div class="fsw-header">
+                    <span class="fsw-title">Monthly Results</span>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <button class="fsw-toggle-btn" id="fswToggleBtn" title="Expand / Minimize Table">+</button>
+                        <button class="fsw-toggle-btn" id="fswCloseBtn" title="Close Table">✕</button>
+                    </div>
+                </div>
+                <div class="fsw-body" id="fswBody">
+                    <table class="fsw-table">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Returns</th>
+                                <th>Win Rate</th>
+                                <th>Trades</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fswTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                    <div class="fsw-summary-rows">
+                        <div class="fsw-row"><span>Max Drawdown:</span><strong id="fswMaxDD" class="negative">—</strong></div>
+                        <div class="fsw-row"><span>Profit Factor:</span><strong id="fswPF">—</strong></div>
+                        <div class="fsw-row"><span>Net PnL:</span><strong id="fswNetPnl">—</strong></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Floating Trade Navigator Bar (Step through trades one-by-one) -->
+            <div id="tvTradeNavigator" class="tv-floating-trade-nav">
+                <button class="tnav-btn" id="tnavPrevBtn" title="Previous Trade">◀ Prev</button>
+                <div class="tnav-info" id="tnavInfo">
+                    <span class="tnav-badge" id="tnavDir">LONG</span>
+                    <span class="tnav-text" id="tnavText">Trade #1: $4,403.69 → $4,415.08</span>
+                    <span class="tnav-pnl positive" id="tnavPnl">+$1,139.00</span>
+                </div>
+                <button class="tnav-btn" id="tnavNextBtn" title="Next Trade">Next ▶</button>
+                <button class="tnav-btn" id="tnavFitBtn" title="Zoom out to fit all trades on chart" style="margin-left: 4px;">🔍 Fit All</button>
+                <div class="tnav-divider"></div>
+                <button class="tnav-btn-list" id="tnavOpenListBtn" title="Open Complete Trades Table in Strategy Tester">📋 View Trades</button>
+            </div>
+        </div>
+
+        <!-- RESIZABLE SPLIT DRAGGER -->
+        <div id="tvSplitDragger" title="Drag to resize Strategy Tester"></div>
+
+        <!-- =====================================================================
+             BOTTOM DOCK: PINE/PYTHON EDITOR + STRATEGY TESTER + AI OPTIMIZER
+        ===================================================================== -->
+        <div id="tvBottomDock">
+            
+            <!-- Dock Tabs Header -->
+            <div class="tv-dock-header">
+                <div class="tv-dock-tabs">
+                    <button class="tv-tab-btn active" data-tab="strategyTester">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M1 14h14v2H1v-2zm1-4h3v3H2v-3zm5-5h3v8H7V5zm5-4h3v12h-3V1z"/>
+                        </svg>
+                        <span>Strategy Tester</span>
+                    </button>
+
+                    <button class="tv-tab-btn" data-tab="pythonEditor">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M5.5 3L1 7.5 5.5 12l1.1-1.1L3.2 7.5l3.4-3.4L5.5 3zm5 0l-1.1 1.1 3.4 3.4-3.4 3.4 1.1 1.1 4.5-4.5L10.5 3z"/>
+                        </svg>
+                        <span>Python Strategy Editor</span>
+                        <span class="tab-badge-py">py</span>
+                    </button>
+
+                    <button class="tv-tab-btn" data-tab="strategyLeaderboard">
+                        <span class="tab-trophy">🏆</span>
+                        <span>Leaderboard</span>
+                    </button>
+
+                    <button class="tv-tab-btn" data-tab="quantLab" id="tabBtnQuantLab">
+                        <span class="tab-dna">🧬</span>
+                        <span>Multi-Agent Quant Lab</span>
+                        <span class="tab-badge-active-loop" id="labRunningBadge" style="display:none;">LIVE</span>
+                    </button>
+                </div>
+
+                <!-- Dock Action Controls (Right side of bottom bar) -->
+                <div class="tv-dock-actions">
+                    <div id="editorActions" style="display: none;">
+                        <button class="tv-dock-btn-secondary" id="resetStrategyBtn" title="Reset to Elvaris River Strategy v2">Reset to Elvaris</button>
+                        <button class="tv-dock-btn-primary" id="runStrategyBtn" title="Run Strategy & Backtest (Ctrl+Enter)">
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M4 2v12l10-6L4 2z"/>
+                            </svg>
+                            <span>Run Strategy</span>
+                        </button>
+                    </div>
+
+                    <button class="tv-icon-btn" id="dockCollapseBtn" title="Collapse / Expand Panel">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M3 5l5 5 5-5H3z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dock Content Panels -->
+            <div class="tv-dock-body">
+
+                <!-- -------------------------------------------------------------
+                     TAB 1: STRATEGY TESTER (TradingView Duplicate)
+                -------------------------------------------------------------- -->
+                <div class="tv-tab-content active" id="tabStrategyTester">
+                    <!-- Tester Sub-Tabs -->
+                    <div class="tv-tester-subnav">
+                        <div class="tester-subtabs">
+                            <button class="subtab-btn active" data-subtab="overview">Overview</button>
+                            <button class="subtab-btn" data-subtab="performance">Performance Summary</button>
+                            <button class="subtab-btn" data-subtab="trades">List of Trades</button>
+                            <button class="subtab-btn" data-subtab="monteCarlo">🎲 Monte Carlo Bootstrap</button>
+                        </div>
+                        <div class="tester-meta" id="testerMeta">
+                            Initial Capital: <strong>$100,000</strong> · 1 Lot (100 oz) · Spread: $0.20 · Slippage: $0.05
+                        </div>
+                    </div>
+
+                    <!-- Subtab 1: Overview -->
+                    <div class="tester-subtab-pane active" id="subtabOverview">
+                        <div class="tester-overview-layout">
+                            <!-- Metrics Cards Grid -->
+                            <div class="tv-metrics-grid" id="metricsGrid">
+                                <!-- Populated dynamically -->
+                            </div>
+                            <!-- Equity Curve Chart -->
+                            <div class="tv-equity-panel">
+                                <div class="equity-header">
+                                    <span class="equity-title">Cumulative Equity Curve ($)</span>
+                                    <span class="equity-final" id="equityFinal">$0.00</span>
+                                </div>
+                                <div id="equityChartMount"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Subtab 2: Performance Summary -->
+                    <div class="tester-subtab-pane" id="subtabPerformance">
+                        <div class="tv-table-wrapper">
+                            <table class="tv-perf-table" id="perfSummaryTable">
+                                <thead>
+                                    <tr>
+                                        <th>Performance Metric</th>
+                                        <th>All Trades</th>
+                                        <th>Long Trades</th>
+                                        <th>Short Trades</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="perfSummaryBody">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Subtab 3: List of Trades -->
+                    <div class="tester-subtab-pane" id="subtabTrades">
+                        <div class="trades-toolbar">
+                            <div class="trades-filters">
+                                <button class="tr-filter-btn active" data-trfilter="all">All (<span id="countAll">0</span>)</button>
+                                <button class="tr-filter-btn" data-trfilter="long">Longs (<span id="countLong">0</span>)</button>
+                                <button class="tr-filter-btn" data-trfilter="short">Shorts (<span id="countShort">0</span>)</button>
+                                <button class="tr-filter-btn" data-trfilter="win">Wins (<span id="countWin">0</span>)</button>
+                                <button class="tr-filter-btn" data-trfilter="loss">Losses (<span id="countLoss">0</span>)</button>
+                            </div>
+                            <span class="trades-hint">Click any trade row to jump chart to that candle</span>
+                        </div>
+                        <div class="tv-table-wrapper tv-trades-table-scroll">
+                            <table class="tv-trades-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Type</th>
+                                        <th>Entry Time</th>
+                                        <th>Entry Price</th>
+                                        <th>Exit Time</th>
+                                        <th>Exit Price</th>
+                                        <th>Exit Reason</th>
+                                        <th>Contracts</th>
+                                        <th>Profit ($)</th>
+                                        <th>Return %</th>
+                                        <th>Cum. Profit ($)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tradesTableBody">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Subtab 4: Monte Carlo Sequence-Risk Bootstrap -->
+                    <div class="tester-subtab-pane" id="subtabMonteCarlo">
+                        <div class="mc-layout">
+                            <div class="mc-chart-col">
+                                <div class="mc-header-row">
+                                    <div class="mc-title-block">
+                                        <span class="mc-title">🎲 Monte Carlo Bootstrap Simulation (1,000 Reshuffled Paths)</span>
+                                        <span class="mc-subtitle">Simulating trade sequence order risk, drawdown corridors & ruin probabilities</span>
+                                    </div>
+                                    <button class="tv-dock-btn-secondary" id="btnRerunMonteCarlo">
+                                        <span>🔄 Resimulate 1,000 Paths</span>
+                                    </button>
+                                </div>
+                                <div class="mc-chart-mount" id="mcChartMount">
+                                    <canvas id="mcCanvas" width="900" height="260"></canvas>
+                                </div>
+                                <div class="mc-legend">
+                                    <span class="mc-leg-item"><span class="mc-dot p95"></span> 95th Percentile (Optimistic)</span>
+                                    <span class="mc-leg-item"><span class="mc-dot p75"></span> 75th Percentile</span>
+                                    <span class="mc-leg-item"><span class="mc-dot p50"></span> 50th Percentile (Median Path)</span>
+                                    <span class="mc-leg-item"><span class="mc-dot p25"></span> 25th Percentile</span>
+                                    <span class="mc-leg-item"><span class="mc-dot p5"></span> 5th Percentile (95% Value at Risk)</span>
+                                </div>
+                            </div>
+                            <div class="mc-metrics-col">
+                                <div class="mc-card">
+                                    <span class="mc-card-label">95% VaR Max Drawdown</span>
+                                    <span class="mc-card-val negative" id="mcVar95">0.0 R</span>
+                                    <span class="mc-card-sub" id="mcVar95Usd">Worst-case 95% confidence</span>
+                                </div>
+                                <div class="mc-card">
+                                    <span class="mc-card-label">Expected (Mean) Drawdown</span>
+                                    <span class="mc-card-val" id="mcExpectedDd">0.0 R</span>
+                                    <span class="mc-card-sub" id="mcExpectedDdUsd">Median simulated risk</span>
+                                </div>
+                                <div class="mc-card">
+                                    <span class="mc-card-label">Risk of 10R Drawdown</span>
+                                    <span class="mc-card-val" id="mcRisk10r">0.0%</span>
+                                    <span class="mc-card-sub">Probability of reaching 10R DD</span>
+                                </div>
+                                <div class="mc-card">
+                                    <span class="mc-card-label">Risk of 20% Account Ruin</span>
+                                    <span class="mc-card-val" id="mcRisk20pct">0.0%</span>
+                                    <span class="mc-card-sub">Chance of hitting 20% account DD</span>
+                                </div>
+                                <div class="mc-card">
+                                    <span class="mc-card-label">Probability of Profit</span>
+                                    <span class="mc-card-val positive" id="mcProbProfit">0.0%</span>
+                                    <span class="mc-card-sub">Simulations ending in profit</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- -------------------------------------------------------------
+                     TAB 2: PYTHON STRATEGY EDITOR (Monaco Code Editor)
+                -------------------------------------------------------------- -->
+                <div class="tv-tab-content" id="tabPythonEditor">
+                    <div class="editor-subbar">
+                        <div class="editor-subbar-left">
+                            <span class="file-name">strategy.py</span>
+                            <span class="guard-pill" title="AST parser scans every character to prevent future leaks">
+                                🛡️ Anti-Lookahead Parser: Active
+                            </span>
+                        </div>
+                        <div class="editor-subbar-right">
+                            <span class="shortcut-tip">Press <strong>Ctrl + Enter</strong> to compile and backtest</span>
+                        </div>
+                    </div>
+                    <!-- Monaco Editor Mount -->
+                    <div id="monacoEditorContainer"></div>
+                </div>
+
+
+                <!-- -------------------------------------------------------------
+                     TAB 5: STRATEGY LEADERBOARD (Ranked by Total R & Monthly Yield)
+                -------------------------------------------------------------- -->
+                <div class="tv-tab-content" id="tabStrategyLeaderboard">
+                    <div class="lb-container">
+                        <div class="lb-header">
+                            <div class="lb-title-block">
+                                <h3 class="lb-title">🏆 Quantitative Strategy Leaderboard & Hall of Fame</h3>
+                                <p class="lb-desc">Ranked by 2026 Year-to-Date Backtest (49,091 MT5 Candles · Jan–Sep 2026): Total R, High-Yield Months (≥ +10.0R), Profit Factor, and Out-of-Sample Edge</p>
+                            </div>
+                            <div class="lb-actions">
+                                <div class="lb-range-selector-wrap" title="Select historical backtest time horizon">
+                                    <label for="lbRangeSelect" class="lb-range-label">📅 Range:</label>
+                                    <select id="lbRangeSelect" class="lb-range-select">
+                                        <option value="2026_ytd" selected>2026 YTD (Jan 2026 – Present · ~49k bars)</option>
+                                        <option value="full">Full History (Apr 2025 – Present · 100,000 bars)</option>
+                                        <option value="1y">Last 1 Year (Sep 2025 – Present · ~75k bars)</option>
+                                        <option value="6m">Last 6 Months (Mar 2026 – Present · ~36k bars)</option>
+                                        <option value="3m">Last 3 Months (Jun 2026 – Present · ~18k bars)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tv-table-wrapper lb-table-scroll">
+                            <table class="tv-trades-table lb-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 75px; text-align: center;">Rank</th>
+                                        <th>Strategy Name & Alpha Concept</th>
+                                        <th style="text-align: right;">Total R (+R)</th>
+                                        <th>Monthly Yields (>= +10R)</th>
+                                        <th style="text-align: right;">Max DD (R / %)</th>
+                                        <th style="text-align: right;">Win Rate</th>
+                                        <th style="text-align: right;">Profit Factor</th>
+                                        <th style="text-align: right;">Monte Carlo 95% Sequence VaR</th>
+                                        <th style="text-align: center; width: 140px;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="leaderboardTableBody">
+                                    <!-- Populated dynamically from /api/leaderboard -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- -------------------------------------------------------------
+                     TAB 6: MULTI-AGENT QUANT LAB & AUTONOMOUS EXPLORATION LOOP
+                -------------------------------------------------------------- -->
+                <div class="tv-tab-content" id="tabQuantLab">
+                    <div class="ql-container">
+                        <!-- Header & Controls -->
+                        <div class="ql-header">
+                            <div>
+                                <h3 class="ql-title">
+                                    <span>🧬 Autonomous Multi-Agent Quant Lab</span>
+                                    <span class="ql-status-pill idle" id="qlStatusPill">IDLE</span>
+                                </h3>
+                                <p class="ql-desc">
+                                    Collaborative LLM Research Team: 💡 Idea Generator ➔ 🛡️ Risk Officer ➔ 📊 Backtester & Monte Carlo ➔ 🔬 Critic Post-Mortem ➔ ⚡ Optimizer
+                                </p>
+                            </div>
+                            <div class="ql-controls">
+                                <button class="btn-start-research" id="btnStartResearch" title="Start endless autonomous research loop">
+                                    ⚡ Start Autonomous Loop
+                                </button>
+                                <button class="btn-pause-research" id="btnPauseResearch" disabled title="Pause and stop process of rounds">
+                                    ⏸ Pause Rounds
+                                </button>
+                                <button class="btn-resume-research" id="btnResumeResearch" style="display:none;" title="Resume loop from exact round where paused">
+                                    ▶ Resume Loop
+                                </button>
+                                <button class="btn-stop-research" id="btnStopResearch" disabled title="Halt research loop and reset to idle">
+                                    ⏹ Stop
+                                </button>
+                            </div>
+                        </div>
+
+                        
+                        <!-- Instrument Sub-Tabs -->
+                        <div class="ql-sub-tabs">
+                            <button class="ql-sub-tab active" data-ql-inst="XAUUSD">XAUUSD</button>
+                            <button class="ql-sub-tab" data-ql-inst="US100">US100</button>
+                            <button class="ql-sub-tab" data-ql-inst="SPX500">SPX500</button>
+                            <button class="ql-sub-tab" data-ql-inst="EURUSD">EURUSD</button>
+                            <button class="ql-sub-tab" data-ql-inst="GBPUSD">GBPUSD</button>
+                        </div>
+                        
+                        <style>
+                            .ql-sub-tabs {
+                                display: flex;
+                                gap: 8px;
+                                margin-bottom: 12px;
+                                padding: 0 16px;
+                                border-bottom: 1px solid #333;
+                            }
+                            .ql-sub-tab {
+                                background: transparent;
+                                color: #888;
+                                border: none;
+                                padding: 8px 16px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                border-bottom: 2px solid transparent;
+                                transition: all 0.2s ease;
+                            }
+                            .ql-sub-tab:hover {
+                                color: #ccc;
+                            }
+                            .ql-sub-tab.active {
+                                color: #00bcd4;
+                                border-bottom-color: #00bcd4;
+                            }
+                        </style>
+                                                <!-- Live AI Generation Engine & Model Banner -->
+                        <div class="ql-engine-banner llm-active" id="qlEngineBanner">
+                            <div class="ql-eb-col main">
+                                <span class="ql-eb-label">ACTIVE STRATEGY GENERATOR:</span>
+                                <div class="ql-eb-status">
+                                    <span class="engine-dot-lg llm" id="qlEngineDot"></span>
+                                    <span class="ql-eb-title" id="qlEngineTitle">OmniRoute LLM (mistral/codestral-latest)</span>
+                                    <span class="ql-eb-badge llm" id="qlEngineBadge">ONLINE (200 OK)</span>
+                                </div>
+                            </div>
+                            <div class="ql-eb-col">
+                                <span class="ql-eb-label">CONFIGURED MODEL:</span>
+                                <span class="ql-eb-val" id="qlEngineModel">mistral/codestral-latest</span>
+                            </div>
+                            <div class="ql-eb-col">
+                                <span class="ql-eb-label">GATEWAY / ENDPOINT:</span>
+                                <span class="ql-eb-val mono" id="qlEngineEndpoint">http://localhost:20128/v1 (OmniRoute)</span>
+                            </div>
+                            <div class="ql-eb-col detail">
+                                <span class="ql-eb-label">UPSTREAM / RATE LIMIT STATUS:</span>
+                                <span class="ql-eb-val success" id="qlEngineReason">Mistral Codestral active via OmniRoute proxy gateway (High Speed ~3s).</span>
+                            </div>
+                        </div>
+
+                        <!-- Alpha Saturation & Codebase Upgrade Sentinel Card -->
+                        <div class="ql-sentinel-card" id="qlSentinelCard">
+                            <div class="ql-sentinel-top">
+                                <div class="ql-sentinel-left">
+                                    <div class="ql-sentinel-badge-wrap">
+                                        <span class="ql-sentinel-indicator optimal" id="qlSentinelDot"></span>
+                                        <span class="ql-sentinel-title" id="qlSentinelTitle">Alpha Space Healthy (0/15 Dry Rounds)</span>
+                                        <span class="ql-sentinel-tag optimal" id="qlSentinelTag">OPTIMAL</span>
+                                    </div>
+                                    <p class="ql-sentinel-sub" id="qlSentinelDesc">
+                                        Archetype discovery active. The Sentinel monitors consecutive rounds without Top 15 breakthroughs to prevent wasted compute and non-meaningful iterations.
+                                    </p>
+                                </div>
+                                <div class="ql-sentinel-actions">
+                                    <button type="button" class="btn-sentinel-diag" id="btnOpenSentinelModal" onclick="openSentinelModal()">
+                                        📋 Diagnostics
+                                    </button>
+                                    <button type="button" class="btn-sentinel-override" id="btnSentinelOverride" onclick="overrideSentinel()" style="display:none;" title="Force continue exploration anyway">
+                                        ⚡ Override & Force Explore
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="ql-sentinel-meter-row">
+                                <div class="ql-sentinel-bar-wrap">
+                                    <div class="ql-sentinel-bar" id="qlSentinelBar" style="width: 0%;"></div>
+                                </div>
+                                <div class="ql-sentinel-stats">
+                                    <span id="qlSentinelMeterText">Saturation Meter: 0% (0 / 35 rounds to auto-heal)</span>
+                                    <span class="ql-tokens-saved" id="qlTokensSavedText">Tokens Saved: 0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Active Archetypes Library -->
+                        <div class="ql-archetypes-card" id="qlArchetypesCard">
+                            <div class="ql-archetypes-header" style="padding: 12px 16px; background: rgba(0, 0, 0, 0.2); border-bottom: 1px solid var(--tv-border); display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-weight: 600; font-size: 13px; color: var(--tv-text);">🧬 Active Archetype Library</span>
+                                <span class="ql-arch-count" id="qlArchCount" style="font-size: 12px; color: var(--tv-gray);">0 Archetypes</span>
+                            </div>
+                            <div class="ql-archetypes-body" id="qlArchetypesBody" style="padding: 12px 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; max-height: 250px; overflow-y: auto;">
+                                <!-- Populated dynamically -->
+                                <div style="color: var(--tv-gray); font-size: 13px; font-style: italic;">Waiting for archetypes...</div>
+                            </div>
+                        </div>
+
+                        <!-- 4-Agent Visual Pipeline -->
+                        <div class="ql-pipeline">
+                            <div class="agent-card" id="agentCardIdea">
+                                <div class="agent-badge">💡 Idea Generator</div>
+                                <div class="agent-sub">Combinatorial Alpha Mining</div>
+                                <div class="agent-detail" id="agentIdeaDetail">Waiting for round start...</div>
+                            </div>
+                            <div class="agent-arrow">➔</div>
+                            <div class="agent-card" id="agentCardRisk">
+                                <div class="agent-badge">🛡️ Risk Officer</div>
+                                <div class="agent-sub">AST Anti-Lookahead & SL/TP</div>
+                                <div class="agent-detail" id="agentRiskDetail">Standby</div>
+                            </div>
+                            <div class="agent-arrow">➔</div>
+                            <div class="agent-card" id="agentCardBacktest">
+                                <div class="agent-badge">📊 Backtest & MC</div>
+                                <div class="agent-sub">MT5 Real Spread & 1000 VaR</div>
+                                <div class="agent-detail" id="agentBacktestDetail">Standby</div>
+                            </div>
+                            <div class="agent-arrow">➔</div>
+                            <div class="agent-card" id="agentCardCritic">
+                                <div class="agent-badge">🔬 Critic Post-Mortem</div>
+                                <div class="agent-sub">Losing Trade Diagnostics</div>
+                                <div class="agent-detail" id="agentCriticDetail">Standby</div>
+                            </div>
+                            <div class="agent-arrow">➔</div>
+                            <div class="agent-card" id="agentCardOptimizer">
+                                <div class="agent-badge">⚡ Optimizer</div>
+                                <div class="agent-sub">High-Yield Tuning (>= 10R)</div>
+                                <div class="agent-detail" id="agentOptimizerDetail">Standby</div>
+                            </div>
+                        </div>
+
+                        <!-- Telemetry Grid -->
+                        <div class="ql-telemetry">
+                            <div class="ql-metric-card">
+                                <span class="ql-m-label">Active Exploration Hypothesis</span>
+                                <span class="ql-m-val highlight" id="qlHypothesisVal">Ready to explore</span>
+                            </div>
+                            <div class="ql-metric-card">
+                                <span class="ql-m-label">Current Progress</span>
+                                <span class="ql-m-val" id="qlProgressVal">Round 0 of 5</span>
+                            </div>
+                            <div class="ql-metric-card">
+                                <span class="ql-m-label">Candidates Evaluated</span>
+                                <span class="ql-m-val" id="qlCandidatesVal">0</span>
+                            </div>
+                            <div class="ql-metric-card">
+                                <span class="ql-m-label">Best Candidate Discovered</span>
+                                <span class="ql-m-val positive" id="qlBestVal">—</span>
+                            </div>
+                        </div>
+
+                        <!-- Live Agent Debate & Activity Stream -->
+                        <div class="ql-stream-wrap">
+                            <div class="ql-stream-header">
+                                <span>💬 Multi-Agent Debate & Real-Time Research Activity Stream</span>
+                                <button class="btn-clear-stream" id="btnClearStream">Clear</button>
+                            </div>
+                            <div class="ql-stream-body" id="qlStreamBody">
+                                <div class="ql-log-row info">
+                                    <span class="ql-log-time">[Ready]</span>
+                                    <span class="ql-log-agent">System:</span>
+                                    <span class="ql-log-msg">Multi-Agent Quant Research Lab initialized. Click '⚡ Start Autonomous Loop' to begin discovering strategies.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </section>
+
+</div>
+
+
+<!-- =========================================================================
+     MODAL: ALPHA SATURATION & CODEBASE UPGRADE SENTINEL
+========================================================================= -->
+<div class="tv-modal-backdrop" id="sentinelModal" style="display: none;">
+    <div class="tv-modal sentinel-modal-container">
+        <div class="tv-modal-header sentinel-header">
+            <div class="sentinel-header-title">
+                <span class="sentinel-icon-glow">⚡</span>
+                <div>
+                    <h3 id="modalSentinelTitle">Alpha Saturation & Codebase Upgrade Sentinel</h3>
+                    <span class="sentinel-badge-sub" id="modalSentinelBadge">DIAGNOSTIC TELEMETRY</span>
+                </div>
+            </div>
+            <button class="modal-close-btn" id="closeSentinelModalBtn" onclick="closeSentinelModal()">✕</button>
+        </div>
+        <div class="tv-modal-body sentinel-modal-body">
+            
+            <!-- Diagnosis Summary Alert -->
+            <div class="sentinel-alert-box" id="modalSentinelAlertBox">
+                <div class="sentinel-alert-icon">🛑</div>
+                <div class="sentinel-alert-content">
+                    <strong id="modalSentinelHeadline">Feature Space & Archetype Saturation Detected</strong>
+                    <p id="modalSentinelExplanation">
+                        The autonomous discovery loop has reached a mathematical plateau. In standard 5-minute single-timeframe OHLCV price action, the existing archetypes have already extracted the maximum available variance (+106R to +125.5R with profit factors up to 1.90).
+                    </p>
+                    <div class="sentinel-stats-strip">
+                        <div class="sentinel-stat-chip">
+                            <span class="chip-label">Dry Rounds:</span>
+                            <span class="chip-val" id="modalRoundsDry">15 / 15</span>
+                        </div>
+                        <div class="sentinel-stat-chip">
+                            <span class="chip-label">Top 15 Bar:</span>
+                            <span class="chip-val">+78.4R (2026 MT5)</span>
+                        </div>
+                        <div class="sentinel-stat-chip">
+                            <span class="chip-label">Est. Compute Saved:</span>
+                            <span class="chip-val highlight" id="modalTokensSaved">~18,750 Tokens</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Why Upgrading The Codebase Is Needed -->
+            <div class="sentinel-section-title">
+                <span>🚀 5 Breakthrough Codebase Upgrades to Unlock Next Alpha Frontier</span>
+            </div>
+            <p class="sentinel-section-desc">
+                Continuing to explore the same archetypes on isolated 5m bars produces marginal duplicate variations. Implementing these institutional upgrades expands the hypothesis surface:
+            </p>
+
+            <!-- Upgrade Paths Grid -->
+            <div class="sentinel-upgrades-grid" id="modalSentinelUpgrades">
+                <div class="sentinel-upgrade-card">
+                    <div class="suc-top">
+                        <span class="suc-title">1. Higher-Timeframe (1H / 4H) Confluence Filters</span>
+                        <span class="suc-badge high">Highest Impact</span>
+                    </div>
+                    <p class="suc-desc">Integrate 1-Hour and 4-Hour institutional trend, EMA 200 regime, and HTF order blocks as prerequisites before 5-minute triggers. Eliminates counter-trend chop.</p>
+                    <span class="suc-target">Target: <code>strategy_executor.py / ai_research_agents.py</code></span>
+                </div>
+
+                <div class="sentinel-upgrade-card">
+                    <div class="suc-top">
+                        <span class="suc-title">2. Cross-Market Macro Features (DXY & US10Y Yields)</span>
+                        <span class="suc-badge inst">Institutional</span>
+                    </div>
+                    <p class="suc-desc">Incorporate Dollar Index (DXY) inverse momentum and US 10-Year Treasury Yield divergences as exogenous entry filters for {{ asset }}.</p>
+                    <span class="suc-target">Target: <code>data_loader.py / strategy_executor.py</code></span>
+                </div>
+
+                <div class="sentinel-upgrade-card">
+                    <div class="suc-top">
+                        <span class="suc-title">3. Tick-Level Order Flow & Absorption Microstructure</span>
+                        <span class="suc-badge liq">Liquidity</span>
+                    </div>
+                    <p class="suc-desc">Upgrade from bar-aggregated volume to real tick volume delta and bid-ask absorption clusters around Daily VAH/VAL and Session Opens.</p>
+                    <span class="suc-target">Target: <code>strategy_executor.py</code></span>
+                </div>
+
+                <div class="sentinel-upgrade-card">
+                    <div class="suc-top">
+                        <span class="suc-title">4. Volatility Regime Switching (GARCH / Realized Vol)</span>
+                        <span class="suc-badge risk">Risk Guard</span>
+                    </div>
+                    <p class="suc-desc">Automatically deploy ORB & Donchian Breakouts during volatility expansion, and switch to VWAP & Daily Floor Pivots during compression.</p>
+                    <span class="suc-target">Target: <code>strategy_executor.py</code></span>
+                </div>
+
+                <div class="sentinel-upgrade-card">
+                    <div class="suc-top">
+                        <span class="suc-title">5. Multi-Strategy Portfolio Ensemble & Correlation Pruning</span>
+                        <span class="suc-badge alpha">Alpha Multiplier</span>
+                    </div>
+                    <p class="suc-desc">Combine top uncorrelated champions (Stochastic Cycle + ORB + Daily Pivots) to compound returns to >+300R with smoothed drawdown.</p>
+                    <span class="suc-target">Target: <code>portfolio_engine.py (Active)</code></span>
+                </div>
+            </div>
+
+            <!-- Compute Efficiency Tip -->
+            <div class="sentinel-efficiency-tip">
+                <span class="tip-icon">💡</span>
+                <div>
+                    <strong>Pro Quant Tip:</strong> Single-strategy intraday alpha peaks around 125R in Gold due to spread friction and regime shifts. The true institutional quantum leap is <em>combining uncorrelated top archetypes</em> (e.g. Trend Breakouts + Mean Reversion + Session Liquidity) into a unified portfolio.
+                </div>
+            </div>
+
+        </div>
+        <div class="tv-modal-footer sentinel-modal-footer">
+            <button type="button" class="modal-btn-secondary" onclick="closeSentinelModal()">Close Diagnostic</button>
+            <button type="button" class="modal-btn-warning" id="btnModalOverride" onclick="overrideSentinel()">
+                ⚡ Override Sentinel & Force Explore
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================================
+     GLOBAL LOADING & ALERT OVERLAY
+========================================================================= -->
+<div id="loadingOverlay">
+    <div class="tv-spinner"></div>
+    <div class="tv-loading-text" id="loadingText">Loading MetaTrader 5 {{ asset }} 5m data...</div>
+</div>
+
+<div id="tvToast" class="tv-toast"></div>
+
+<!-- =========================================================================
+     SCRIPTS: APPLICATION LOGIC
+========================================================================= -->
+    <script src="/static/app.js?v=strategy_ids_v2"></script>
+<div id="deleted-elements-graveyard" style="display:none;">
+    <input id="aiPromptInput">
+    <div id="optIterations"></div>
+    <div id="optStatusPill"></div>
+    <div id="btnStartOptimize"></div>
+    <div id="btnStopOptimize"></div>
+    <div id="bestScoreBadge"></div>
+    <div id="aiLogStream"></div>
+    <div id="consoleOutput"></div>
+    <div id="cfgProvider"></div>
+    <div id="cfgApiKey"></div>
+    <div id="cfgModel"></div>
+    <div id="cfgEndpoint"></div>
+    <div id="aiConfigModal"></div>
+    <div id="btnAiGenerate"></div>
+    <div id="openAiConfigBtn"></div>
+    <div id="aiConfigModalLink"></div>
+    <div id="closeAiModalBtn"></div>
+    <div id="cancelAiModalBtn"></div>
+    <div id="saveAiModalBtn"></div>
+    <div id="indicatorsBtn"></div>
+    <div id="indicatorsModal"></div>
+    <div id="closeIndModalBtn"></div>
+    <div id="applyIndBtn"></div>
+    <div id="chkBB"></div>
+    <div id="chkSMMA33"></div>
+    <div id="chkSMMA144"></div>
+    <div id="chkRF"></div>
+    <div id="btnStartGenerationToLeaderboard"></div>
+    <div id="tvHeaderEngineBadge"></div>
+    <div id="btnOpenRank1Live"></div>
+    <div id="btnRebuildEnsemble"></div>
+    <div id="headerEngineDot"></div>
+    <div id="headerEngineText"></div>
+    <div id="aiActiveEngineText"></div>
+    <div id="ensNetReturn"></div>
+    <div id="ensNetReturnSub"></div>
+    <div id="ensMaxDD"></div>
+    <div id="ensMaxDDSub"></div>
+    <div id="ensCalmar"></div>
+    <div id="ensCalmarSub"></div>
+    <div id="ensTotalTrades"></div>
+    <div id="ensConcurrencySub"></div>
+    <div id="ensAvgCorr"></div>
+    <div id="ensMonteCarloDD"></div>
+    <div id="ensRuinSub"></div>
+    <canvas id="ensEquityCanvas"></canvas>
+    <div id="ensChartHoverInfo"></div>
+    <tbody id="ensMonthlyTableBody"></tbody>
+    <table id="ensCorrTable"></table>
+    <tbody id="ensWeightsTableBody"></tbody>
+    <div id="rank1BrokerStatusText"></div>
+    <div id="rank1BrokerPulse"></div>
+    <div id="rank1BrokerLatency"></div>
+    <div id="rank1LiveStatusBadge"></div>
+    <div id="rank1LiveQuoteText"></div>
+    <div id="rank1LiveSpread"></div>
+    <div id="rank1LastCandleTime"></div>
+    <div id="rank1ParityScoreVal"></div>
+    <div id="rank1ParityTradesVal"></div>
+    <div id="rank1ParityBadge"></div>
+    <div id="rank1DaemonBtnIcon"></div>
+    <div id="rank1DaemonBtnText"></div>
+    <div id="btnToggleRank1Daemon"></div>
+    <div id="rank1OmniStatusVal"></div>
+    <div id="rank1CertText"></div>
+    <tbody id="rank1SignalsTableBody"></tbody>
+    <div id="rank1SignalCountBadge"></div>
+    <div id="rank1LiveCodePre"></div>
+    <div id="btnPollRank1Now"></div>
+    <div id="btnRunrank1Audit"></div>
+    <div id="btnRefreshSignals"></div>
+    <div id="btnClearSignals"></div>
+    <input id="rank1OmniPromptInput">
+    <div id="btnExecuteOmniEdit"></div>
+    <select id="rank1OmniModelSelect"></select>
+    <div id="rank1DiffContainer"></div>
+    <div id="rank1DiffContent"></div>
+    <div id="btnCopyCk3Code"></div>
+    <div id="tvRightPanel"></div>
+    <div id="tvLeftToolbar"></div>
+    <div id="qlEngineBanner"></div>
+    <div id="qlEngineDot"></div>
+    <div id="qlEngineTitle"></div>
+    <div id="qlEngineBadge"></div>
+    <div id="qlEngineModel"></div>
+    <div id="qlEngineEndpoint"></div>
+    <div id="qlEngineReason"></div>
+    <div id="qlStatusPill"></div>
+    <div id="labRunningBadge"></div>
+    <div id="btnStartResearch"></div>
+    <div id="btnPauseResearch"></div>
+    <div id="btnResumeResearch"></div>
+    <div id="btnStopResearch"></div>
+    <div id="hdrTournPill"></div>
+    <div id="hdrBtnStart1000"></div>
+    <div id="hdrBtnPause"></div>
+    <div id="hdrBtnResume"></div>
+    <div id="lbTournPill"></div>
+    <div id="btnLbStart1000"></div>
+    <div id="btnLbPause"></div>
+    <div id="btnLbResume"></div>
+    <div id="qlHypothesisVal"></div>
+    <div id="qlProgressVal"></div>
+    <div id="qlCandidatesVal"></div>
+    <div id="qlBestVal"></div>
+    <div id="agentIdeaDetail"></div>
+    <div id="agentRiskDetail"></div>
+    <div id="agentBacktestDetail"></div>
+    <div id="agentCriticDetail"></div>
+    <div id="agentOptimizerDetail"></div>
+    <tbody id="qlStreamBody"></tbody>
+    <div id="hdrSentinelPill"></div>
+    <div id="lbSentinelPill"></div>
+    <div id="qlSentinelCard"></div>
+    <tbody id="qlArchetypesBody"></tbody>
+    <div id="qlArchCount"></div>
+    <div id="qlSentinelDot"></div>
+    <div id="qlSentinelTitle"></div>
+    <div id="qlSentinelTag"></div>
+    <div id="qlSentinelDesc"></div>
+    <div id="qlSentinelBar"></div>
+    <div id="qlSentinelMeterText"></div>
+    <div id="qlTokensSavedText"></div>
+    <div id="btnSentinelOverride"></div>
+    <div id="btnThresh1"></div>
+    <div id="btnThresh2"></div>
+    <div id="btnThresh3"></div>
+    <div id="btnThresh4"></div>
+    <div id="btnThresh5"></div>
+    <div id="modalRoundsDry"></div>
+    <div id="modalTokensSaved"></div>
+    <div id="modalSentinelAlertBox"></div>
+    <div id="sentinelModal"></div>
+    <div id="btnModalOverride"></div>
+</div>
+</body>
+</html>

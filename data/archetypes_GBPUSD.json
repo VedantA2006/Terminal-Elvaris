@@ -1,0 +1,92 @@
+[
+    {
+        "id": "ssm_gbp_01",
+        "name": "Kalman Momentum Regime",
+        "concept": "Estimates hidden price momentum with a Kalman filter and trades on regime shifts.",
+        "instructions": "Apply a Kalman filter where observation is df['close'] and state vector is [price, momentum]; extract the filtered momentum series; compute its first difference; define bullish regime when momentum>0 and diff>0, bearish when momentum<0 and diff<0; generate a bull_signal when bullish regime starts (current bar true and previous bar false) inside session_mask(df,'london_ny'); generate bear_signal similarly; filter signals with rvol(df,20)>1.2 and adx(df,14)[0]>22; set sl_long = df['low']-1.5*atr(df,14), sl_short = df['high']+1.5*atr(df,14); enforce minimum risk of 2.5; compute tp1_long = df['close']+1.5*(df['close']-sl_long) and tp1_short = df['close']-1.5*(sl_short-df['close'])."
+    },
+    {
+        "id": "spectral_gbp_02",
+        "name": "Spectral Density Breakout",
+        "concept": "Detects dominant frequency power spikes and trades when they exceed historical thresholds.",
+        "instructions": "For each bar compute a rolling FFT on the last 120 closes (5\u2011minute data) using np.fft.rfft; calculate spectral power density; track the max power frequency; maintain a rolling mean and std of max power over 500 bars; create a breakout flag when current max power > mean+2*std; if breakout occurs during session_mask(df,'ny') and rvol(df,20)>1.3 and adx(df,14)[0]>25, set bull_signal when price is above its 20\u2011period EMA and bear_signal when below; set stops using 1.5*atr(df,14) as in prior entry and compute TP at 1.5R."
+    },
+    {
+        "id": "hmm_gbp_03",
+        "name": "Hidden Markov Regime Switch",
+        "concept": "Uses a two\u2011state HMM on returns to identify bullish or bearish hidden regimes.",
+        "instructions": "Calculate log returns of df['close']; fit a Gaussian HMM with 2 hidden states on the last 1000 returns using hmmlearn (or implement EM manually); label the state with higher mean return as bullish; generate bull_signal when state switches to bullish and price closes above EMA(34) within session_mask(df,'london'); generate bear_signal on switch to bearish and close below EMA(34); require rvol(df,20)>1.2 and ADX>20; set stops and TP as per ATR\u2011based rules."
+    },
+    {
+        "id": "wavelet_gbp_04",
+        "name": "Wavelet Decomposition Trend",
+        "concept": "Extracts the low\u2011frequency component via discrete wavelet transform to capture institutional trend.",
+        "instructions": "Apply pywt.dwt on the last 256 closes with 'db4' wavelet; keep the approximation coefficients as the trend proxy; forward\u2011fill to align with original index; define bullish when trend proxy is rising for three consecutive bars and price closes above it; bearish when falling and price closes below; trigger signals only on first qualifying bar inside session_mask(df,'london_ny') and when rvol(df,20)>1.15 and efficiency_ratio(df['close'],20)>0.28; compute stops and TP using ATR buffer and 1.5R."
+    },
+    {
+        "id": "entropy_gbp_05",
+        "name": "Shannon Entropy Volatility Filter",
+        "concept": "Measures information entropy of price changes to separate high\u2011entropy breakout periods from low\u2011entropy consolidation.",
+        "instructions": "Compute rolling histogram of 20\u2011bar returns with 10 bins; calculate Shannon entropy; maintain rolling mean and std of entropy over 500 bars; define high\u2011entropy regime when entropy > mean+1.5*std; in high\u2011entropy regime generate bull_signal if price closes above its 21\u2011EMA and bear_signal if below, only during session_mask(df,'ny'); require rvol(df,20)>1.2 and ADX>22; set stops and TP using 1.5*ATR and 1.5R."
+    },
+    {
+        "id": "mfdfa_gbp_06",
+        "name": "Multifractal Detrended Fluctuation Analysis",
+        "concept": "Uses MF\u2011DFA scaling exponent to detect persistent trending versus anti\u2011persistent ranging.",
+        "instructions": "Implement MF\u2011DFA on the last 1024 closes to obtain scaling exponent h; forward\u2011fill h; treat h>0.55 as trending, h<0.45 as ranging; generate bull_signal when trending and price closes above 34\u2011EMA inside session_mask(df,'london'); generate bear_signal when trending and close below 34\u2011EMA; ignore ranging periods; require rvol(df,20)>1.2 and ADX>24; compute stops and TP with ATR buffer and 1.5R."
+    },
+    {
+        "id": "copula_gbp_07",
+        "name": "Dynamic EURUSD Copula Correlation",
+        "concept": "Trades GBPUSD when its correlation with EURUSD deviates from a rolling copula\u2011based benchmark.",
+        "instructions": "Assume a secondary DataFrame eurdf with same columns; compute rolling Pearson correlation of GBPUSD and EURUSD closes over 200 bars; fit a Gaussian copula to joint distribution of returns; calculate conditional probability of GBPUSD moving up given EURUSD up; if conditional probability exceeds 0.7 and GBPUSD close > its 55\u2011EMA during session_mask(df,'london_ny'), set bull_signal; if below 0.3 and close < 55\u2011EMA, set bear_signal; filter with rvol(df,20)>1.2 and ADX>22; set stops and TP using ATR and 1.5R."
+    },
+    {
+        "id": "regime_gbp_08",
+        "name": "Markov Switching Volatility Model",
+        "concept": "Applies a two\u2011state Markov switching model on squared returns to identify high\u2011volatility regimes for breakout entries.",
+        "instructions": "Estimate a Markov switching autoregressive model on squared returns using statsmodels; label state with higher variance as volatile; generate bull_signal when volatile state begins and price closes above 20\u2011EMA within session_mask(df,'ny'); generate bear_signal on volatile start with close below 20\u2011EMA; require rvol(df,20)>1.25 and ADX>23; compute stops and TP with 1.5*ATR and 1.5R."
+    },
+    {
+        "id": "fractal_gbp_09",
+        "name": "Fractal Dimension Trend Filter",
+        "concept": "Calculates the Higuchi fractal dimension to differentiate institutional trends from noise.",
+        "instructions": "Compute Higuchi fractal dimension on the last 200 closes (kmax=10); forward\u2011fill fd; treat fd<1.4 as trending, fd>1.6 as noisy; generate bull_signal when trending and price closes above 34\u2011EMA inside session_mask(df,'london'); generate bear_signal when trending and close below 34\u2011EMA; require rvol(df,20)>1.2 and ADX>22; set stops and TP using ATR buffer and 1.5R."
+    },
+    {
+        "id": "svd_gbp_10",
+        "name": "Singular Value Decomposition Trend Extraction",
+        "concept": "Uses SVD on a price matrix to isolate the dominant trend component for signal generation.",
+        "instructions": "Construct a matrix of overlapping 30\u2011bar windows of closes; apply np.linalg.svd; take the first left singular vector as trend proxy; forward\u2011fill to original index; define bullish when trend proxy slope >0 for three bars and price closes above it; bearish when slope <0 and close below; trigger only on first bar of condition inside session_mask(df,'london_ny'); filter with rvol(df,20)>1.15 and ADX>21; compute stops and TP with 1.5*ATR and 1.5R."
+    },
+    {
+        "id": "chaos_gbp_11",
+        "name": "Lyapunov Exponent Breakout",
+        "concept": "Estimates the largest Lyapunov exponent to gauge chaos and trades when chaos drops indicating emerging order.",
+        "instructions": "Calculate rolling largest Lyapunov exponent on the last 300 closes using Rosenstein method; forward\u2011fill le; define low\u2011chaos regime when le < mean(le[-500:]) - 0.5*std(le[-500:]); generate bull_signal if low\u2011chaos and price closes above 55\u2011EMA inside session_mask(df,'ny'); generate bear_signal if low\u2011chaos and close below 55\u2011EMA; require rvol(df,20)>1.2 and ADX>22; set stops and TP with ATR buffer and 1.5R."
+    },
+    {
+        "id": "garch_gbp_12",
+        "name": "GARCH\u2011Volatility Regime Entry",
+        "concept": "Uses a rolling GARCH(1,1) forecast to identify volatility compression and subsequent expansion breakouts.",
+        "instructions": "Fit a GARCH(1,1) model on the last 500 returns using arch package; forecast next\u2011day variance; compute volatility compression when forecast variance < rolling mean variance *0.7; on compression bar, if price closes above 20\u2011EMA during session_mask(df,'london'), set bull_signal; if below 20\u2011EMA, set bear_signal; require rvol(df,20)>1.2 and ADX>23; compute stops and TP with 1.5*ATR and 1.5R."
+    },
+    {
+        "id": "phase_gbp_13",
+        "name": "Phase\u2011Space Reconstruction Momentum",
+        "concept": "Reconstructs phase space of price to detect attractor transitions signaling institutional moves.",
+        "instructions": "Create delayed vectors of closes with embedding dimension 3 and delay 2; compute Euclidean distance between successive vectors; calculate average distance over 50 bars as a proxy for phase\u2011space expansion; define expansion when avg distance > rolling mean + 1.5*std; on expansion bar, if price > 34\u2011EMA inside session_mask(df,'london_ny'), set bull_signal; if price < 34\u2011EMA, set bear_signal; filter with rvol(df,20)>1.2 and ADX>22; set stops and TP using ATR buffer and 1.5R."
+    },
+    {
+        "id": "cluster_gbp_14",
+        "name": "K\u2011Means Price Cluster Breakout",
+        "concept": "Clusters recent price levels with K\u2011Means and trades when price exits the dominant cluster.",
+        "instructions": "Run KMeans with k=4 on the last 200 closes; assign each bar to a cluster; identify dominant cluster as the one with most members; generate bull_signal when price moves from dominant cluster to a higher\u2011priced cluster and closes above 21\u2011EMA during session_mask(df,'ny'); generate bear_signal when moving to lower\u2011priced cluster and closes below 21\u2011EMA; require rvol(df,20)>1.2 and ADX>22; compute stops and TP with 1.5*ATR and 1.5R."
+    },
+    {
+        "id": "bayes_gbp_15",
+        "name": "Bayesian Change\u2011Point Detection",
+        "concept": "Applies Bayesian online change\u2011point detection on returns to spot structural breaks for entry.",
+        "instructions": "Implement Bayesian online change\u2011point detection on log returns with hazard rate 1/250; obtain posterior probability of a change point; when probability exceeds 0.8 on a bar and price closes above 55\u2011EMA inside session_mask(df,'london'), set bull_signal; if below 55\u2011EMA, set bear_signal; require rvol(df,20)>1.2 and ADX>22; set stops and TP using 1.5*ATR and 1.5R."
+    }
+]
