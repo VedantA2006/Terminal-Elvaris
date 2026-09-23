@@ -1,92 +1,27 @@
 [
     {
-        "id": "arch001",
-        "name": "State-Space Momentum Regime (SSMR)",
-        "concept": "Detects hidden momentum regimes using a Kalman filter on price and volume state vectors.",
-        "instructions": "Compute a 2\u2011dimensional state vector [price, volume] and run a Kalman filter with a constant\u2011velocity model; extract the filtered velocity as momentum and the filter covariance trace as regime confidence; generate a long signal when velocity > 0 and confidence < 0.5 inside London\u2011NY killzone, short when velocity < 0 and confidence < 0.5; ensure first\u2011bar trigger only."
+        "name": "London/NY Overlap Momentum",
+        "concept": "High liquidity breakouts during the overlap session.",
+        "instructions": "Trade breakouts of the London morning range specifically during the overlap window (13:00 - 16:00 UTC) when US volume enters."
     },
     {
-        "id": "arch002",
-        "name": "Fractal Dimension Trend Divergence (FDTD)",
-        "concept": "Uses rolling fractal dimension to separate trending from ranging markets and aligns with order\u2011block retests.",
-        "instructions": "Calculate the Higuchi fractal dimension on the close series over a 50\u2011bar window; label bars with dimension < 1.2 as ranging and > 1.4 as trending; when trending and price revisits the most recent bullish order block (identified via find_swings) generate a long, opposite for bearish; apply ADX > 25 filter and killzone gating; use one\u2011time entry logic."
+        "name": "Frankfurt Fakeout (Stop Hunt)",
+        "concept": "Trading the false breakout of the Asian range.",
+        "instructions": "Track the Asian session range. If Frankfurt/early London breaks the high then immediately reverses back inside, short the false breakout."
     },
     {
-        "id": "arch003",
-        "name": "Spectral Density Breakout (SDB)",
-        "concept": "Identifies low\u2011frequency power spikes in the price spectrum as precursors to large breakouts.",
-        "instructions": "Apply a Fast Fourier Transform on the last 256 close values; compute power spectral density and sum power below the 0.05\u202fHz band; when this low\u2011frequency power exceeds its 30\u2011bar rolling mean by 2\u202f\u03c3, and price breaks above the Donchian upper channel, trigger a long; reverse for short when power drops and price breaks below lower channel; restrict to NY session."
+        "name": "Interest Rate Divergence Proxy",
+        "concept": "Using macro bond proxies (if available) or structural higher-timeframe momentum.",
+        "instructions": "Align trades with the 1h and 4h trend (HTF Swings). Only take 5m entries that agree with this macro direction."
     },
     {
-        "id": "arch004",
-        "name": "Regime\u2011Switching Volatility Clustering (RSVC)",
-        "concept": "A hidden Markov model classifies volatility regimes and only trades in low\u2011volatility clusters awaiting volatility expansion.",
-        "instructions": "Fit a 2\u2011state Gaussian HMM on the 14\u2011period ATR series using the hmmlearn library (states: low\u2011vol, high\u2011vol); label current state; when in low\u2011vol state and a bullish FVG appears, open long; when in low\u2011vol and bearish FVG, open short; require rvol > 1.3 and killzone filter; ensure single\u2011bar entry."
+        "name": "RSI Divergence in Value Zones",
+        "concept": "Mean reversion in a ranging environment.",
+        "instructions": "When EURUSD is ranging (ADX < 25), use RSI divergence at previous day's high/low to enter mean-reversion trades."
     },
     {
-        "id": "arch005",
-        "name": "Multiscale Wavelet Decomposition Trend (MWDT)",
-        "concept": "Decomposes price into wavelet scales to isolate the dominant trend component for signal generation.",
-        "instructions": "Perform a discrete wavelet transform (Daubechies 4) on the last 128 close values; reconstruct the approximation at level 3 as the trend line; compute its slope over the last 8 bars; if slope > 0 and price is above the trend line, generate long; if slope < 0 and price below trend line, generate short; filter with efficiency_ratio > 0.3 and London killzone."
-    },
-    {
-        "id": "arch006",
-        "name": "Dynamic Correlation with EUR\u2011GBP (DC\u2011EGBP)",
-        "concept": "Exploits temporary divergence between EURUSD and EURGBP to capture cross\u2011currency arbitrage.",
-        "instructions": "Fetch synchronized EURGBP 5\u2011min close series; compute rolling 30\u2011bar Pearson correlation; when correlation drops below 0.4 and EURUSD closes above its VWAP while EURGBP is below its VWAP, go long EURUSD; opposite condition for short; require ADX > 20 and NY\u2011London overlap; one\u2011time entry per divergence event."
-    },
-    {
-        "id": "arch007",
-        "name": "Entropy\u2011Based Liquidity Imbalance (EBLI)",
-        "concept": "Measures information entropy of bid\u2011ask volume distribution to spot institutional liquidity sweeps.",
-        "instructions": "Approximate bid\u2011ask volume by splitting total volume into upper and lower halves of the candle range; compute Shannon entropy over a 20\u2011bar window; when entropy falls below its 20\u2011bar rolling median indicating concentrated liquidity and a BSL sweep occurs, trigger short; when entropy low and SSL sweep, trigger long; enforce killzone and risk rules."
-    },
-    {
-        "id": "arch008",
-        "name": "Non\u2011Linear Phase Space Rotation (NLPSR)",
-        "concept": "Maps price\u2011volume pairs into a phase\u2011space and detects rotational patterns indicative of accumulation or distribution.",
-        "instructions": "Create a 2\u2011D trajectory of normalized price change and volume change over the last 30 bars; compute the signed area (cross product) of the polygon; positive area signals clockwise rotation (accumulation) \u2192 long, negative \u2192 short; require rvol > 1.2 and ADX > 22; limit to London\u2011NY session and first\u2011bar trigger."
-    },
-    {
-        "id": "arch009",
-        "name": "Adaptive Fractal\u2011Based Stop Engine (AFSE)",
-        "concept": "Derives stop\u2011loss levels from the local fractal dimension to adapt to market roughness.",
-        "instructions": "Calculate rolling Higuchi dimension over 40 bars; set sl_long = close - (1.5 * atr(14) * (1 + (fd - 1.2))) and sl_short = close + (1.5 * atr(14) * (1 + (fd - 1.2))); generate entry when price breaks recent bullish order block and fd > 1.4 for long, fd < 1.2 for short; apply killzone and momentum filters; ensure risk distance >= 2.5."
-    },
-    {
-        "id": "arch010",
-        "name": "Spectral Ratio Momentum (SRM)",
-        "concept": "Compares high\u2011frequency to low\u2011frequency power ratios to gauge short\u2011term momentum bursts.",
-        "instructions": "Compute FFT on last 128 closes; sum power in 0.2\u20110.5\u202fHz band (high) and 0.01\u20110.05\u202fHz band (low); calculate ratio = high/low; when ratio exceeds its 30\u2011bar rolling mean by 1.5\u202f\u03c3 and price is above VWAP, go long; opposite for short; require rvol > 1.3, ADX > 25, and NY killzone."
-    },
-    {
-        "id": "arch011",
-        "name": "Markov Transition Liquidity Grid (MTLG)",
-        "concept": "Builds a Markov transition matrix of price moves between discrete liquidity zones to predict next\u2011move bias.",
-        "instructions": "Define three zones: below swing low, between swing low/high, above swing high; count transitions over last 200 bars to form a 3\u00d73 matrix; compute probability of moving up from current zone; if up\u2011prob > 0.6 and a bullish FVG appears, trigger long; if down\u2011prob > 0.6 and bearish FVG, trigger short; filter with efficiency_ratio > 0.28 and London session."
-    },
-    {
-        "id": "arch012",
-        "name": "Recursive Kalman\u2011Enhanced Supertrend (RK\u2011ST)",
-        "concept": "Feeds Kalman\u2011filtered price into Supertrend to obtain a smoother trend line with reduced noise.",
-        "instructions": "Apply Kalman filter to close series (constant\u2011acceleration model) and obtain filtered price; run supertrend on filtered price with period 10, mult 3; generate long when direction = 1 and price > filtered VWAP, short when direction = -1 and price < filtered VWAP; require ADX > 22 and rvol > 1.2; enforce first\u2011bar entry inside London\u2011NY killzone."
-    },
-    {
-        "id": "arch013",
-        "name": "Fractal\u2011Weighted Order Block (FWOB)",
-        "concept": "Weights order\u2011block strength by local fractal dimension to prioritize high\u2011confidence zones.",
-        "instructions": "Identify bullish and bearish order blocks via find_swings; compute fractal dimension over 30 bars surrounding each block; assign weight = fd; trigger long when a bullish block with weight > 1.5 is retested and price closes above block; short for bearish block with weight > 1.5; apply rvol > 1.25, ADX > 20, and killzone filter."
-    },
-    {
-        "id": "arch014",
-        "name": "Cross\u2011Asset Spectral Correlation (CASC)",
-        "concept": "Uses spectral correlation between EURUSD and US10Y Treasury futures to capture macro\u2011driven moves.",
-        "instructions": "Obtain synchronized US10Y close series; compute FFT on both series over 256 bars; calculate cosine similarity of their low\u2011frequency spectra; when similarity drops below 0.3 and EURUSD breaks above its daily pivot R1, go long; opposite for short when similarity low and price breaks below S1; require ADX > 25, rvol > 1.3, and NY session."
-    },
-    {
-        "id": "arch015",
-        "name": "Regime\u2011Adaptive Risk Scaling (RARS)",
-        "concept": "Adjusts stop\u2011loss and take\u2011profit distances dynamically based on detected volatility regime via GARCH.",
-        "instructions": "Fit a rolling GARCH(1,1) model on 14\u2011period returns to estimate conditional volatility; if volatility > rolling median, set sl_long = low - (2.0 * cond_vol) and tp_long = close + (3.0 * (close - sl_long)); if volatility <= median, use 1.5 * cond_vol for SL and 2.0\u202fR for TP; generate entry on bullish FVG with ADX > 22 and London\u2011NY killzone; ensure risk distance >= 2.5 and first\u2011bar trigger."
+        "name": "Order Block Mitigation",
+        "concept": "Institutional order flow pullback trading.",
+        "instructions": "Identify strong impulsive moves that leave behind a 15m order block. Enter on the first retest of this block."
     }
 ]

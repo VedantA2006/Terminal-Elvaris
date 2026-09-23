@@ -1,92 +1,27 @@
 [
     {
-        "id": "fractal_spectral_density",
-        "name": "Fractal Spectral Density Regime Switching",
-        "concept": "Uses fractal dimension and spectral density to identify regime switching in US100 5-minute candles, with dynamic parameter optimization.",
-        "instructions": "Calculate the fractal dimension of the price series using the Higuchi algorithm. Compute the spectral density using the Lomb-Scargle periodogram. Identify regime switches when the fractal dimension crosses a threshold of 1.2. Optimize parameters dynamically based on the current regime."
+        "name": "Opening Range Breakout (ORB) Momentum",
+        "concept": "Tech-heavy momentum breakouts at the NY Open.",
+        "instructions": "Calculate the high/low of the first 30 minutes of the NY session (13:30 - 14:00 UTC). Enter trades in the direction of the breakout with strong volume expansion."
     },
     {
-        "id": "state_space_volatility",
-        "name": "State-Space Volatility Modeling",
-        "concept": "Uses state-space models to identify volatility regimes in US100 5-minute candles, with dynamic parameter optimization.",
-        "instructions": "Fit a state-space model to the price series using the Kalman filter. Identify volatility regimes based on the state estimates. Optimize parameters dynamically based on the current volatility regime."
+        "name": "Tech Gap & Go Continuation",
+        "concept": "Trading the continuation of overnight gaps.",
+        "instructions": "Detect overnight gaps. If the price gaps up and holds the gap during the first 15 mins of NY open, buy the pullback to the VWAP."
     },
     {
-        "id": "multi_scale_entropy",
-        "name": "Multi-Scale Entropy Analysis",
-        "concept": "Uses multi-scale entropy to identify regime switching in US100 5-minute candles, with dynamic parameter optimization.",
-        "instructions": "Calculate the multi-scale entropy of the price series using the sample entropy algorithm. Identify regime switches when the multi-scale entropy crosses a threshold of 0.5. Optimize parameters dynamically based on the current regime."
+        "name": "High-Beta VWAP Trend Following",
+        "concept": "Aggressive trend following using VWAP and EMAs.",
+        "instructions": "In strong trend days (price > 1h VWAP), buy the first intraday pullback to the 5m VWAP if accompanied by a MACD bullish cross."
     },
     {
-        "id": "fractal_momentum",
-        "name": "Fractal Momentum Oscillator",
-        "concept": "Uses fractal dimension and momentum to identify regime switching in US100 5-minute candles, with dynamic parameter optimization.",
-        "instructions": "Calculate the fractal dimension of the price series using the Higuchi algorithm. Compute the momentum using the rate of change. Identify regime switches when the fractal dimension crosses a threshold of 1.2 and the momentum is positive. Optimize parameters dynamically based on the current regime."
+        "name": "Volatility Contraction (VCP) Breakout",
+        "concept": "Breakouts from tight consolidation zones.",
+        "instructions": "Use Bollinger Bands bandwidth or ATR to detect extreme compression. Trade the explosive breakout when bandwidth expands."
     },
     {
-        "id": "state_space_momentum",
-        "name": "State-Space Momentum Modeling",
-        "concept": "Uses state-space models to identify momentum regimes in US100 5-minute candles, with dynamic parameter optimization.",
-        "instructions": "Fit a state-space model to the price series using the Kalman filter. Identify momentum regimes based on the state estimates. Optimize parameters dynamically based on the current momentum regime."
-    },
-    {
-        "id": "multi_scale_momentum",
-        "name": "Multi-Scale Momentum Analysis",
-        "concept": "Uses multi-scale entropy to identify momentum regimes in US100 5-minute candles, with dynamic parameter optimization.",
-        "instructions": "Calculate the multi-scale entropy of the price series using the sample entropy algorithm. Identify momentum regimes when the multi-scale entropy crosses a threshold of 0.5 and the momentum is positive. Optimize parameters dynamically based on the current regime."
-    },
-    {
-        "id": "fractal_volatility",
-        "name": "Fractal Volatility Oscillator",
-        "concept": "Uses fractal dimension and volatility to identify regime switching in US100 5-minute candles, with dynamic parameter optimization.",
-        "instructions": "Calculate the fractal dimension of the price series using the Higuchi algorithm. Compute the volatility using the average true range. Identify regime switches when the fractal dimension crosses a threshold of 1.2 and the volatility is high. Optimize parameters dynamically based on the current regime."
-    },
-    {
-        "id": "state_space_volatility_momentum",
-        "name": "State-Space Volatility and Momentum Modeling",
-        "concept": "Uses state-space models to identify volatility and momentum regimes in US100 5-minute candles, with dynamic parameter optimization.",
-        "instructions": "Fit a state-space model to the price series using the Kalman filter. Identify volatility and momentum regimes based on the state estimates. Optimize parameters dynamically based on the current volatility and momentum regimes."
-    },
-    {
-        "id": "multi_scale_volatility_momentum",
-        "name": "Multi-Scale Volatility and Momentum Analysis",
-        "concept": "Uses multi-scale entropy to identify volatility and momentum regimes in US100 5-minute candles, with dynamic parameter optimization.",
-        "instructions": "Calculate the multi-scale entropy of the price series using the sample entropy algorithm. Identify volatility and momentum regimes when the multi-scale entropy crosses a threshold of 0.5 and the momentum is positive. Optimize parameters dynamically based on the current volatility and momentum regimes."
-    },
-    {
-        "id": "fractal_spectral_density_momentum",
-        "name": "Fractal Spectral Density and Momentum Regime Switching",
-        "concept": "Uses fractal dimension and spectral density to identify regime switching in US100 5-minute candles, with dynamic parameter optimization based on momentum.",
-        "instructions": "Calculate the fractal dimension of the price series using the Higuchi algorithm. Compute the spectral density using the Lomb-Scargle periodogram. Identify regime switches when the fractal dimension crosses a threshold of 1.2 and the momentum is positive. Optimize parameters dynamically based on the current regime and momentum."
-    },
-    {
-        "id": "state_space_spectral_density",
-        "name": "State-Space Spectral Density Modeling",
-        "concept": "Uses state-space models to identify spectral density regimes in US100 5-minute candles, with dynamic parameter optimization.",
-        "instructions": "Fit a state-space model to the price series using the Kalman filter. Identify spectral density regimes based on the state estimates. Optimize parameters dynamically based on the current spectral density regime."
-    },
-    {
-        "id": "multi_scale_spectral_density",
-        "name": "Multi-Scale Spectral Density Analysis",
-        "concept": "Uses multi-scale entropy to identify spectral density regimes in US100 5-minute candles, with dynamic parameter optimization.",
-        "instructions": "Calculate the multi-scale entropy of the price series using the sample entropy algorithm. Identify spectral density regimes when the multi-scale entropy crosses a threshold of 0.5. Optimize parameters dynamically based on the current spectral density regime."
-    },
-    {
-        "id": "fractal_spectral_density_volatility",
-        "name": "Fractal Spectral Density and Volatility Regime Switching",
-        "concept": "Uses fractal dimension and spectral density to identify regime switching in US100 5-minute candles, with dynamic parameter optimization based on volatility.",
-        "instructions": "Calculate the fractal dimension of the price series using the Higuchi algorithm. Compute the spectral density using the Lomb-Scargle periodogram. Identify regime switches when the fractal dimension crosses a threshold of 1.2 and the volatility is high. Optimize parameters dynamically based on the current regime and volatility."
-    },
-    {
-        "id": "state_space_spectral_density_momentum",
-        "name": "State-Space Spectral Density and Momentum Modeling",
-        "concept": "Uses state-space models to identify spectral density and momentum regimes in US100 5-minute candles, with dynamic parameter optimization.",
-        "instructions": "Fit a state-space model to the price series using the Kalman filter. Identify spectral density and momentum regimes based on the state estimates. Optimize parameters dynamically based on the current spectral density and momentum regimes."
-    },
-    {
-        "id": "multi_scale_spectral_density_volatility_momentum",
-        "name": "Multi-Scale Spectral Density, Volatility, and Momentum Analysis",
-        "concept": "Uses multi-scale entropy to identify spectral density, volatility, and momentum regimes in US100 5-minute candles, with dynamic parameter optimization.",
-        "instructions": "Calculate the multi-scale entropy of the price series using the sample entropy algorithm. Identify spectral density, volatility, and momentum regimes when the multi-scale entropy crosses a threshold of 0.5 and the momentum is positive. Optimize parameters dynamically based on the current spectral density, volatility, and momentum regimes."
+        "name": "Late-Day Squeeze",
+        "concept": "Momentum squeeze in the final hour of the NY session.",
+        "instructions": "Identify tight ranges between 18:00 - 19:30 UTC. Trade the breakout into the 20:00 UTC close."
     }
 ]

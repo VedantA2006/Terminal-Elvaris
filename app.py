@@ -21,6 +21,7 @@ import math
 from datetime import datetime, timezone
 from pathlib import Path
 from flask import Flask, render_template, jsonify, request
+import pandas as pd
 
 REPO_DIR = Path(__file__).parent.resolve()
 
@@ -430,8 +431,9 @@ def api_ai_start_generation():
             endpoint = 'http://localhost:20128/v1'
     elif not api_key:
         return jsonify({'success': False, 'message': 'API Key is required.'}), 400
+    instrument = data.get('instrument', 'XAUUSD')
     if not prompt:
-        prompt = "Create a robust institutional quantitative strategy on 5m Gold using SMC sweeps, Daily Pivots, and Volatility Regimes."
+        prompt = f"Create a robust institutional quantitative strategy on 5m {instrument} using SMC sweeps, Daily Pivots, and Volatility Regimes."
 
     gen_res = generate_strategy_code(provider, api_key, model, prompt, endpoint_url=endpoint)
     if not gen_res.get('success'):
@@ -440,8 +442,20 @@ def api_ai_start_generation():
     code = gen_res['code']
 
     # Execute backtest on 2026 data
-    target_df = _cache.get('df_2026', _cache['raw_df'])
-    exec_res = execute_strategy(code, target_df)
+    try:
+        from autonomous_research_loop import ResearchLoopManager
+        train, val, test = ResearchLoopManager()._ensure_data(instrument)
+        target_df = pd.concat([train, val, test])
+        target_df = target_df[target_df.index >= '2026-01-01']
+        if len(target_df) < 100: target_df = train
+        bt_params = ResearchLoopManager._get_backtest_params(instrument)
+    except Exception:
+        target_df = _cache.get('df_2026', _cache['raw_df'])
+        bt_params = {'spread': 0.20, 'slippage': 0.05, 'lot_size': 100.0}
+
+    exec_res = execute_strategy(
+        code, target_df, spread=bt_params['spread'], slippage=bt_params['slippage'], lot_size=bt_params['lot_size']
+    )
     if not exec_res.get('success'):
         return jsonify({
             'success': False,
@@ -514,9 +528,9 @@ def api_research_start():
     # Route through OmniRoute proxy so requests and token analytics show up live in the OmniRoute UI
     provider = 'omniroute'
     api_key = api_key or omniroute_env_key
-    model = model or 'mistral/codestral-latest'
-    if model in ('agentrouter/gpt-6-astra', 'auto', 'auto/best-coding'):
-        model = 'mistral/codestral-latest'
+    model = model or 'groq/llama-3.1-70b-versatile'
+    if model in ('agentrouter/gpt-6-astra', 'auto', 'auto/best-coding', 'mistral/codestral-latest'):
+        model = 'groq/llama-3.1-70b-versatile'
     endpoint = endpoint or 'http://localhost:20128/v1'
 
     started = research_manager.start_loop(rounds=rounds, provider=provider, api_key=api_key, model=model, endpoint=endpoint, force_restart=force_restart)

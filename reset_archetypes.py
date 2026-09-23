@@ -1,4 +1,7 @@
-[
+import json
+import os
+
+retail_ict_archetypes = [
     {
         "name": "Fair Value Gap (FVG) Trend Following",
         "concept": "Enter on pullbacks into 3-candle Fair Value Gaps in the direction of the macro trend.",
@@ -75,3 +78,17 @@
         "instructions": "Use `volatility_ratio(df, 5, 30)`. Enter momentum breakouts when the volatility ratio spikes > 1.20."
     }
 ]
+
+instruments = ["US100", "SPX500", "EURUSD", "GBPUSD", "XAUUSD"]
+
+# Overwrite fallback
+os.makedirs("data", exist_ok=True)
+with open("data/archetypes.json", "w", encoding="utf-8") as f:
+    json.dump(retail_ict_archetypes, f, indent=4)
+
+# Overwrite per-instrument
+for inst in instruments:
+    with open(f"data/archetypes_{inst}.json", "w", encoding="utf-8") as f:
+        json.dump(retail_ict_archetypes, f, indent=4)
+
+print("Successfully injected Retail ICT archetypes into all instruments!")

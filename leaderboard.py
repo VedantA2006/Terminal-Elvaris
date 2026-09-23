@@ -264,7 +264,7 @@ def upgrade_leaderboard_to_mt5_data(full_df, train_df=None, val_df=None, test_df
 
     updated_count = 0
     for entry in items:
-        if not force and entry.get('data_split') in ('mt5_ecn', 'mt5_ecn_2026', 'equityedge_mt5_2026'):
+        if not force and entry.get('data_split') in ('mt5_ecn', 'mt5_ecn_2026', 'equityedge_mt5_2026', 'guarded_full'):
             continue
         code = entry.get('code', '')
         if not code or not code.strip():
@@ -579,6 +579,7 @@ def add_strategy_to_leaderboard(name: str,
         },
         'rank_score': rank_score,
         'data_split': data_split,
+        'instrument': instrument,
     }
 
     # Attach train, validation and test set stats if provided

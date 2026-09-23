@@ -1,92 +1,92 @@
 [
     {
-        "id": "arch1",
-        "name": "State-Space Regime Filter",
-        "concept": "Uses a Kalman filter to estimate hidden market regimes and triggers trades when the filtered price deviates beyond a dynamic confidence band.",
-        "instructions": "Implement a Kalman filter on the 5\u2011minute close series to estimate the latent trend and volatility; compute the filter residual and its rolling standard deviation; generate a bull_signal when residual > 2*std and the estimated trend is upward, and a bear_signal when residual < -2*std and trend is downward; apply a session_mask for london_ny and ensure signals fire only on the first bar of a deviation."
+        "id": "xau_hurst_adaptive",
+        "name": "XAU Hurst Exponent Adaptive Reversion",
+        "concept": "Uses rolling Hurst exponent to dynamically switch between mean-reversion and trend-following modes based on market regime.",
+        "instructions": "Calculate rolling Hurst exponent using log returns over a 50-bar window. If Hurst < 0.45, enter mean-reversion mode: buy when Z-score < -1.5 and sell when Z-score > 1.5. If Hurst > 0.55, enter trend mode: buy when price > EMA20 and sell when price < EMA20. Use ATR-based stops with 1.5x multiplier. Gate signals to London/NY sessions only."
     },
     {
-        "id": "arch2",
-        "name": "Fractal Dimension Momentum",
-        "concept": "Calculates the local fractal dimension of price swings to distinguish high\u2011dimensional choppy periods from low\u2011dimensional trending periods.",
-        "instructions": "For each bar compute the Higuchi fractal dimension on the last 30 closes; define trending when FD < 1.3 and ranging when FD > 1.5; combine with ADX>25 for trend confirmation; trigger bull_signal when trending, close > EMA(34) and FD decreasing, bear_signal when trending, close < EMA(34) and FD increasing; restrict to london_ny session and enforce single\u2011bar entry."
+        "id": "xau_variance_ratio_break",
+        "name": "XAU Variance Ratio Breakout",
+        "concept": "Detects volatility regime shifts using variance ratio to identify explosive breakouts from consolidation.",
+        "instructions": "Calculate variance ratio as ratio of 20-bar variance to 5-bar variance. When variance ratio > 2.5 and price breaks 20-bar high/low, enter trend direction. Use Donchian channels for breakout confirmation. Set stops at 2x ATR and targets at 3R. Only trade during high-liquidity sessions."
     },
     {
-        "id": "arch3",
-        "name": "Spectral Density Breakout",
-        "concept": "Applies a short\u2011term Fourier transform to detect dominant frequency spikes that precede breakout moves.",
-        "instructions": "Compute a rolling FFT on the last 64 close values; extract the power of the dominant frequency; calculate its z\u2011score over 20 periods; generate bull_signal when z\u2011score > 2 and price breaks above recent high, bear_signal when z\u2011score < -2 and price breaks below recent low; filter with rvol>1.2 and session_mask('london_ny'); ensure one\u2011time trigger per breakout."
+        "id": "xau_kalman_price_dev",
+        "name": "XAU Kalman Filter Price Deviation",
+        "concept": "Uses Kalman filter to estimate true price and trades deviations from the filtered estimate.",
+        "instructions": "Implement simplified Kalman filter with state = price, observation = close. Calculate deviation as (close - kalman_state) / kalman_std. Buy when deviation < -2.0 and sell when deviation > 2.0. Use 1.5x ATR stops and 2R targets. Filter with ADX < 20 to ensure ranging conditions."
     },
     {
-        "id": "arch4",
-        "name": "Regime\u2011Switching Hidden Markov Model",
-        "concept": "Fits a two\u2011state HMM to recent returns to label bullish or bearish regimes and trades only in the bullish state with strong momentum.",
-        "instructions": "Fit a Gaussian HMM on the last 200 return observations; label state 0 as low\u2011volatility and state 1 as high\u2011volatility; when the model predicts state 1 and close > EMA(55) and MACD histogram rising, set bull_signal; when state 1 and close < EMA(55) and MACD histogram falling, set bear_signal; apply session_mask('london_ny') and single\u2011bar entry rule."
+        "id": "xau_std_band_squeeze",
+        "name": "XAU Standard Deviation Band Squeeze",
+        "concept": "Identifies volatility compression using standard deviation bands and trades the expansion.",
+        "instructions": "Calculate 20-bar standard deviation of returns. When std dev drops below 0.5x its 100-bar average, mark as squeeze. On squeeze release (std dev > 1.5x average), enter in direction of price movement. Use 2x ATR stops and 2.5R targets. Gate to London/NY killzones."
     },
     {
-        "id": "arch5",
-        "name": "Multiscale Wavelet Decomposition",
-        "concept": "Decomposes price into wavelet components to isolate high\u2011frequency noise and low\u2011frequency trend for precise entry timing.",
-        "instructions": "Perform a discrete wavelet transform on the last 128 closes using a Daubechies 4 wavelet; reconstruct the approximation (low\u2011freq) and detail (high\u2011freq) series; generate bull_signal when approximation slope > 0 and detail crosses above zero, bear_signal when approximation slope < 0 and detail crosses below zero; require ADX>22 and session_mask('london_ny'); enforce first\u2011bar trigger."
+        "id": "xau_regression_curve_dev",
+        "name": "XAU Linear Regression Curve Deviation",
+        "concept": "Trades deviations from a rolling linear regression curve to capture mean-reversion opportunities.",
+        "instructions": "Fit 30-bar linear regression to close prices. Calculate residual as (close - regression_line) / regression_std. Buy when residual < -1.8 and sell when residual > 1.8. Use 1.5x ATR stops and 2R targets. Require RSI(14) < 30 for longs and > 70 for shorts."
     },
     {
-        "id": "arch6",
-        "name": "Dynamic Fractal\u2011Based ATR Scaling",
-        "concept": "Scales ATR stop distances by the local fractal dimension to adapt to market complexity.",
-        "instructions": "Calculate fractal dimension over 40 bars; compute ATR(14); set sl_long = close - (1.5 * ATR * (FD/1.5)), sl_short = close + (1.5 * ATR * (FD/1.5)); trigger bull_signal when close > EMA(21) and FD decreasing, bear_signal when close < EMA(21) and FD increasing; filter with rvol>1.3 and session_mask('london_ny'); ensure risk distance >= 2.5."
+        "id": "xau_autocorr_momentum",
+        "name": "XAU Autocorrelation Momentum",
+        "concept": "Uses lag-1 autocorrelation to identify momentum persistence and fade reversals.",
+        "instructions": "Calculate lag-1 autocorrelation of returns over 40-bar window. If autocorr > 0.3, enter trend-following: buy on pullback to EMA10. If autocorr < -0.3, enter mean-reversion: buy when Z-score < -1.5. Use 1.8x ATR stops and 2.2R targets. Filter with RVOL > 1.2."
     },
     {
-        "id": "arch7",
-        "name": "Entropy\u2011Weighted Liquidity Sweep",
-        "concept": "Measures Shannon entropy of volume distribution to weight BSL/SSL sweeps for higher conviction.",
-        "instructions": "Compute volume entropy over the last 30 bars; obtain swing_highs and swing_lows via find_swings; define weighted_bsl = (high > swing_highs) & (close < swing_highs) & (entropy < 0.6); weighted_ssl = (low < swing_lows) & (close > swing_lows) & (entropy < 0.6); generate bull_signal on weighted_ssl first occurrence, bear_signal on weighted_bsl first occurrence; apply session_mask('london_ny') and ADX>20."
+        "id": "xau_vol_of_vol",
+        "name": "XAU Volatility of Volatility",
+        "concept": "Measures volatility of volatility to identify extreme volatility compression before expansion.",
+        "instructions": "Calculate 10-bar ATR, then calculate 20-bar standard deviation of ATR. When ATR_std < 0.3x its 100-bar average, mark as vol-of-vol squeeze. On expansion (ATR_std > 1.5x average), enter in direction of first 3-bar move. Use 2x ATR stops and 3R targets."
     },
     {
-        "id": "arch8",
-        "name": "Adaptive Spectral Risk Parity",
-        "concept": "Allocates risk based on the spectral density of price volatility, favoring periods with concentrated energy at low frequencies.",
-        "instructions": "Estimate power spectral density of the last 256 returns; compute low\u2011frequency energy ratio; when ratio > 0.7 and close > VWAP, set bull_signal; when ratio < 0.3 and close < VWAP, set bear_signal; scale stop loss using ATR * (1 + (1 - ratio)); enforce session_mask('london_ny') and single\u2011bar entry."
+        "id": "xau_zscore_accel",
+        "name": "XAU Z-Score Acceleration",
+        "concept": "Trades acceleration in Z-score to capture momentum shifts before price moves.",
+        "instructions": "Calculate 20-bar Z-score of close. Calculate 5-bar change in Z-score. Buy when Z-score < -1.0 and Z-score_change > 0.3 (accelerating up). Sell when Z-score > 1.0 and Z-score_change < -0.3. Use 1.5x ATR stops and 2R targets. Gate to London/NY sessions."
     },
     {
-        "id": "arch9",
-        "name": "Nonlinear State\u2011Space Momentum",
-        "concept": "Combines an extended Kalman filter on price and its first derivative to capture nonlinear momentum dynamics.",
-        "instructions": "Model state vector [price, momentum]; run EKF on 5\u2011minute closes; derive estimated momentum; bull_signal when momentum > 0 and its derivative > 0, bear_signal when momentum < 0 and derivative < 0; require rvol>1.2 and ADX>22; restrict to london_ny session and fire only on first qualifying bar."
+        "id": "xau_hurst_vol_filter",
+        "name": "XAU Hurst Exponent with Volatility Filter",
+        "concept": "Combines Hurst exponent with volatility regime to optimize entry timing.",
+        "instructions": "Calculate 50-bar Hurst exponent. If Hurst > 0.55 and ATR(14) > 1.5x ATR(50), enter trend: buy when price > EMA21. If Hurst < 0.45 and ATR(14) < 0.7x ATR(50), enter reversion: buy when Z-score < -1.5. Use 1.8x ATR stops and 2.5R targets."
     },
     {
-        "id": "arch10",
-        "name": "Fractal\u2011Adjusted Order Block",
-        "concept": "Modifies traditional order block zones by expanding them according to local fractal dimension to capture institutional liquidity pockets.",
-        "instructions": "Identify bullish order blocks via find_swings; compute FD over 30 bars; expand block upper/lower bounds by (FD-1)*0.5% of price; generate bull_signal when price re\u2011enters expanded bullish block and close > EMA(34); bear_signal analogously for bearish blocks; filter with rvol>1.3, ADX>20 and session_mask('london_ny'); enforce one\u2011time entry."
+        "id": "xau_regression_slope_flip",
+        "name": "XAU Regression Slope Flip",
+        "concept": "Detects trend reversals by monitoring linear regression slope changes.",
+        "instructions": "Calculate 20-bar linear regression slope of close. When slope flips from negative to positive and price > VWAP, buy. When slope flips from positive to negative and price < VWAP, sell. Use 2x ATR stops and 2.5R targets. Require ADX > 20 for confirmation."
     },
     {
-        "id": "arch11",
-        "name": "Regime\u2011Weighted Supertrend",
-        "concept": "Applies supertrend but weights its direction by a regime probability derived from a logistic regression on macro indicators.",
-        "instructions": "Compute supertrend_line and direction; build a logistic model using daily PDH, PDL, and VIX (mocked as constant) to output bullish probability; multiply supertrend direction by probability > 0.6 to confirm bull_signal, < 0.4 for bear_signal; require rvol>1.2 and session_mask('london_ny'); ensure first\u2011bar trigger."
+        "id": "xau_std_dev_convergence",
+        "name": "XAU Standard Deviation Convergence",
+        "concept": "Trades convergence of price to standard deviation bands for mean-reversion.",
+        "instructions": "Calculate 20-bar mean and standard deviation of close. When price touches lower band (mean - 2*std) and RSI(14) < 35, buy. When price touches upper band (mean + 2*std) and RSI(14) > 65, sell. Use 1.5x ATR stops and 2R targets. Filter with efficiency_ratio < 0.25."
     },
     {
-        "id": "arch12",
-        "name": "Multifractal Detrended Fluctuation Analysis (MF\u2011DFA)",
-        "concept": "Uses MF\u2011DFA to quantify long\u2011range correlations and trade when the Hurst exponent shifts toward persistence.",
-        "instructions": "Calculate Hurst exponent over rolling window of 100 closes using DFA; bull_signal when H > 0.6 and close > EMA(55); bear_signal when H < 0.4 and close < EMA(55); filter with ADX>22, rvol>1.2 and session_mask('london_ny'); enforce single\u2011bar entry and risk management as specified."
+        "id": "xau_autocorr_vol_ratio",
+        "name": "XAU Autocorrelation Volatility Ratio",
+        "concept": "Uses autocorrelation and volatility ratio to identify high-probability setups.",
+        "instructions": "Calculate lag-1 autocorrelation over 30-bar window. Calculate volatility ratio as ATR(10)/ATR(30). If autocorr > 0.25 and vol_ratio > 1.3, enter trend: buy on pullback to EMA15. If autocorr < -0.25 and vol_ratio < 0.7, enter reversion: buy when Z-score < -1.5. Use 1.8x ATR stops and 2.2R targets."
     },
     {
-        "id": "arch13",
-        "name": "Spectral Cluster Breakout",
-        "concept": "Clusters recent price windows by spectral similarity and trades when price exits its current cluster.",
-        "instructions": "Compute PSD for each of the last 10 windows of 30 bars; cluster using k\u2011means with k=3; assign current bar to a cluster; generate bull_signal when price breaks above the max of its cluster and cluster label indicates upward bias, bear_signal for downward break; require ADX>20, rvol>1.2 and session_mask('london_ny'); fire only on first breakout."
+        "id": "xau_kalman_residual",
+        "name": "XAU Kalman Residual Trading",
+        "concept": "Trades Kalman filter residuals to capture short-term mean-reversion.",
+        "instructions": "Implement Kalman filter with process noise = 0.1, observation noise = 0.5. Calculate residual as (close - kalman_estimate) / kalman_std. Buy when residual < -1.8 and sell when residual > 1.8. Use 1.5x ATR stops and 2R targets. Require session_mask('london_ny') and RVOL > 1.1."
     },
     {
-        "id": "arch14",
-        "name": "Entropy\u2011Driven Volume Profile",
-        "concept": "Creates a volume profile weighted by entropy of price moves to locate high\u2011certainty liquidity zones.",
-        "instructions": "Bin price into 0.1% buckets over last 200 bars; sum volume per bucket multiplied by exp(-price_entropy) where entropy computed over 20\u2011bar returns; identify the bucket with maximum weighted volume as high\u2011certainty zone; bull_signal when price crosses above zone and close > EMA(34); bear_signal when crossing below and close < EMA(34); filter with rvol>1.3 and session_mask('london_ny'); ensure one\u2011time entry."
+        "id": "xau_hurst_trend_strength",
+        "name": "XAU Hurst Trend Strength",
+        "concept": "Uses Hurst exponent to measure trend strength and optimize position sizing.",
+        "instructions": "Calculate 40-bar Hurst exponent. If Hurst > 0.6, strong trend: enter on EMA20/EMA50 crossover. If Hurst < 0.4, weak trend: enter on Z-score extremes. Use 2x ATR stops and 3R targets for strong trends, 1.5x ATR and 2R for weak. Gate to high-liquidity sessions."
     },
     {
-        "id": "arch15",
-        "name": "Dynamic Regime\u2011Switching ATR Trailing",
-        "concept": "Adjusts ATR trailing stops based on a Markov-switching model that toggles between high\u2011volatility and low\u2011volatility regimes.",
-        "instructions": "Fit a two\u2011state Markov\u2011switching model on recent ATR values; if in high\u2011volatility state, set ATR multiplier to 2.0, else 1.2; compute chandelier_exit using the dynamic multiplier; generate bull_signal when close > EMA(21) and direction from supertrend is +1, bear_signal when close < EMA(21) and direction -1; require ADX>22, rvol>1.2 and session_mask('london_ny'); enforce first\u2011bar trigger and risk distance >=2.5."
+        "id": "xau_regression_curvature",
+        "name": "XAU Regression Curvature",
+        "concept": "Detects price curvature using second derivative of linear regression to anticipate reversals.",
+        "instructions": "Calculate 25-bar linear regression slope. Calculate 5-bar change in slope (curvature). Buy when slope < 0 and curvature > 0.2 (slope turning up). Sell when slope > 0 and curvature < -0.2. Use 1.8x ATR stops and 2.5R targets. Require price > VWAP for longs, < VWAP for shorts."
     }
 ]

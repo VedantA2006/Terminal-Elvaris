@@ -31,13 +31,10 @@ from leaderboard import compute_monthly_r_breakdown, compute_rank_score
 # Archetype prompt blueprints for combinatorial alpha mining
 # Archetype prompt blueprints for combinatorial alpha mining (16 Diverse Institutional Archetypes)
 
-def load_archetypes(instrument="XAUUSD"):
+def load_archetypes():
     import json
     import os
-    path = os.path.join("data", f"archetypes_{instrument}.json")
-    if not os.path.exists(path):
-        # Fallback to default
-        path = os.path.join("data", "archetypes.json")
+    path = os.path.join("data", "archetypes_XAUUSD.json")
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -46,10 +43,10 @@ def load_archetypes(instrument="XAUUSD"):
             pass
     return []
 
-def save_archetypes(archetypes, instrument="XAUUSD"):
+def save_archetypes(archetypes):
     import json
     import os
-    path = os.path.join("data", f"archetypes_{instrument}.json")
+    path = os.path.join("data", "archetypes_XAUUSD.json")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(archetypes, f, indent=4)
@@ -69,21 +66,17 @@ class IdeaGeneratorAgent:
     def __init__(self, provider: str = 'omniroute', api_key: str = '', model: str = '', endpoint: str = None):
         self.provider = (provider or 'omniroute').lower()
         self.api_key = api_key or os.environ.get('OMNIROUTE_API_KEY', '') or os.environ.get('GROQ_API_KEY', '')
-        self.model = model or 'mistral/codestral-latest'
-        if self.model in ('auto/best-coding', 'auto/best-reasoning', 'auto', 'groq/qwen/qwen3.6-27b', 'qwen/qwen3.6-27b', 'agentrouter/gpt-6-astra'):
-            self.model = 'mistral/codestral-latest'
+        self.model = model or 'groq/llama-3.1-70b-versatile'
+        if self.model in ('auto/best-coding', 'auto/best-reasoning', 'auto', 'groq/qwen/qwen3.6-27b', 'qwen/qwen3.6-27b', 'agentrouter/gpt-6-astra', 'mistral/codestral-latest'):
+            self.model = 'groq/llama-3.1-70b-versatile'
         self.endpoint = endpoint or os.environ.get('OMNIROUTE_ENDPOINT', 'http://localhost:20128/v1')
 
-    def propose_strategy(self, archetype_idx: int = 0, recent_hypotheses: List[str] = None, custom_focus: str = None, instrument: str = "XAUUSD",
+    def propose_strategy(self, archetype_idx: int = 0, recent_hypotheses: List[str] = None, custom_focus: str = None,
                          champion_code: str = None, second_parent_code: str = None,
                          failure_memory: List[str] = None, leaderboard_code_context: List[Dict] = None,
                          negative_constraints: List[str] = None, temperature: float = 0.7) -> Dict[str, Any]:
         """Generates an initial strategy code proposal based on a chosen archetype or breeds a champion parent."""
-        archetypes = load_archetypes(instrument)
-        if not archetypes:
-            archetype = {}
-        else:
-            archetype = archetypes[archetype_idx % len(archetypes)]
+        archetype = load_archetypes()[archetype_idx % len(load_archetypes())]
 
         novelty_mandate = ""
         if recent_hypotheses and not champion_code:
@@ -185,7 +178,7 @@ Produce a refined, evolved strategy that outperforms the parent champion!
 
         user_prompt = f"""
 [AGENT: IDEA GENERATOR]
-Your mission: Synthesize a high-performing institutional quantitative trading strategy for {instrument} (5-minute candles).
+Your mission: Synthesize a high-performing institutional quantitative trading strategy for XAUUSD (Gold 5-minute candles).
 
 ALPHA ARCHETYPE:
 Name: {archetype['name']}
@@ -271,13 +264,18 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
                 endpoint_url=self.endpoint,
                 temperature=float(temperature)
             )
-            code = _clean_code_response(raw_resp)
+            raw_code = _clean_code_response(raw_resp)
+            if raw_code and "def calculate_signals" not in raw_code:
+                indented_body = "\n".join(f"    {line}" for line in raw_code.split("\n"))
+                code = f"def calculate_signals(df):\n{indented_body}\n    return df\n"
+            else:
+                code = raw_code
         except Exception as err:
             raw_resp = f"LLM Quota/Network Fallback: {err}"
 
         # If LLM failed, timed out, or returned malformed output, fall back to autonomous synthesis
         if not code or "def calculate_signals" not in code:
-            code = self._synthesize_archetype_code(archetype_idx, champion_code=champion_code, instrument=instrument)
+            code = self._synthesize_archetype_code(archetype_idx, champion_code=champion_code)
             engine_mode = "ARCHETYPE_GENERATOR"
             engine_name = "Institutional Archetype Generator"
             fallback_active = True
@@ -309,7 +307,7 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
         }
 
     @staticmethod
-    def _synthesize_archetype_code(archetype_idx: int, champion_code: str = None, instrument: str = "XAUUSD") -> str:
+    def _synthesize_archetype_code(archetype_idx: int, champion_code: str = None) -> str:
         """High-speed institutional alpha synthesizer. Generates AST-compliant causal trading systems."""
         sw_len = random.choice([5, 6, 7, 8, 10, 12])
         atr_period = random.choice([10, 14, 20])
@@ -347,13 +345,8 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
             if mutated != champion_code:
                 return mutated
 
-        archetypes = load_archetypes(instrument)
-        if not archetypes:
-            arch_id = ''
-            idx = 0
-        else:
-            idx = archetype_idx % len(archetypes)
-            arch_id = archetypes[idx].get('id', '')
+        idx = archetype_idx % len(load_archetypes())
+        arch_id = load_archetypes()[idx].get('id', '')
 
         if idx == 0 or arch_id == 'sequential_smc_fvg_state_machine':
             return f'''def calculate_signals(df):
@@ -672,9 +665,9 @@ MANDATORY INSTITUTIONAL RULES FOR PROFITABILITY:
 '''
 
 
-def synthesize_archetype_code(archetype_idx: int, champion_code: str = None, instrument: str = "XAUUSD") -> str:
+def synthesize_archetype_code(archetype_idx: int, champion_code: str = None) -> str:
     """Convenience module function to synthesize an institutional archetype strategy."""
-    return IdeaGeneratorAgent._synthesize_archetype_code(archetype_idx, champion_code=champion_code, instrument=instrument)
+    return IdeaGeneratorAgent._synthesize_archetype_code(archetype_idx, champion_code=champion_code)
 
 
 # ===========================================================================

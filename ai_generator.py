@@ -29,14 +29,14 @@ from strategy_executor import execute_strategy
 ENGINE_TELEMETRY: Dict[str, Any] = {
     "mode": "IDLE",
     "provider": "omniroute",
-    "model": "mistral/codestral-latest",
+    "model": "groq/llama-3.1-70b-versatile",
     "endpoint": "http://localhost:20128/v1",
     "status": "idle",
     "status_code": None,
     "last_error": None,
     "fallback_active": False,
     "fallback_reason": None,
-    "active_display": "OmniRoute LLM (mistral/codestral-latest)",
+    "active_display": "OmniRoute LLM (groq/llama-3.1-70b-versatile)",
     "last_updated": datetime.utcnow().strftime("%H:%M:%S")
 }
 
@@ -72,7 +72,7 @@ def set_engine_fallback(reason: str, status_code: int = 429, error_text: str = "
 # ---------------------------------------------------------------------------
 HARDCODED_SYSTEM_PROMPT = """
 You are an elite quantitative hedge fund researcher and algorithmic trading engineer.
-Your task is to write high-performing, robust Python trading strategies for the specified instrument on 5-minute data.
+Your task is to write high-performing, robust Python trading strategies for XAUUSD (Gold) on 5-minute data.
 
 🚨 CRITICAL MANDATORY RULES — STRICT CAUSALITY & ZERO LOOKAHEAD BIAS:
 1. NEVER peek into the future under any circumstances.
@@ -82,51 +82,38 @@ Your task is to write high-performing, robust Python trading strategies for the 
    - Absolutely NO backward filling: `.bfill()`, `fillna(method='bfill')` are STRICTLY BANNED.
    - Absolutely NO forward indexing into future bars: `iloc[i + n]`, `loc[...]` are STRICTLY BANNED.
    - Every calculation for bar [t] can ONLY use historical data <= [t].
-3. NO MANUAL PYTHON LOOPS:
-   - Absolutely NO `while` loops or `for` loops to iterate over rows (e.g. iterrows, itertuples, range(len(df))).
-   - You MUST use ONLY vectorized pandas/numpy operations. Any manual loops will be flagged as security violations by the AST and instantly rejected.
-4. HARDCODED SERVER VALIDATION:
-   All strategy code is statically parsed by an AST Security & Lookahead Bias Guard. Any violation (including manual loops) will immediately reject your code and fail the test.
+3. HARDCODED SERVER VALIDATION:
+   All strategy code is statically parsed by an AST Lookahead Bias Guard. Any violation will immediately reject your code and fail the test.
+4. STRICT TRADING WINDOW REQUIREMENTS:
+   - Your dataset includes two Boolean flag columns: `is_news_time` and `is_weekend_close`.
+   - You MUST explicitly filter out trades during news and weekends. 
+   - Every buy/sell signal MUST require: `(df['is_news_time'] == 0) & (df['is_weekend_close'] == 0)`.
 
 QUANTITATIVE RESEARCH CONCEPT INVENTORY (BUILD & EXPERIMENT USING THESE BLOCKS):
-You draw from 7 proven institutional quantitative domains to discover and optimize strategies:
+You draw from 5 proven institutional quantitative domains to discover and optimize strategies:
 
-1. LIQUIDITY & MARKET STRUCTURE (SMC / ICT):
-   - Liquidity Sweeps: BSL (Buy-Side Liquidity) sweep (high > swing_high and close < swing_high) & SSL (Sell-Side Liquidity) sweep (low < swing_low and close > swing_low).
-   - Equal Highs / Equal Lows (EQH / EQL) liquidity pools.
-   - Fair Value Gaps (FVG): Bullish (low[i] > high[i-2]) and Bearish (high[i] < low[i-2]), with mitigation at midpoint ((top + bot) / 2).
-   - Inverted Fair Value Gaps (IFVG): Broken FVGs flipped into support/resistance.
-   - Order Blocks (OB) & Displacement candles (body/range ratio > 70%).
-
-2. MULTI-TIMEFRAME MACRO & DAILY KEY LEVELS:
-   - Daily Levels: Previous Day High (PDH), Previous Day Low (PDL), Previous Day Close (PDC).
-   - Floor Pivot Points: Central Pivot (PP), Resistance (R1, R2), Support (S1, S2).
-   - Developing Intraday VWAP (Volume-Weighted Average Price) resetting daily.
-
-3. STATISTICAL MECHANICS & QUANTITATIVE ARBITRAGE:
+1. STATISTICAL MECHANICS & QUANTITATIVE ARBITRAGE:
    - Rolling Z-Score: Statistical standard deviations from rolling mean ((price - mean) / std) for mean-reversion fades.
    - Vectorized Linear Regression Slope: Quantitative price drift velocity.
    - Kaufman Efficiency Ratio: Signal-to-noise filter (ER > 0.35 for trending, ER < 0.20 for ranging chop).
 
-4. VOLATILITY REGIMES & ADAPTIVE BANDS:
+2. VOLATILITY REGIMES & ADAPTIVE BANDS:
    - Supertrend: Adaptive trend tracking line and regime direction (+1 bull / -1 bear).
    - Keltner Channels & Bollinger Bands: Volatility squeezes (Bollinger inside Keltner) followed by explosive directional expansion.
    - Donchian Channels: Turtle Breakout dynamics (highest high / lowest low breakout).
    - Chandelier Exit: Dynamic trailing ATR stops.
 
-5. MOMENTUM & DIRECTIONAL DYNAMICS:
+3. MOMENTUM & DIRECTIONAL DYNAMICS:
    - ADX & Directional Movement (+DI / -DI): Trend persistence filter (ADX > 25) vs consolidation (ADX < 20).
    - Wilder's RSI (14) & Stochastic: Dynamic overbought/oversold and midline transitions.
    - MACD / Histogram: Momentum acceleration and zero-line crossovers.
 
-6. INSTITUTIONAL VOLUME FOOTPRINT:
+4. INSTITUTIONAL VOLUME FOOTPRINT:
    - RVOL (Relative Volume): Detecting institutional volume spikes (> 1.5x rolling average).
    - Volume exhaustion vs volume expansion candles.
 
-7. SESSION TIMING & KILLZONES:
-   - London Open Killzone: 06:00 - 11:00 UTC (07:00 - 12:00 CET).
-   - New York Killzone: 17:30 - 24:00 UTC (13:30 - 20:00 EDT).
-   - Asian Range Sweeps (Judas Swings at London Open).
+5. STRUCTURAL HURST & KALMAN ESTIMATION:
+   - Using dynamic volatility windows and momentum filters to capture statistically significant drift states.
 
 API SPECIFICATION — CAUSAL BUILT-IN HELPERS:
 The strategy code operates on a pandas DataFrame `df` with columns: ['open', 'high', 'low', 'close', 'volume'] and DatetimeIndex `df.index`.
@@ -183,7 +170,9 @@ CRITICAL INSTITUTIONAL TRADE EXECUTION & PROFITABILITY RULES:
    - NEVER invert Risk-to-Reward or use micro-stops (< $2.00)!
 
 REQUIRED OUTPUTS:
-Your code MUST define `calculate_signals(df)` and set boolean signal columns on `df`:
+You are writing the BODY of the `calculate_signals(df)` function. 
+Do NOT write the `def calculate_signals(df):` definition.
+Assume `df` is already available in your scope. Set boolean signal columns on `df`:
 - `df['bull_signal']`: True when a buy/long condition triggers on bar close
 - `df['bear_signal']`: True when a sell/short condition triggers on bar close
 Risk management columns (calculated strictly relative to candle close):
@@ -194,7 +183,7 @@ Risk management columns (calculated strictly relative to candle close):
 
 FORMATTING:
 CRITICAL: Do NOT output <think> tags, conversational commentary, or internal reasoning.
-Start immediately with ```python and return ONLY clean, valid, executable Python code inside a ```python ... ``` block.
+Start immediately with ```python and return ONLY the core pandas logic that goes inside the function inside a ```python ... ``` block.
 """
 
 
@@ -204,33 +193,22 @@ def _clean_code_response(text: str) -> str:
         return ""
 
     raw_code = ""
-    # 1. First, search for standard fenced code blocks containing calculate_signals
+    # 1. First, search for standard fenced code blocks
     fenced_blocks = re.findall(r'```(?:python)?\s*([\s\S]*?)(?:```|$)', text, re.IGNORECASE)
     for block in fenced_blocks:
-        if 'def calculate_signals' in block:
+        if block.strip():
             raw_code = block.strip()
             break
 
     if not raw_code:
         # 2. Strip closed <think>...</think> blocks
         cleaned = re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE)
-
-        # 3. If def calculate_signals is present anywhere in cleaned or raw text, slice from it
-        target = cleaned if 'def calculate_signals' in cleaned else text
-        if 'def calculate_signals' in target:
-            start_idx = target.find('def calculate_signals')
-            code_part = target[start_idx:]
-            # If there's an ending backtick or markdown fence, strip it
-            fence_end = re.search(r'```', code_part)
-            if fence_end:
-                code_part = code_part[:fence_end.start()]
-            raw_code = code_part.strip()
-        elif fenced_blocks and fenced_blocks[0].strip():
-            raw_code = fenced_blocks[0].strip()
-        else:
-            if '<think>' in cleaned.lower():
-                cleaned = re.sub(r'<think>[\s\S]*$', '', cleaned, flags=re.IGNORECASE)
-            raw_code = cleaned.strip()
+        
+        # 3. Handle unclosed <think>
+        if '<think>' in cleaned.lower():
+            cleaned = re.sub(r'<think>[\s\S]*$', '', cleaned, flags=re.IGNORECASE)
+            
+        raw_code = cleaned.strip()
 
     # Pass through robust AST self-healer to normalize indentation and repair truncated expressions
     return heal_strategy_code(raw_code)
@@ -339,7 +317,7 @@ def call_ai_llm(provider: str, api_key: str, model: str, prompt: str, system_pro
                 'max_tokens': 4096,
             }
             try:
-                res = requests.post(url, headers=headers, json=payload, timeout=(5, 25))
+                res = requests.post(url, headers=headers, json=payload, timeout=(5, 40))
                 if res.status_code in (400, 401, 404, 429, 500, 502, 503, 504):
                     last_err = requests.HTTPError(f"HTTP {res.status_code} on model {cand_model}: {res.text[:120]}")
                     time.sleep(1.0)
@@ -436,7 +414,7 @@ def generate_strategy_code(provider: str, api_key: str, model: str, user_prompt:
             return {'success': False, 'message': 'API Key is required to call AI provider.'}
 
     full_prompt = f"""
-Create a high-win-rate, robust Python algorithmic trading strategy for the specified instrument on 5-minute candles.
+Create a high-win-rate, robust Python algorithmic trading strategy for XAUUSD (Gold) on 5-minute candles.
 User Request / Strategy Concept:
 {user_prompt}
 

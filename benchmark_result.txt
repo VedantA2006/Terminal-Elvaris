@@ -1,0 +1,6 @@
+Starting benchmark...
+[XAUUSD] Failed: "Column(s) ['volume'] do not exist"
+[US100] Failed: "Column(s) ['volume'] do not exist"
+[SPX500] Failed: "Column(s) ['volume'] do not exist"
+[EURUSD] Failed: "Column(s) ['volume'] do not exist"
+[GBPUSD] Failed: "Column(s) ['volume'] do not exist"

@@ -1892,10 +1892,11 @@ async function startAutonomousGeneration() {
     showLoading('Autonomous AI is researching and generating a new institutional quantitative strategy...');
     addConsoleLog('[Autonomous Loop] Initiating strategy generation via OmniRoute with zero-lookahead AST guard & Monte Carlo stress test...', 'info');
 
+    const inst = window.activeQuantLabInst || 'XAUUSD';
     const promptList = [
-        "Create an institutional Fair Value Gap (FVG) and Liquidity Sweep Strategy on 5m Gold with Dynamic ATR Stop Loss and strict R:R target.",
-        "Create an Order Block & Break of Structure (BOS) Trend Continuation Strategy on 5m Gold with multi-timeframe session volume filters.",
-        "Create a Volume Imbalance Mean Reversion Strategy on 5m Gold with ATR volatility bands and time-decay expiration."
+        `Create an institutional Fair Value Gap (FVG) and Liquidity Sweep Strategy on 5m ${inst} with Dynamic ATR Stop Loss and strict R:R target.`,
+        `Create an Order Block & Break of Structure (BOS) Trend Continuation Strategy on 5m ${inst} with multi-timeframe session volume filters.`,
+        `Create a Volume Imbalance Mean Reversion Strategy on 5m ${inst} with ATR volatility bands and time-decay expiration.`
     ];
     const prompt = promptList[Math.floor(Math.random() * promptList.length)];
 
@@ -1908,7 +1909,8 @@ async function startAutonomousGeneration() {
                 api_key: cfg.apiKey,
                 model: cfg.model,
                 endpoint: cfg.endpoint,
-                prompt: prompt
+                prompt: prompt,
+                instrument: inst
             })
         });
         const data = await res.json().catch(() => ({ success: false, message: `HTTP ${res.status}: ${res.statusText}` }));

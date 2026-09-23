@@ -25,6 +25,7 @@ BANNED_CALLS = frozenset({
     'input', 'exit', 'quit', 'breakpoint',
     'getattr', 'setattr', 'delattr',  # Can be used to bypass restrictions
     'globals', 'locals', 'vars', 'dir',
+    'apply', # Banned due to extremely slow un-vectorized Pandas iteration
 })
 
 # Dangerous attribute names

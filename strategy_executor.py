@@ -814,10 +814,20 @@ def execute_strategy(code_str: str, raw_df: pd.DataFrame, initial_capital: float
     sys.stdout = stdout_capture
     
     # Generate True MTF DataFrames
-    df_1h = df_copy.resample('1h', on='dt').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).ffill()
-    df_1h['dt'] = df_1h.index
-    df_4h = df_copy.resample('4h', on='dt').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).ffill()
-    df_4h['dt'] = df_4h.index
+    try:
+        df_1h = df_copy.resample('1h', on='dt').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).ffill()
+        df_1h['dt'] = df_1h.index
+        df_4h = df_copy.resample('4h', on='dt').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).ffill()
+        df_4h['dt'] = df_4h.index
+    except Exception as e:
+        sys.stdout = old_stdout
+        return {
+            'success': False,
+            'error_type': 'EXECUTION_ERROR',
+            'message': f"Data Preparation Error: {str(e)}",
+            'traceback': '',
+            'logs': stdout_capture.getvalue()
+        }
 
     env = {
         '__builtins__': SAFE_BUILTINS,
